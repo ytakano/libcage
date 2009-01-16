@@ -1,0 +1,21 @@
+CXXFLAGS += -Wall -O2 -DDEBUG -DDEBUG_NAT
+# ASFLAGS +=
+LDFLAGS += -levent -lcrypto
+# INCLUDES +=
+
+
+SRC[] =
+	rttable
+	cage
+	timer
+	natdetector
+	udphandler
+	main
+
+MAIN = main
+
+.DEFAULT: $(CXXProgram $(MAIN), $(SRC))
+
+.PHONY: clean
+clean:
+	rm -f *~ $(MAIN) *.o
