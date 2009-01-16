@@ -35,10 +35,13 @@
 #ifndef CAGETYPES_HPP
 #define CAGETYPES_HPP
 
+#include "common.hpp"
+
+#include "bn.hpp"
+
 #include <boost/shared_ptr.hpp>
 #include <boost/variant.hpp>
 
-#include "common.hpp"
 
 namespace libcage {
         typedef boost::shared_ptr<sockaddr_in>  in_ptr;
@@ -47,7 +50,7 @@ namespace libcage {
 
         struct cageaddr {
                 id_ptr          id;
-                sa_family_t     domain; // PF_INET || PF_INET6
+                sa_family_t     domain;
                 boost::variant<in_ptr, in6_ptr> saddr;
         };
 
@@ -55,8 +58,8 @@ namespace libcage {
         static const uint16_t CAGE_VERSION = 0;
 
         static const uint16_t domain_loopback = 0;
-        static const uint16_t domain_inet     = 1;
-        static const uint16_t domain_inet6    = 2;
+        static const uint16_t domain_inet     = PF_INET;
+        static const uint16_t domain_inet6    = PF_INET6;
 
         static const uint16_t type_nat_echo                = 0;
         static const uint16_t type_nat_echo_reply          = 1;

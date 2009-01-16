@@ -1,5 +1,3 @@
-/* $Id: bn.hpp,v 1.4 2007/05/23 09:29:59 ytakanoster Exp $ */
-
 /*
  * Copyright (c) 2009, Yuuki Takano (ytakanoster@gmail.com).
  * All rights reserved.

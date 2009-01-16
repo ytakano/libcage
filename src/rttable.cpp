@@ -1,5 +1,3 @@
-/* $Id: bn.hpp,v 1.4 2007/05/23 09:29:59 ytakanoster Exp $ */
-
 /*
  * Copyright (c) 2009, Yuuki Takano (ytakanoster@gmail.com).
  * All rights reserved.
@@ -209,7 +207,7 @@ namespace libcage {
                         return;
                 }
 
-                if (src.domain == PF_INET) {
+                if (src.domain == domain_inet) {
                         in_ptr in1, in2;
                         in1 = boost::get<in_ptr>(src.saddr);
                         in2 = boost::get<in_ptr>(t->m_addr_old.saddr);
@@ -226,7 +224,7 @@ namespace libcage {
                                 m_ping_wait.erase(nonce);
                                 m_ping_send.erase(t->m_i);
                         }
-                } else if (src.domain == PF_INET6) {
+                } else if (src.domain == domain_inet6) {
                         in6_ptr in6_1, in6_2;
                         in6_1 = boost::get<in6_ptr>(src.saddr);
                         in6_2 = boost::get<in6_ptr>(t->m_addr_old.saddr);
@@ -344,12 +342,12 @@ namespace libcage {
                                 str = j->id->to_string();
                                 printf("    ID = %s,\n", str.c_str());
 
-                                if (j->domain == PF_INET) {
+                                if (j->domain == domain_inet) {
                                         in_ptr in;
                                         in = boost::get<in_ptr>(j->saddr);
 
                                         printf("    Port = %d\n", in->sin_port);
-                                } else if (j->domain == PF_INET6) {
+                                } else if (j->domain == domain_inet6) {
                                         in6_ptr in6;
                                         in6 = boost::get<in6_ptr>(j->saddr);
 
@@ -384,7 +382,7 @@ namespace libcage {
                         in_dst->sin_addr.s_addr = htonl(127 << 24 + 1);
 
                         addr.id     = id_dst;
-                        addr.domain = PF_INET;
+                        addr.domain = domain_inet;
                         addr.saddr  = in_dst;
 
                         table.add(addr);

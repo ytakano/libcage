@@ -29,36 +29,61 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "bn.hpp"
+#ifndef PEERS_HPP
+#define PEERS_HPP
 
-#include <sys/time.h>
-#include <event.h>
+#include "common.hpp"
 
-#include <iostream>
+#include "cagetypes.hpp"
 
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
+#include <boost/bimap/bimap.hpp>
 
-#include "cage.hpp"
-#include "rttable.hpp"
-#include "udphandler.hpp"
-#include "timer.hpp"
+namespace libcage {
+        class peers {
+        private:
+                class _id : private boost::totally_ordered<_id> {
+                public:
+                        id_ptr id;
+                        time_t t;
 
-int
-main(int argc, char* argv[])
-{
-        event_init();
+                        bool operator== (const _id &rhs) const
+                        {
+                                return *id == *rhs.id;
+                        }
 
-        // libcage::udphandler::test_udp();
-        // libcage::timer::test_timer();
+                        bool operator< (const _id &rhs) const
+                        {
+                                return *id < *rhs.id;
+                        }
+                };
 
-        // libcage::cage::test_natdetect();
-        // libcage::cage::test_nattypedetect();
+                class _addr : private boost::totally_ordered<_addr> {
+                public:
+                        sa_family_t     domain;
+                        boost::variant<in_ptr, in6_ptr> saddr;
 
-        libcage::rttable::test_rttable();
+                        bool operator== (const _addr &rhs) const;
+                        bool operator< (const _addr &rhs) const;
+                };
 
-        event_dispatch();
+                typedef boost::bimaps::bimap<_id, _addr>::value_type value_t;
 
-        return 0;
+
+        public:
+                peers();
+
+                // throws std::out_of_range
+                cageaddr        get_addr(id_ptr id);
+                id_ptr          get_id(cageaddr &addr);
+
+                void            remove_id(id_ptr id);
+                void            remove_addr(cageaddr &addr);
+
+                void            add_addr(cageaddr &addr);
+
+        private:
+                boost::bimaps::bimap<_id, _addr>        m_map;
+        };
 }
+
+#endif // PEERS_HPP

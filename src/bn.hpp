@@ -1,5 +1,3 @@
-/* $Id: bn.hpp,v 1.4 2007/05/23 09:29:59 ytakanoster Exp $ */
-
 /*
  * Copyright (c) 2006, Yuuki Takano (ytakanoster@gmail.com).
  * All rights reserved.
@@ -35,6 +33,8 @@
 #define BN_HPP
 
 
+#include "common.hpp"
+
 #include <stdio.h>
 
 #include <arpa/inet.h>
@@ -43,8 +43,6 @@
 #include <iostream>
 #include <string>
 
-
-#include "common.hpp"
 
 namespace libcage {
 // this is a sizeof(T) * N bytes integer class
