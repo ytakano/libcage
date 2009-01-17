@@ -254,6 +254,30 @@ namespace libcage {
                 }
         }
 
+        void
+        peers::add_timeout(id_ptr id)
+        {
+                _id i;
+
+                i.t  = time(NULL);
+                i.id = id;
+
+                m_timeout.insert(i);
+        }
+
+        bool
+        peers::is_timeout(id_ptr id)
+        {
+                _id i;
+
+                i.id = id;
+
+                if (m_timeout.find(i) == m_timeout.end())
+                        return false;
+
+                return true;
+        }
+
 #ifdef DEBUG
         void
         peers::test_peers()
@@ -360,30 +384,6 @@ namespace libcage {
                         uint32_t n = (uint32_t)**it;
                         printf("get_id: ID = %d\n", n);
                 }
-        }
-
-        void
-        peers::add_timeout(id_ptr id)
-        {
-                _id i;
-
-                i.t  = time(NULL);
-                i.id = id;
-
-                m_timeout.insert(i);
-        }
-
-        bool
-        peers::is_timeout(id_ptr id)
-        {
-                _id i;
-
-                i.id = id;
-
-                if (m_timeout.find(i) == m_timeout.end())
-                        return false;
-
-                return true;
         }
 #endif // DEBUG
 }
