@@ -43,13 +43,14 @@
 
 #include "bn.hpp"
 #include "cagetypes.hpp"
+#include "peers.hpp"
 #include "timer.hpp"
 
 
 namespace libcage {
         class rttable {
         public:
-                rttable(const uint160_t &id, timer &t);
+                rttable(const uint160_t &id, timer &t, peers &p);
                 virtual ~rttable();
 
                 void            add(const cageaddr &addr);
@@ -91,6 +92,7 @@ namespace libcage {
 
                 const uint160_t        &m_id;
                 timer                  &m_timer;
+                peers                  &m_peers;
 
                 int             id2i(const uint160_t &id);
                 int             id2i4lookup(const uint160_t &id, int max,

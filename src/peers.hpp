@@ -35,7 +35,9 @@
 #include "common.hpp"
 
 #include "cagetypes.hpp"
+#include "timer.hpp"
 
+#include <set>
 #include <vector>
 
 #include <boost/bimap/bimap.hpp>
@@ -44,6 +46,43 @@
 namespace libcage {
         class peers {
         private:
+                static const time_t     timeout_ttl;
+                static const time_t     map_ttl;
+                static const time_t     timer_interval;
+
+                class timer_func : public timer::callback {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_peers.refresh();
+
+                                // reschedule
+                                timeval tval;
+
+                                tval.tv_sec  = m_peers.timer_interval;
+                                tval.tv_usec = 0;
+                                m_peers.m_timer.set_timer(this, &tval);
+                        }
+
+                        timer_func(peers &p) : m_peers(p)
+                        {
+                                timeval tval;
+
+                                tval.tv_sec  = m_peers.timer_interval;
+                                tval.tv_usec = 0;
+                                m_peers.m_timer.set_timer(this, &tval);
+                        }
+
+                        ~timer_func()
+                        {
+                                m_peers.m_timer.unset_timer(this);
+                        }
+
+                        peers   &m_peers;
+                };
+
+                friend class    timer_func;
+
                 class _id : private boost::totally_ordered<_id> {
                 public:
                         id_ptr id;
@@ -75,7 +114,7 @@ namespace libcage {
                 typedef boost::bimaps::bimap<_id, _addr_set> _bimap;
 
         public:
-                peers();
+                peers(timer &t);
 
                 // throws std::out_of_range
                 cageaddr        get_addr(id_ptr id);
@@ -87,9 +126,17 @@ namespace libcage {
                 void            add_node(cageaddr &addr);
                 void            add_node_force(cageaddr &addr);
 
+                void            add_timeout(id_ptr id);
+                bool            is_timeout(id_ptr id);
+
+                void            refresh();
+
         private:
                 _bimap          m_map;
+                std::set<_id>   m_timeout;
 
+                timer           m_timer;
+                timer_func      m_timer_func;
 
 #ifdef DEBUG
         public:

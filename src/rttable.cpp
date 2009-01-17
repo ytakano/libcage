@@ -48,14 +48,16 @@ namespace libcage {
                 m_rttable->m_nodes.erase(*m_addr_old.id);
                 m_rttable->m_nodes.insert(*m_addr_new.id);
 
-                // TODO: add timed out
+                // add timed out
+                m_rttable->m_peers.add_timeout(m_addr_old.id);
 
                 // delete this
                 // do not reference menber variables after this code
                 m_rttable->m_ping_wait.erase(m_nonce);
         }
 
-        rttable::rttable(const uint160_t &id, timer &t) : m_id(id), m_timer(t)
+        rttable::rttable(const uint160_t &id, timer &t, peers &p) :
+                m_id(id), m_timer(t), m_peers(p)
         {
 
         }
@@ -367,7 +369,8 @@ namespace libcage {
         {
                 uint160_t id;
                 timer     t;
-                rttable   table(id, t);
+                peers     p(t);
+                rttable   table(id, t, p);
                 int       i;
 
                 id = 0;

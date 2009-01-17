@@ -34,6 +34,10 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
+        const time_t    peers::timeout_ttl    = 120;
+        const time_t    peers::map_ttl        = 360;
+        const time_t    peers::timer_interval = 120;
+
         bool
         peers::_addr::operator== (const peers::_addr &rhs) const
         {
@@ -104,7 +108,7 @@ namespace libcage {
                 return false;
         }
 
-        peers::peers()
+        peers::peers(timer &t) : m_timer(t), m_timer_func(*this)
         {
 
         }
@@ -146,7 +150,6 @@ namespace libcage {
         void
         peers::remove_id(id_ptr id)
         {
-                _addr a;
                 _id   i;
 
                 i.id = id;
@@ -158,7 +161,6 @@ namespace libcage {
         peers::remove_addr(cageaddr &addr)
         {
                 _addr a;
-                _id   i;
                 
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
@@ -207,11 +209,39 @@ namespace libcage {
                 m_map.insert(value_t(i, a));
         }
 
+        void
+        peers::refresh()
+        {
+                time_t now = time(NULL);
+
+                std::set<_id>::iterator it1;
+                for (it1 = m_timeout.begin(); it1 != m_timeout.end();) {
+                        time_t diff = now - it1->t;
+                        ++it1;
+
+                        if (diff > timeout_ttl) {
+                                m_timeout.erase(it1);
+                        }
+                }
+
+
+                _bimap::left_iterator it2;
+                for (it2 = m_map.left.begin(); it2 != m_map.left.end();) {
+                        time_t diff = now - it2->first.t;
+                        ++it2;
+
+                        if (diff > map_ttl) {
+                                m_map.left.erase(it2);
+                        }
+                }
+        }
+
 #ifdef DEBUG
         void
         peers::test_peers()
         {
-                peers    p;
+                timer    t;
+                peers    p(t);
                 cageaddr addr;
                 id_ptr   id1(new uint160_t);
                 id_ptr   id2(new uint160_t);
@@ -312,6 +342,30 @@ namespace libcage {
                         uint32_t n = (uint32_t)**it;
                         printf("get_id: ID = %d\n", n);
                 }
+        }
+
+        void
+        peers::add_timeout(id_ptr id)
+        {
+                _id i;
+
+                i.t  = time(NULL);
+                i.id = id;
+
+                m_timeout.insert(i);
+        }
+
+        bool
+        peers::is_timeout(id_ptr id)
+        {
+                _id i;
+
+                i.id = id;
+
+                if (m_timeout.find(i) == m_timeout.end())
+                        return false;
+
+                return true;
         }
 #endif // DEBUG
 }
