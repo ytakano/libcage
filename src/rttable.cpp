@@ -256,6 +256,7 @@ namespace libcage {
         {
                 uint160_t d;
                 uint160_t mask;
+                uint160_t zero;
                 int       i;
 
                 d      = m_id ^ id;
@@ -263,8 +264,10 @@ namespace libcage {
                 mask <<= 159;
                 i      = 159;
 
+                zero.fill_zero();
+
                 for (i = 159; i >= 0; i--) {
-                        if ((d & mask) > 0)
+                        if ((d & mask) > zero)
                                 break;
                         mask >>= 1;
                 }

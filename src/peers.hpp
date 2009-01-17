@@ -36,7 +36,10 @@
 
 #include "cagetypes.hpp"
 
+#include <vector>
+
 #include <boost/bimap/bimap.hpp>
+#include <boost/bimap/multiset_of.hpp>
 
 namespace libcage {
         class peers {
@@ -66,23 +69,32 @@ namespace libcage {
                         bool operator< (const _addr &rhs) const;
                 };
 
-                typedef boost::bimaps::bimap<_id, _addr>::value_type value_t;
-
+                typedef boost::bimaps::multiset_of<_addr> _addr_set;
+                typedef boost::bimaps::bimap<_id,
+                                             _addr_set>::value_type value_t;
+                typedef boost::bimaps::bimap<_id, _addr_set> _bimap;
 
         public:
                 peers();
 
                 // throws std::out_of_range
                 cageaddr        get_addr(id_ptr id);
-                id_ptr          get_id(cageaddr &addr);
+                void            get_id(cageaddr &addr, std::vector<id_ptr> &id);
 
                 void            remove_id(id_ptr id);
                 void            remove_addr(cageaddr &addr);
 
-                void            add_addr(cageaddr &addr);
+                void            add_node(cageaddr &addr);
+                void            add_node_force(cageaddr &addr);
 
         private:
-                boost::bimaps::bimap<_id, _addr>        m_map;
+                _bimap          m_map;
+
+
+#ifdef DEBUG
+        public:
+                static void     test_peers();
+#endif // DEBUG
         };
 }
 

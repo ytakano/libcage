@@ -31,6 +31,8 @@
 
 #include "peers.hpp"
 
+#include <boost/foreach.hpp>
+
 namespace libcage {
         bool
         peers::_addr::operator== (const peers::_addr &rhs) const
@@ -125,25 +127,27 @@ namespace libcage {
                 return addr;
         }
 
-        id_ptr
-        peers::get_id(cageaddr &addr)
+        void
+        peers::get_id(cageaddr &addr, std::vector<id_ptr> &id)
         {
-                _addr a;
-                _id   i;
+                // _bimap_its its;
+                _addr      a;
+                _id        i;
 
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
 
-                // throws std::out_of_range
-                i = m_map.right.at(a);
-
-                return i.id;
+                BOOST_FOREACH(_bimap::right_reference rp,
+                              m_map.right.equal_range(a)) {
+                        id.push_back(rp.second.id);
+                }
         }
 
         void
         peers::remove_id(id_ptr id)
         {
-                _id i;
+                _addr a;
+                _id   i;
 
                 i.id = id;
 
@@ -154,6 +158,7 @@ namespace libcage {
         peers::remove_addr(cageaddr &addr)
         {
                 _addr a;
+                _id   i;
                 
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
@@ -162,10 +167,36 @@ namespace libcage {
         }
 
         void
-        peers::add_addr(cageaddr &addr)
+        peers::add_node(cageaddr &addr)
         {
                 _addr a;
                 _id   i;
+
+                if (addr.domain != domain_inet && addr.domain == domain_inet6)
+                        return;
+
+                a.domain = addr.domain;
+                a.saddr  = addr.saddr;
+
+                i.id = addr.id;
+                i.t  = time(NULL);
+
+                try {
+                        m_map.left.at(i);
+                        return;
+                } catch (std::out_of_range e) {
+                        m_map.insert(value_t(i, a));
+                }
+        }
+
+        void
+        peers::add_node_force(cageaddr &addr)
+        {
+                _addr a;
+                _id   i;
+
+                if (addr.domain != domain_inet && addr.domain != domain_inet6)
+                        return;
 
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
@@ -175,4 +206,112 @@ namespace libcage {
 
                 m_map.insert(value_t(i, a));
         }
+
+#ifdef DEBUG
+        void
+        peers::test_peers()
+        {
+                peers    p;
+                cageaddr addr;
+                id_ptr   id1(new uint160_t);
+                id_ptr   id2(new uint160_t);
+                in_ptr   in1(new sockaddr_in);
+                in_ptr   in2(new sockaddr_in);
+
+
+                // add node
+                *id1 = 100;
+                memset(in1.get(), 0, sizeof(sockaddr_in));
+                in1->sin_port = 10000;
+                in1->sin_addr.s_addr = htonl((192UL << 24) + (168UL << 16) + 1);
+
+                memset(in2.get(), 0, sizeof(sockaddr_in));
+                in2->sin_port = 10000;
+                in2->sin_addr.s_addr = htonl((192UL << 24) + (168UL << 16) + 1);
+
+                addr.id     = id1;
+                addr.domain = domain_inet;
+                addr.saddr  = in1;
+
+                p.add_node(addr);
+
+                *id2 = 200;
+                addr.id     = id2;
+                addr.saddr  = in2;
+
+                p.add_node(addr);
+                printf("added: ID = 200\n");
+
+
+                // get by ID
+                try {
+                        addr = p.get_addr(id1);
+                        printf("get_addr: ID = 100\n");
+                } catch (std::out_of_range) {
+                        printf("failed get_addr: ID = 100\n");
+                }
+
+                try {
+                        addr = p.get_addr(id2);
+                        printf("get_addr: ID = 200\n");
+                } catch (std::out_of_range) {
+                        printf("failed get_addr: ID = 200\n");
+                }
+
+
+                // get by addr
+                std::vector<id_ptr> ids;
+
+                addr.domain = domain_inet;
+                addr.saddr  = in1;
+
+                p.get_id(addr, ids);
+
+                std::vector<id_ptr>::iterator it;
+                for (it = ids.begin(); it != ids.end(); ++it) {
+                        uint32_t n = (uint32_t)**it;
+                        printf("get_id: ID = %d\n", n);
+                }
+
+
+                // remove id
+                p.remove_id(id1);
+                printf("remove: ID = 100\n");
+
+                try {
+                        addr = p.get_addr(id1);
+                        printf("get_addr: ID = 100\n");
+                } catch (std::out_of_range) {
+                        printf("failed get_addr: ID = 100\n");
+                }
+
+                ids.clear();
+                p.get_id(addr, ids);
+                for (it = ids.begin(); it != ids.end(); ++it) {
+                        uint32_t n = (uint32_t)**it;
+                        printf("get_id: ID = %d\n", n);
+                }
+
+
+                // add again
+                addr.id     = id1;
+                addr.domain = domain_inet;
+                addr.saddr  = in1;
+
+                p.add_node(addr);
+                printf("added: ID = 100\n");
+
+
+                // remove addr
+                p.remove_addr(addr);
+                printf("remove_addr\n");
+
+                ids.clear();
+                p.get_id(addr, ids);
+                for (it = ids.begin(); it != ids.end(); ++it) {
+                        uint32_t n = (uint32_t)**it;
+                        printf("get_id: ID = %d\n", n);
+                }
+        }
+#endif // DEBUG
 }

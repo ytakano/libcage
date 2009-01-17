@@ -114,6 +114,10 @@ namespace libcage {
                 bool            operator <(const bn<T, N> &rhs) const;
                 bool            operator >(const bn<T, N> &rhs) const;
 
+                                operator T() const { return m_num[N - 1]; }
+                                operator T&() { return m_num[N - 1]; }
+
+
                 void            fill_zero();
                 void            fill_max();
                 void            to_binary(void *buf, int len) const;
