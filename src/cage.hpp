@@ -35,7 +35,9 @@
 #include "common.hpp"
 
 #include "bn.hpp"
+#include "dtun.hpp"
 #include "natdetector.hpp"
+#include "peers.hpp"
 #include "timer.hpp"
 #include "udphandler.hpp"
 
@@ -65,6 +67,8 @@ namespace libcage {
                 uint160_t       m_id;
                 natdetector     m_nat;
                 udp_receiver    m_receiver;
+                peers           m_peers;
+                dtun            m_dtun;
 
 #ifdef DEBUG_NAT
         public:

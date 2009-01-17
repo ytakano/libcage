@@ -37,6 +37,7 @@
 #include "bn.hpp"
 #include "natdetector.hpp"
 #include "timer.hpp"
+#include "udphandler.hpp"
 #include "peers.hpp"
 #include "rttable.hpp"
 
@@ -44,7 +45,7 @@ namespace libcage {
         class dtun : public rttable {
         public:
                 dtun(const uint160_t &id, timer &t, peers &p,
-                     const natdetector &nat);
+                     const natdetector &nat, udphandler &hdp);
                 virtual ~dtun();
 
         private:
@@ -54,6 +55,7 @@ namespace libcage {
                 timer                  &m_timer;
                 peers                  &m_peers;
                 const natdetector      &m_nat;
+                udphandler             &m_udp;
         };
 }
 

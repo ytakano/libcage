@@ -169,24 +169,42 @@ namespace libcage {
         }
 
         void
-        peers::add_node(cageaddr &addr)
+        peers::add_node(cageaddr &addr, bool is_advertise)
         {
-                _addr a;
                 _id   i;
 
                 if (addr.domain != domain_inet && addr.domain == domain_inet6)
                         return;
 
-                a.domain = addr.domain;
-                a.saddr  = addr.saddr;
+                i.id           = addr.id;
+                i.t            = time(NULL);
+                i.is_advertise = is_advertise;
 
-                i.id = addr.id;
-                i.t  = time(NULL);
+                _bimap::left_iterator it = m_map.left.find(i);
 
-                try {
-                        m_map.left.at(i);
-                        return;
-                } catch (std::out_of_range e) {
+                if (it != m_map.left.end()) {
+                        if (is_advertise && ! it->first.is_advertise) {
+                                _addr a;
+                                a.domain = addr.domain;
+                                a.saddr  = addr.saddr;
+                                m_map.left.erase(it);
+                                m_map.insert(value_t(i, a));
+                        } else {
+                                _addr a1, a2;
+                                a1 = m_map.left.at(i);
+                                a2.domain = addr.domain;
+                                a2.saddr  = addr.saddr;
+
+                                if (a1 == a2) {
+                                        // update time
+                                        m_map.left.erase(it);
+                                        m_map.insert(value_t(i, a1));
+                                }
+                        }
+                } else {
+                        _addr a;
+                        a.domain = addr.domain;
+                        a.saddr  = addr.saddr;
                         m_map.insert(value_t(i, a));
                 }
         }
@@ -263,13 +281,13 @@ namespace libcage {
                 addr.domain = domain_inet;
                 addr.saddr  = in1;
 
-                p.add_node(addr);
+                p.add_node(addr, false);
 
                 *id2 = 200;
                 addr.id     = id2;
                 addr.saddr  = in2;
 
-                p.add_node(addr);
+                p.add_node(addr, false);
                 printf("added: ID = 200\n");
 
 
@@ -328,7 +346,7 @@ namespace libcage {
                 addr.domain = domain_inet;
                 addr.saddr  = in1;
 
-                p.add_node(addr);
+                p.add_node(addr, false);
                 printf("added: ID = 100\n");
 
 

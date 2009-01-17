@@ -77,7 +77,10 @@ namespace libcage {
 
         }
 
-        cage::cage() : m_nat(m_udp, m_timer, m_id), m_receiver(*this)
+        cage::cage() : m_nat(m_udp, m_timer, m_id),
+                       m_receiver(*this),
+                       m_peers(m_timer),
+                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp)
         {
                 unsigned char buf[20];
 

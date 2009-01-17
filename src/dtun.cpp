@@ -33,8 +33,9 @@
 
 namespace libcage {
         dtun::dtun(const uint160_t &id, timer &t, peers &p,
-                   const natdetector &nat) :
-                rttable(id, t, p), m_id(id), m_timer(t), m_peers(p), m_nat(nat)
+                   const natdetector &nat, udphandler &udp) :
+                rttable(id, t, p), m_id(id), m_timer(t), m_peers(p), m_nat(nat),
+                m_udp(udp)
         {
 
         }
