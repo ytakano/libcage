@@ -1,5 +1,3 @@
-/* $Id: bn.hpp,v 1.4 2007/05/23 09:29:59 ytakanoster Exp $ */
-
 /*
  * Copyright (c) 2009, Yuuki Takano (ytakanoster@gmail.com).
  * All rights reserved.
@@ -65,8 +63,12 @@ namespace libcage {
         static const uint16_t type_nat_echo_reply          = 1;
         static const uint16_t type_nat_echo_redirect       = 2;
         static const uint16_t type_nat_echo_redirect_reply = 3;
-        static const uint16_t type_dtun_ping         = 0;
-        static const uint16_t type_dtun_ping_reply   = 1;
+        static const uint16_t type_dtun_ping               = 4;
+        static const uint16_t type_dtun_ping_reply         = 5;
+        static const uint16_t type_dtun_find_node          = 6;
+        static const uint16_t type_dtun_find_node_reply    = 7;
+        static const uint16_t type_dtun_find_value         = 8;
+        static const uint16_t type_dtun_find_value_reply   = 9;
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -114,7 +116,50 @@ namespace libcage {
                 msg_hdr         hdr;
                 uint32_t        nonce;
         };
-}
 
+        struct msg_dtun_find_node {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint16_t        domain;
+                uint16_t        state;
+        };
+
+        struct msg_inet {
+                uint32_t        port;
+                uint32_t        addr;
+                uint32_t        id[5];
+        };
+
+        struct msg_inet6 {
+                uint32_t        port;
+                uint32_t        addr[4];
+                uint32_t        id[5];
+        };
+        
+        struct msg_dtun_find_node_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint16_t        domain;
+                uint8_t         num;
+                uint8_t         padding;
+                uint32_t        addrs[1];
+        };
+
+        struct msg_dtun_find_value {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint16_t        domain;
+                uint16_t        state;
+        };
+
+        struct msg_dtun_find_value_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint16_t        domain;
+                uint8_t         num;
+                uint8_t         flag;
+                uint32_t        addrs[1];
+        };
+}
 
 #endif // CAGETYPES_HPP
