@@ -69,8 +69,13 @@ namespace libcage {
                 void            sendto(const void *msg, int len,
                                        std::string host, int port);
 
+                bool            get_sockaddr(sockaddr_storage *saddr,
+                                             std::string host, int port);
+
                 // network byte order
                 uint16_t        get_port();
+
+                uint16_t        get_domain();
 
 
                 static void     init();

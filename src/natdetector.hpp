@@ -68,6 +68,12 @@ namespace libcage {
                                                    int fromlen);
                 void            recv_echo_redirect_reply(void *msg);
 
+
+                bool is_global() const
+                {
+                        return m_state == global ? true : false;
+                }
+
         private:
                 class timer_echo_wait1 : public timer::callback {
                 public:

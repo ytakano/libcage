@@ -31,6 +31,8 @@
 
 #include "udphandler.hpp"
 
+#include "cagetypes.hpp"
+
 #include <stdio.h>
 #include <string.h>
 #include <memory.h>
@@ -131,6 +133,37 @@ namespace libcage {
 #endif // WIN32
         }
 
+        bool
+        udphandler::get_sockaddr(sockaddr_storage *saddr, std::string host,
+                                 int port)
+        {
+                addrinfo  hints;
+                addrinfo* res = NULL;
+                int       err;
+                char      str[20];
+
+                memset(&hints, 0, sizeof(hints));
+
+                hints.ai_family   = m_domain;
+                hints.ai_flags    = AI_PASSIVE;
+                hints.ai_protocol = IPPROTO_UDP;
+                hints.ai_socktype = SOCK_DGRAM;
+
+                snprintf(str, sizeof(str), "%d", port);
+
+                err = getaddrinfo(host.c_str(), str, &hints, &res);
+                if (err != 0) {
+                        perror("getaddrinfo");
+                        return false;
+                }
+
+                memcpy(saddr, res->ai_addr, res->ai_addrlen);
+
+                freeaddrinfo(res);
+
+                return true;
+        }
+
         void
         udphandler::sendto(const void *msg, int len, const sockaddr* to,
                            int tolen)
@@ -161,35 +194,27 @@ namespace libcage {
         void
         udphandler::sendto(const void *msg, int len, std::string host, int port)
         {
-                addrinfo  hints;
-                addrinfo* res = NULL;
-                int       err;
-                char      str[20];
-
-                memset(&hints, 0, sizeof(hints));
-
-                hints.ai_family   = m_domain;
-                hints.ai_flags    = AI_PASSIVE;
-                hints.ai_protocol = IPPROTO_UDP;
-                hints.ai_socktype = SOCK_DGRAM;
-
-                snprintf(str, sizeof(str), "%d", port);
-
-                err = getaddrinfo(host.c_str(), str, &hints, &res);
-                if (err != 0) {
-                        perror("getaddrinfo");
-                }
+                sockaddr_storage saddr;
+                if (! get_sockaddr(&saddr, host, port))
+                        return;
 
 #ifndef WIN32
-                ssize_t sendlen;
+                ssize_t sendlen = 0;
                 size_t  l = len;
 #else
-                int sendlen;
+                int sendlen = 0;
                 int l = len;
 #endif // WIN32
 
-                sendlen = ::sendto(m_socket, msg, l, 0, res->ai_addr,
-                                   res->ai_addrlen);
+                if (m_domain == PF_INET) {
+                        sendlen = ::sendto(m_socket, msg, l, 0,
+                                           (sockaddr*)&saddr,
+                                           sizeof(sockaddr_in));
+                } else if (m_domain == PF_INET6) {
+                        sendlen = ::sendto(m_socket, msg, l, 0,
+                                           (sockaddr*)&saddr,
+                                           sizeof(sockaddr_in6));
+                }
 
 #ifndef WIN32
                 if (sendlen < 0) {
@@ -200,8 +225,6 @@ namespace libcage {
                         perror("sendto");
                 }
 #endif // WIN32
-
-                freeaddrinfo(res);
         }
 
         void
@@ -303,6 +326,17 @@ namespace libcage {
 
                 closesocket(m_socket);
                 m_opened = false;
+        }
+
+        uint16_t
+        udphandler::get_domain()
+        {
+                if (m_domain == PF_INET)
+                        return domain_inet;
+                else if (m_domain == PF_INET6)
+                        return domain_inet6;
+
+                return 0;
         }
 
         uint16_t

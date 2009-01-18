@@ -59,6 +59,9 @@ namespace libcage {
         static const uint16_t domain_inet     = 1;
         static const uint16_t domain_inet6    = 2;
 
+        static const uint16_t state_global = 1;
+        static const uint16_t state_nat    = 2;
+
         static const uint16_t type_nat_echo                = 0;
         static const uint16_t type_nat_echo_reply          = 1;
         static const uint16_t type_nat_echo_redirect       = 2;
@@ -120,6 +123,7 @@ namespace libcage {
         struct msg_dtun_find_node {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+                uint32_t        id[5];
                 uint16_t        domain;
                 uint16_t        state;
         };
@@ -139,15 +143,17 @@ namespace libcage {
         struct msg_dtun_find_node_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+                uint32_t        id[5];
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         padding;
-                uint32_t        addrs[1];
+                uint32_t        addrs[0];
         };
 
         struct msg_dtun_find_value {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+                uint32_t        id[5];
                 uint16_t        domain;
                 uint16_t        state;
         };
@@ -155,10 +161,11 @@ namespace libcage {
         struct msg_dtun_find_value_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+                uint32_t        id[5];
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         flag;
-                uint32_t        addrs[1];
+                uint32_t        addrs[0];
         };
 
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);

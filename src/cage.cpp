@@ -47,8 +47,8 @@ namespace libcage {
 
                 msg_hdr *hdr = (msg_hdr*)buf;
 
-                if (hdr->magic != MAGIC_NUMBER ||
-                    hdr->ver   != CAGE_VERSION) {
+                if (ntohs(hdr->magic) != MAGIC_NUMBER ||
+                    ntohs(hdr->ver)   != CAGE_VERSION) {
                         return;
                 }
 
@@ -77,6 +77,17 @@ namespace libcage {
 #endif // DEBUG_NAT
                                 m_cage.m_nat.recv_echo_redirect(buf, from,
                                                                 fromlen);
+                        }
+                        break;
+                case type_dtun_ping:
+                        if (len == (int)sizeof(msg_dtun_ping)) {
+                                m_cage.m_dtun.recv_ping(buf, from, fromlen);
+                        }
+                        break;
+                case type_dtun_ping_reply:
+                        if (len == (int)sizeof(msg_dtun_ping_reply)) {
+                                m_cage.m_dtun.recv_ping_reply(buf, from,
+                                                              fromlen);
                         }
                         break;
                 }
