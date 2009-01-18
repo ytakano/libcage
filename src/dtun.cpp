@@ -43,13 +43,18 @@ namespace libcage {
         {
                 query_ptr q = p_dtun->m_query[nonce];
                 timer_ptr t = q->timers[id];
+                uint160_t zero;
 
                 q->sent.insert(id);
                 q->num_query--;
                 q->timers.erase(id);
 
-                p_dtun->m_peers.add_timeout(id.id);
-                p_dtun->remove(*id.id);
+                zero.fill_zero();
+
+                if (*id.id != zero) {
+                        p_dtun->m_peers.add_timeout(id.id);
+                        p_dtun->remove(*id.id);
+                }
 
                 // send find node
                 p_dtun->send_find(q);
@@ -547,11 +552,28 @@ namespace libcage {
                         return;
 
 
+                // stop timer
                 src->from_binary(reply->hdr.src, sizeof(reply->hdr.src));
                 c_id.id = src;
 
-                if (q->timers.find(c_id) == q->timers.end())
-                        return;
+                if (q->timers.find(c_id) == q->timers.end()) {
+                        timer_ptr t;
+                        id_ptr    zero(new uint160_t);
+
+                        zero->fill_zero();
+                        c_id.id = zero;
+                        if (q->timers.find(c_id) == q->timers.end())
+                                return;
+                        
+                        t = q->timers[c_id];
+                        m_timer.unset_timer(t.get());
+                        q->timers.erase(c_id);
+                } else {
+                        timer_ptr t;
+                        t = q->timers[c_id];
+                        m_timer.unset_timer(t.get());
+                        q->timers.erase(c_id);
+                }
 
 
                 // read nodes
@@ -633,6 +655,18 @@ namespace libcage {
                         }
                 }
 
+
+                cageaddr  caddr;
+                timer_ptr t;
+                _id       i;
+
+                caddr = new_cageaddr(&reply->hdr, from);
+                i.id = caddr.id;
+
+                q->sent.insert(i);
+                q->num_query--;
+
+
                 // sort
                 compare cmp;
                 cmp.m_id = &id;
@@ -671,22 +705,6 @@ namespace libcage {
 
                         n++;
                 }
-
-
-                cageaddr  caddr;
-                timer_ptr t;
-                _id       i;
-
-                caddr = new_cageaddr(&reply->hdr, from);
-                i.id = caddr.id;
-
-                q->sent.insert(i);
-                q->num_query--;
-
-                // stop timer
-                t = q->timers[i];
-                m_timer.unset_timer(t.get());
-                q->timers.erase(i);
 
                 // send
                 send_find(q);
