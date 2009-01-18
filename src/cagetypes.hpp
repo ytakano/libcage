@@ -147,7 +147,7 @@ namespace libcage {
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         padding;
-                uint32_t        addrs[0];
+                uint32_t        addrs[1];
         };
 
         struct msg_dtun_find_value {
@@ -165,7 +165,7 @@ namespace libcage {
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         flag;
-                uint32_t        addrs[0];
+                uint32_t        addrs[1];
         };
 
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);

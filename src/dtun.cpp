@@ -392,4 +392,126 @@ namespace libcage {
         {
                 SEND_FIND(msg_dtun_find_value, type_dtun_find_value, dst, q);
         }
+
+        void
+        dtun::recv_find_node(void *msg, sockaddr *from, int fromlen)
+        {
+                msg_dtun_find_node       *find_node;
+                msg_dtun_find_node_reply *reply;
+                std::vector<cageaddr>     nodes;
+                uint160_t                 dst, id;
+                int                       size;
+                uint8_t                  *buf;
+
+                find_node = (msg_dtun_find_node*)msg;
+
+                dst.from_binary(find_node->hdr.dst,
+                                sizeof(find_node->hdr.dst));
+
+                if (dst != m_id && dst.is_zero()) {
+                        return;
+                }
+
+                if (ntohs(find_node->domain) != m_udp.get_domain()) {
+                        return;
+                }
+
+                
+                // lookup rttable
+                id.from_binary(find_node->id, sizeof(find_node->id));
+
+                lookup(id, num_find_node, nodes);
+
+                uint16_t domain = m_udp.get_domain();
+                if (domain == domain_inet) {
+                        msg_inet *min;
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                nodes.size() * sizeof(*min);
+                        buf = new uint8_t[size];
+
+                        reply = (msg_dtun_find_node_reply*)buf;
+                        min   = (msg_inet*)reply->addrs;
+
+                        memset(reply, 0, size);
+
+                        BOOST_FOREACH(cageaddr &addr, nodes) {
+                                if (addr.domain == domain_loopback) {
+                                        min->port = 0;
+                                        min->addr = 0;
+                                } else {
+                                        in_ptr in;
+                                        in = boost::get<in_ptr>(addr.saddr);
+
+                                        min->port = in->sin_port;
+                                        min->addr = in->sin_addr.s_addr;
+                                }
+
+                                min++;
+                        }
+                } else if (domain == domain_inet6) {
+                        msg_inet6 *min6;
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                nodes.size() * sizeof(*min6);
+                        buf = new uint8_t[size];
+
+                        reply = (msg_dtun_find_node_reply*)buf;
+                        min6  = (msg_inet6*)reply->addrs;
+
+                        memset(reply, 0, size);
+
+                        BOOST_FOREACH(cageaddr &addr, nodes) {
+                                if (addr.domain == domain_loopback) {
+                                        min6->port = 0;
+                                        memset(min6->addr, 0,
+                                               sizeof(min6->addr));
+                                } else {
+                                        in6_ptr in6;
+                                        in6 = boost::get<in6_ptr>(addr.saddr);
+
+                                        min6->port = in6->sin6_port;
+                                        memcpy(min6->addr, 
+                                               in6->sin6_addr.s6_addr,
+                                               sizeof(min6->addr));
+                                }
+
+                                min6++;
+                        }
+                } else {
+                        return;
+                }
+
+
+                // fill header
+                reply->hdr.magic = htons(MAGIC_NUMBER);
+                reply->hdr.ver   = htons(CAGE_VERSION);
+                reply->hdr.type  = htons(type_dtun_find_node_reply);
+
+                m_id.to_binary(reply->hdr.src, sizeof(reply->hdr.src));
+                memcpy(reply->hdr.dst, find_node->hdr.src,
+                       sizeof(reply->hdr.dst));
+
+
+                reply->nonce  = find_node->nonce;
+                reply->domain = find_node->domain;
+                reply->num    = (uint8_t)nodes.size();
+
+                memcpy(reply->id, find_node->id, sizeof(reply->id));
+
+
+                // send
+                m_udp.sendto(buf, size, from, fromlen);
+
+
+                // add to rttable and cache
+                cageaddr caddr;
+                caddr = new_cageaddr(&find_node->hdr, from);
+
+                if (ntohs(find_node->state) == state_global) {
+                        add(caddr);
+                }
+
+                m_peers.add_node(caddr);
+
+                delete buf;
+        }
 }

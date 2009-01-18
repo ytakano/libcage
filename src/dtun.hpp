@@ -71,6 +71,8 @@ namespace libcage {
                                           int fromlen);
                 void            recv_ping_reply(void *msg, sockaddr *from,
                                                 int fromlen);
+                void            recv_find_node(void *msg, sockaddr *from,
+                                               int fromlen);
 
 
                 void            find_node(const uint160_t &dst,
