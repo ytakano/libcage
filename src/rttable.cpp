@@ -158,17 +158,6 @@ namespace libcage {
                 
         }
 
-        class compare {
-        public:
-                const uint160_t        *m_id;
-
-                bool operator() (const cageaddr &lhs,
-                                 const cageaddr &rhs) const
-                {
-                        return (*m_id ^ *lhs.id) < (*m_id ^ *rhs.id);
-                }
-        };
-
         void
         rttable::lookup(const uint160_t &id, int num,
                         std::vector<cageaddr> &ret)

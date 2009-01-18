@@ -514,4 +514,181 @@ namespace libcage {
 
                 delete buf;
         }
+
+        void
+        dtun::recv_find_node_reply(void *msg, int len, sockaddr *from)
+        {
+                msg_dtun_find_node_reply *reply;
+                std::vector<cageaddr>     nodes;
+                id_ptr    src(new uint160_t);
+                query_ptr q;
+                uint160_t dst, id;
+                uint32_t  nonce;
+                uint16_t  domain;
+                int       size;
+                _id       c_id;
+
+                
+                reply = (msg_dtun_find_node_reply*)msg;
+
+                nonce = ntohl(reply->nonce);
+                if (m_query.find(nonce) == m_query.end())
+                        return;
+
+                dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
+                if (dst != m_id)
+                        return;
+
+
+                id.from_binary(reply->id, sizeof(reply->id));
+                q = m_query[nonce];
+
+                if (q->dst != id)
+                        return;
+
+
+                src->from_binary(reply->hdr.src, sizeof(reply->hdr.src));
+                c_id.id = src;
+
+                if (q->timers.find(c_id) == q->timers.end())
+                        return;
+
+
+                // read nodes
+                domain = ntohs(reply->domain);
+                if (domain == domain_inet) {
+                        msg_inet *min;
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                sizeof(*min) * reply->num;
+
+                        if (size != len)
+                                return;
+
+                        min = (msg_inet*)reply->addrs;
+                        for (int i = 0; i < reply->num; i++) {
+                                cageaddr caddr;
+                                id_ptr   p_id(new uint160_t);
+                                in_ptr   p_in(new sockaddr_in);
+
+                                p_id->from_binary(min->id, sizeof(min->id));
+
+                                if (min->port == 0 && min->addr == 0) {
+                                        memcpy(p_in.get(), from,
+                                               sizeof(sockaddr_in));
+                                } else {
+                                        memset(p_in.get(), 0,
+                                               sizeof(sockaddr_in));
+                                        p_in->sin_family      = PF_INET;
+                                        p_in->sin_port        = min->port;
+                                        p_in->sin_addr.s_addr = min->addr;
+                                }
+
+                                caddr.id     = p_id;
+                                caddr.domain = domain;
+                                caddr.saddr  = p_in;
+
+                                nodes.push_back(caddr);
+
+                                min++;
+                        }
+                } else if (domain == domain_inet6) {
+                        msg_inet6 *min6;
+                        uint32_t   zero[4];
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                sizeof(*min6) * reply->num;
+
+                        if (size != len)
+                                return;
+
+                        memset(zero, 0, sizeof(zero));
+                        min6 = (msg_inet6*)reply->addrs;
+                        for (int i = 0; i < reply->num; i++) {
+                                cageaddr caddr;
+                                id_ptr   p_id(new uint160_t);
+                                in6_ptr  p_in6(new sockaddr_in6);
+
+                                p_id->from_binary(min6->id, sizeof(min6->id));
+
+                                if (min6->port == 0 &&
+                                    memcmp(min6->addr, zero,
+                                           sizeof(zero)) == 0) {
+                                        memcpy(p_in6.get(), from,
+                                               sizeof(sockaddr_in6));
+                                } else {
+                                        memset(p_in6.get(), 0,
+                                               sizeof(sockaddr_in6));
+                                        p_in6->sin6_family = PF_INET6;
+                                        p_in6->sin6_port   = min6->port;
+                                        memcpy(p_in6->sin6_addr.s6_addr,
+                                               min6->addr, sizeof(min6->addr));
+                                }
+
+                                caddr.id     = p_id;
+                                caddr.domain = domain;
+                                caddr.saddr  = p_in6;
+
+                                nodes.push_back(caddr);
+
+                                min6++;
+                        }
+                }
+
+                // sort
+                compare cmp;
+                cmp.m_id = &id;
+                std::sort(nodes.begin(), nodes.end(), cmp);
+
+                // merge
+                std::vector<cageaddr> tmp;
+                std::vector<cageaddr>::iterator it1, it2;
+                int n = 0;
+
+                tmp = q->nodes;
+                q->nodes.clear();
+
+                it1 = tmp.begin();
+                it2 = nodes.begin();
+
+                while (n < num_find_node) {
+                        if (it1 == tmp.end() && it2 == nodes.end()) {
+                                break;
+                        } else if (it1 == tmp.end()) {
+                                q->nodes.push_back(*it2);
+                                ++it2;
+                        } else if (it2 == nodes.end()) {
+                                q->nodes.push_back(*it1);
+                        } else if (*it1->id == *it2->id) {
+                                q->nodes.push_back(*it1);
+                                ++it1;
+                                ++it2;
+                        } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
+                                q->nodes.push_back(*it1);
+                                ++it1;
+                        } else {
+                                q->nodes.push_back(*it2);
+                                ++it2;
+                        }
+
+                        n++;
+                }
+
+
+                cageaddr  caddr;
+                timer_ptr t;
+                _id       i;
+
+                caddr = new_cageaddr(&reply->hdr, from);
+                i.id = caddr.id;
+
+                q->sent.insert(i);
+                q->num_query--;
+
+                // stop timer
+                t = q->timers[i];
+                m_timer.unset_timer(t.get());
+                q->timers.erase(i);
+
+                // send
+                send_find(q);
+        }
 }

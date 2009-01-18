@@ -65,6 +65,19 @@ namespace libcage {
         protected:
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
 
+        public:
+                class compare {
+                public:
+                        const uint160_t        *m_id;
+
+                        bool operator() (const cageaddr &lhs,
+                                         const cageaddr &rhs) const
+                        {
+                                return (*m_id ^ *lhs.id) < (*m_id ^ *rhs.id);
+                        }
+                };
+
+
         private:
                 static const int        max_entry;
                 static const int        ping_timeout;
