@@ -169,25 +169,31 @@ namespace libcage {
         }
 
         void
-        peers::add_node(cageaddr &addr, bool is_advertise)
+        peers::add_node(cageaddr &addr)
+        {
+                add_node(addr, 0);
+        }
+
+        void
+        peers::add_node(cageaddr &addr, uint32_t session)
         {
                 _id   i;
 
                 if (addr.domain != domain_inet && addr.domain == domain_inet6)
                         return;
 
-                i.id           = addr.id;
-                i.t            = time(NULL);
-                i.is_advertise = is_advertise;
+                i.id      = addr.id;
+                i.t       = time(NULL);
+                i.session = session;
 
                 _bimap::left_iterator it = m_map.left.find(i);
 
                 if (it != m_map.left.end()) {
-                        if (is_advertise && ! it->first.is_advertise) {
+                        if (it->first.session == session ||
+                            it->first.session == 0) {
                                 _addr a;
                                 a.domain = addr.domain;
                                 a.saddr  = addr.saddr;
-                                m_map.left.erase(it);
                                 m_map.insert(value_t(i, a));
                         } else {
                                 _addr a1, a2;
@@ -197,8 +203,7 @@ namespace libcage {
 
                                 if (a1 == a2) {
                                         // update time
-                                        m_map.left.erase(it);
-                                        m_map.insert(value_t(i, a1));
+                                        it->first.t = i.t;
                                 }
                         }
                 } else {
@@ -221,8 +226,9 @@ namespace libcage {
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
 
-                i.id = addr.id;
-                i.t  = time(NULL);
+                i.id      = addr.id;
+                i.t       = time(NULL);
+                i.session = 0;
 
                 m_map.insert(value_t(i, a));
         }
@@ -305,13 +311,13 @@ namespace libcage {
                 addr.domain = domain_inet;
                 addr.saddr  = in1;
 
-                p.add_node(addr, false);
+                p.add_node(addr, 0);
 
                 *id2 = 200;
                 addr.id     = id2;
                 addr.saddr  = in2;
 
-                p.add_node(addr, false);
+                p.add_node(addr, 0);
                 printf("added: ID = 200\n");
 
 
@@ -370,7 +376,7 @@ namespace libcage {
                 addr.domain = domain_inet;
                 addr.saddr  = in1;
 
-                p.add_node(addr, false);
+                p.add_node(addr, 0);
                 printf("added: ID = 100\n");
 
 

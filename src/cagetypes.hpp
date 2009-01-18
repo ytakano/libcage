@@ -56,8 +56,8 @@ namespace libcage {
         static const uint16_t CAGE_VERSION = 0;
 
         static const uint16_t domain_loopback = 0;
-        static const uint16_t domain_inet     = PF_INET;
-        static const uint16_t domain_inet6    = PF_INET6;
+        static const uint16_t domain_inet     = 1;
+        static const uint16_t domain_inet6    = 2;
 
         static const uint16_t type_nat_echo                = 0;
         static const uint16_t type_nat_echo_reply          = 1;
@@ -160,6 +160,8 @@ namespace libcage {
                 uint8_t         flag;
                 uint32_t        addrs[1];
         };
+
+        cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
 }
 
 #endif // CAGETYPES_HPP

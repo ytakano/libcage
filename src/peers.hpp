@@ -85,9 +85,9 @@ namespace libcage {
 
                 class _id : private boost::totally_ordered<_id> {
                 public:
-                        id_ptr id;
-                        time_t t;
-                        bool   is_advertise;
+                        id_ptr          id;
+                        mutable time_t  t;
+                        uint32_t        session;
 
                         bool operator== (const _id &rhs) const
                         {
@@ -124,7 +124,8 @@ namespace libcage {
                 void            remove_id(id_ptr id);
                 void            remove_addr(cageaddr &addr);
 
-                void            add_node(cageaddr &addr, bool is_advertise);
+                void            add_node(cageaddr &addr);
+                void            add_node(cageaddr &addr, uint32_t session);
                 void            add_node_force(cageaddr &addr);
 
                 void            add_timeout(id_ptr id);

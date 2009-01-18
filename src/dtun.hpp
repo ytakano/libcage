@@ -50,6 +50,10 @@ namespace libcage {
 
         private:
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
+                void            recv_ping(void *msg, sockaddr *from,
+                                          int fromlen);
+                void            recv_ping_reply(void *msg, sockaddr *from,
+                                                int fromlen);
 
                 const uint160_t        &m_id;
                 timer                  &m_timer;

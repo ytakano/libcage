@@ -31,7 +31,6 @@
 
 #include "rttable.hpp"
 
-
 namespace libcage {
         const int       rttable::max_entry = 20;
         const int       rttable::ping_timeout = 2;
@@ -83,44 +82,58 @@ namespace libcage {
                 if (m_table.find(i) == m_table.end()) {
                         m_table[i].push_back(addr);
                         m_nodes.insert(*addr.id);
-                } else if ((int)m_table[i].size() < max_entry) {
-                        m_table[i].push_back(addr);
-                        m_nodes.insert(*addr.id);
-                } else if (m_ping_send.find(i) != m_ping_send.end()){
-                        return;
                 } else {
-                        uint32_t nonce;
-                        for (;;) {
-                                nonce = (uint32_t)mrand48();
-                                if (m_ping_wait.find(nonce) ==
-                                    m_ping_wait.end())
-                                        break;
+                        std::list<cageaddr>           &row = m_table[i];
+                        std::list<cageaddr>::iterator  it;
+
+                        for (it = row.begin(); it != row.end(); ++it) {
+                                if (*it->id == *addr.id) {
+                                        row.erase(it);
+                                        row.push_back(addr);
+                                        return;
+                                }
                         }
 
 
-                        // start timer
-                        cageaddr  &addr_old(m_table[i].front());
-                        timer_ptr  func(new timer_ping);
-                        timeval    tval;
+                        if ((int)m_table[i].size() < max_entry) {
+                                m_table[i].push_back(addr);
+                                m_nodes.insert(*addr.id);
+                        } else if (m_ping_send.find(i) != m_ping_send.end()){
+                                return;
+                        } else {
+                                uint32_t nonce;
+                                for (;;) {
+                                        nonce = (uint32_t)mrand48();
+                                        if (m_ping_wait.find(nonce) ==
+                                            m_ping_wait.end())
+                                                break;
+                                }
+
+
+                                // start timer
+                                cageaddr  &addr_old(m_table[i].front());
+                                timer_ptr  func(new timer_ping);
+                                timeval    tval;
                         
-                        func->m_rttable  = this;
-                        func->m_addr_old = addr_old;
-                        func->m_addr_new = addr;
-                        func->m_nonce    = nonce;
-                        func->m_i        = i;
+                                func->m_rttable  = this;
+                                func->m_addr_old = addr_old;
+                                func->m_addr_new = addr;
+                                func->m_nonce    = nonce;
+                                func->m_i        = i;
 
-                        tval.tv_sec  = ping_timeout;
-                        tval.tv_usec = 0;
-                        m_timer.set_timer(func.get(), &tval);
-
-
-                        // set state
-                        m_ping_wait[nonce] = func;
-                        m_ping_send.insert(i);
+                                tval.tv_sec  = ping_timeout;
+                                tval.tv_usec = 0;
+                                m_timer.set_timer(func.get(), &tval);
 
 
-                        // send ping
-                        send_ping(addr_old, nonce);
+                                // set state
+                                m_ping_wait[nonce] = func;
+                                m_ping_send.insert(i);
+
+
+                                // send ping
+                                send_ping(addr_old, nonce);
+                        }
                 }
         }
 

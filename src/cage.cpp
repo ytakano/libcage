@@ -46,6 +46,12 @@ namespace libcage {
                 }
 
                 msg_hdr *hdr = (msg_hdr*)buf;
+
+                if (hdr->magic != MAGIC_NUMBER ||
+                    hdr->ver   != CAGE_VERSION) {
+                        return;
+                }
+
                 switch (ntohs(hdr->type)) {
                 case type_nat_echo:
                         if (len == (int)sizeof(msg_nat_echo)) {

@@ -57,9 +57,9 @@ main(int argc, char* argv[])
         // libcage::cage::test_natdetect();
         // libcage::cage::test_nattypedetect();
 
-        // libcage::rttable::test_rttable();
+        libcage::rttable::test_rttable();
 
-        libcage::peers::test_peers();
+        // libcage::peers::test_peers();
 
         event_dispatch();
 
