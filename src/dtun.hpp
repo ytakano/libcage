@@ -55,6 +55,7 @@ namespace libcage {
                 static const int        num_find_node;
                 static const int        max_query;
                 static const int        query_timeout;
+                static const int        register_timeout;
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
@@ -85,6 +86,8 @@ namespace libcage {
                 void            find_value(const uint160_t &dst,
                                            callback_find_value func);
 
+                void            register_node();
+
 
         private:
                 class _id : private boost::totally_ordered<_id> {
@@ -114,6 +117,22 @@ namespace libcage {
                 friend class timer_query;
                 typedef boost::shared_ptr<timer_query>  timer_ptr;
 
+                class timer_register : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        timer_register(dtun &d) : m_dtun(d) {}
+
+                        dtun   &m_dtun;
+                };
+
+                class register_callback {
+                public:
+                        void operator() (std::vector<cageaddr> &nodes);
+
+                        dtun   *p_dtun;
+                };
+
                 class query {
                 public:
                         std::vector<cageaddr>           nodes;
@@ -131,6 +150,7 @@ namespace libcage {
 
                 typedef boost::shared_ptr<query> query_ptr;
 
+
                 void            find_nv(const uint160_t &dst,
                                         callback_func func, bool is_find_value);
 
@@ -140,12 +160,21 @@ namespace libcage {
                 void            send_find_node(cageaddr &dst, query_ptr q);
                 void            send_find_value(cageaddr &dst, query_ptr q);
 
+                template<typename MSG>
+                void            send_find_nv(uint16_t type, cageaddr &dst,
+                                             query_ptr q);
+
+
                 const uint160_t        &m_id;
                 timer                  &m_timer;
                 peers                  &m_peers;
                 const natdetector      &m_nat;
                 udphandler             &m_udp;
                 std::map<uint32_t, query_ptr>    m_query;
+                timer_register          m_timer_register;
+                bool                    m_registering;
+                time_t                  m_last_registerd;
+                uint32_t                m_register_session;
         };
 }
 

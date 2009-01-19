@@ -56,6 +56,8 @@ namespace libcage {
                         timer  *m_timer;
                 };
 
+                virtual ~timer();
+
 
                 friend void     timer_callback(int fd, short event, void *arg);
 

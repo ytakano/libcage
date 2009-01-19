@@ -31,12 +31,15 @@
 
 #include "dtun.hpp"
 
+#include <openssl/rand.h>
+
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const int       dtun::num_find_node = 6;
-        const int       dtun::max_query     = 3;
-        const int       dtun::query_timeout = 2;
+        const int       dtun::num_find_node    = 6;
+        const int       dtun::max_query        = 3;
+        const int       dtun::query_timeout    = 2;
+        const int       dtun::register_timeout = 10;
 
         void
         dtun::timer_query::operator() ()
@@ -71,10 +74,18 @@ namespace libcage {
 
         dtun::dtun(const uint160_t &id, timer &t, peers &p,
                    const natdetector &nat, udphandler &udp) :
-                rttable(id, t, p), m_id(id), m_timer(t), m_peers(p), m_nat(nat),
-                m_udp(udp)
+                rttable(id, t, p),
+                m_id(id),
+                m_timer(t),
+                m_peers(p),
+                m_nat(nat),
+                m_udp(udp),
+                m_timer_register(*this),
+                m_registering(false),
+                m_last_registerd(0)
         {
-
+                RAND_pseudo_bytes((unsigned char*)&m_register_session,
+                                  sizeof(m_register_session));
         }
 
         dtun::~dtun()
@@ -225,7 +236,7 @@ namespace libcage {
                         memcpy(in.get(), &saddr, sizeof(sockaddr_in));
                         addr.saddr = in;
                 } else if (addr.domain == domain_inet6) {
-                        in_ptr in6(new sockaddr_in);
+                        in6_ptr in6(new sockaddr_in6);
                         memcpy(in6.get(), &saddr, sizeof(sockaddr_in6));
                         addr.saddr = in6;
                 }
@@ -359,53 +370,55 @@ namespace libcage {
                 }
         }
 
-#define SEND_FIND(MSG, TYPE, DST, Q)                                    \
-        do {                                                            \
-                MSG msg;                                                \
-                                                                        \
-                memset(&msg, 0, sizeof(msg));                           \
-                                                                        \
-                msg.hdr.magic = htons(MAGIC_NUMBER);                    \
-                msg.hdr.ver   = htons(CAGE_VERSION);                    \
-                msg.hdr.type  = htons(TYPE);                            \
-                                                                        \
-                m_id.to_binary(msg.hdr.src, sizeof(msg.hdr.src));       \
-                DST.id->to_binary(msg.hdr.dst, sizeof(msg.hdr.dst));    \
-                                                                        \
-                msg.nonce  = htonl(Q->nonce);                           \
-                msg.domain = htons(m_udp.get_domain());                 \
-                                                                        \
-                if (m_nat.is_global()) {                                \
-                        msg.state = htons(state_global);                \
-                } else {                                                \
-                        msg.state = htons(state_nat);                   \
-                }                                                       \
-                                                                        \
-                Q->dst.to_binary(msg.id, sizeof(msg.id));               \
-                                                                        \
-                if (DST.domain == domain_inet) {                        \
-                        in_ptr in = boost::get<in_ptr>(DST.saddr);      \
-                        m_udp.sendto(&msg, sizeof(msg),                 \
-                                     (sockaddr*)in.get(),               \
-                                     sizeof(sockaddr_in));              \
-                } else if (DST.domain == domain_inet6) {                \
-                        in6_ptr in6 = boost::get<in6_ptr>(DST.saddr);   \
-                        m_udp.sendto(&msg, sizeof(msg),                 \
-                                     (sockaddr*)in6.get(),              \
-                                     sizeof(sockaddr_in6));             \
-                }                                                       \
-        } while (0);
+        template<typename MSG>
+        void
+        dtun::send_find_nv(uint16_t type, cageaddr &dst, query_ptr q)
+        {
+                MSG msg;
+
+                memset(&msg, 0, sizeof(msg));
+
+                msg.hdr.magic = htons(MAGIC_NUMBER);
+                msg.hdr.ver   = htons(CAGE_VERSION);
+                msg.hdr.type  = htons(type);
+
+                m_id.to_binary(msg.hdr.src, sizeof(msg.hdr.src));
+                dst.id->to_binary(msg.hdr.dst, sizeof(msg.hdr.dst));
+
+                msg.nonce  = htonl(q->nonce);
+                msg.domain = htons(m_udp.get_domain());
+
+                if (m_nat.is_global()) {
+                        msg.state = htons(state_global);
+                } else {
+                        msg.state = htons(state_nat);
+                }
+
+                q->dst.to_binary(msg.id, sizeof(msg.id));
+
+                if (dst.domain == domain_inet) {
+                        in_ptr in = boost::get<in_ptr>(dst.saddr);
+                        m_udp.sendto(&msg, sizeof(msg),
+                                     (sockaddr*)in.get(),
+                                     sizeof(sockaddr_in));
+                } else if (dst.domain == domain_inet6) {
+                        in6_ptr in6 = boost::get<in6_ptr>(dst.saddr);
+                        m_udp.sendto(&msg, sizeof(msg),
+                                     (sockaddr*)in6.get(),
+                                     sizeof(sockaddr_in6));
+                }
+        }
 
         void
         dtun::send_find_node(cageaddr &dst, query_ptr q)
         {
-                SEND_FIND(msg_dtun_find_node, type_dtun_find_node, dst, q);
+                send_find_nv<msg_dtun_find_node>(type_dtun_find_node, dst, q);
         }
 
         void
         dtun::send_find_value(cageaddr &dst, query_ptr q)
         {
-                SEND_FIND(msg_dtun_find_value, type_dtun_find_value, dst, q);
+                send_find_nv<msg_dtun_find_value>(type_dtun_find_value, dst, q);
         }
 
         void
@@ -748,5 +761,68 @@ namespace libcage {
 
                 // send
                 send_find(q);
+        }
+
+        void
+        dtun::timer_register::operator() ()
+        {
+                m_dtun.m_timer.unset_timer(this);
+                m_dtun.m_registering = false;
+        }
+
+        void
+        dtun::register_callback::operator() (std::vector<cageaddr> &nodes)
+        {
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        msg_dtun_register reg;
+
+                        memset(&reg, 0, sizeof(reg));
+
+                        reg.hdr.magic = htons(MAGIC_NUMBER);
+                        reg.hdr.ver   = htons(CAGE_VERSION);
+                        reg.hdr.type  = htons(type_dtun_register);
+
+                        p_dtun->m_id.to_binary(reg.hdr.src,
+                                               sizeof(reg.hdr.src));
+                        addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
+
+                        reg.session = p_dtun->m_register_session;
+
+                        if (addr.domain == domain_inet) {
+                                in_ptr in = boost::get<in_ptr>(addr.saddr);
+                                p_dtun->m_udp.sendto(&reg, sizeof(reg),
+                                                     (sockaddr*)in.get(),
+                                                     sizeof(sockaddr_in));
+                        } else if (addr.domain == domain_inet6) {
+                                in6_ptr in6 = boost::get<in6_ptr>(addr.saddr);
+                                p_dtun->m_udp.sendto(&reg, sizeof(reg),
+                                                     (sockaddr*)in6.get(),
+                                                     sizeof(sockaddr_in6));
+                        }
+                }
+        }
+
+        void
+        dtun::register_node()
+        {
+                if (m_registering)
+                        return;
+
+                register_callback func;
+
+                func.p_dtun = this;
+
+                find_node(m_id, func);
+
+                m_registering = true;
+
+
+                // start timer
+                timeval tval;
+
+                tval.tv_sec  = register_timeout;
+                tval.tv_usec = 0;
+
+                m_timer.set_timer(&m_timer_register, &tval);
         }
 }

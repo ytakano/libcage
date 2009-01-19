@@ -43,6 +43,15 @@ namespace libcage {
                 func.get_timer()->m_events.erase(&func);
         }
 
+        timer::~timer()
+        {
+                std::map<callback*, boost::shared_ptr<event> >::iterator it;
+
+                for (it = m_events.begin(); it != m_events.end(); ++it) {
+                        evtimer_del(it->second.get());
+                }
+        }
+
         void
         timer::set_timer(callback *func, timeval *t)
         {
