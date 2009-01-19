@@ -33,6 +33,8 @@
 
 #include <openssl/rand.h>
 
+#include <boost/foreach.hpp>
+
 #include "cagetypes.hpp"
 
 namespace libcage {
@@ -88,6 +90,20 @@ namespace libcage {
                         if (len == (int)sizeof(msg_dtun_ping_reply)) {
                                 m_cage.m_dtun.recv_ping_reply(buf, from,
                                                               fromlen);
+                        }
+                        break;
+                case type_dtun_find_node:
+                        if (len == (int)sizeof(msg_dtun_find_node)) {
+                                m_cage.m_dtun.recv_find_node(buf, from,
+                                                             fromlen);
+                        }
+                        break;
+                case type_dtun_find_node_reply:
+                        if (len >= (int)(sizeof(msg_dtun_find_node_reply) -
+                                         sizeof(uint32_t)))
+                        {
+                                m_cage.m_dtun.recv_find_node_reply(buf, len,
+                                                                   from);
                         }
                         break;
                 }
@@ -151,4 +167,53 @@ namespace libcage {
 
         }
 #endif // DEBUG_NAT
+
+#ifdef DEBUG
+        void
+        cage::dtun_find_node_callback::operator() (std::vector<cageaddr> &addrs)
+        {
+                printf("recv find node reply\n");
+
+                BOOST_FOREACH(cageaddr &addr, addrs) {
+                        in_ptr in = boost::get<in_ptr>(addr.saddr);
+                        printf("  port = %d, ", ntohs(in->sin_port));
+                        printf("id = %s\n", addr.id->to_string().c_str());
+                }
+
+                if (n < 0)
+                        return;
+
+                dtun_find_node_callback func;
+                cage *c;
+
+                c = new cage;
+
+                c->open(PF_INET, 11000 + n);
+                c->m_nat.set_state_global();
+
+                func.n = n - 1;
+
+                c->m_dtun.find_node("localhost", 10000, func);
+        }
+
+        void
+        cage::test_dtun_find_node()
+        {
+                dtun_find_node_callback func;
+                cage *c1, *c2;
+
+                c1 = new cage;
+                c2 = new cage;
+
+                c1->open(PF_INET, 10000);
+                c2->open(PF_INET, 10001);
+
+                c1->m_nat.set_state_global();
+                c2->m_nat.set_state_global();
+
+                func.n = 10;
+
+                c2->m_dtun.find_node("localhost", 10000, func);
+        }
+#endif // DEBUG
 }

@@ -109,9 +109,9 @@ namespace libcage {
 
                 int             id2i(const uint160_t &id);
                 int             id2i4lookup(const uint160_t &id, int max,
-                                            std::vector<int> &ret);
+                                            std::set<int> &ret);
                 int             id2i4lookupR(const uint160_t &id, int max,
-                                             std::vector<int> &ret);
+                                             std::set<int> &ret);
 
 #ifdef DEBUG
         public:

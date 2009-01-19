@@ -52,6 +52,15 @@ namespace libcage {
                 zero.fill_zero();
 
                 if (*id.id != zero) {
+                        std::vector<cageaddr> tmp;
+                        
+                        tmp = q->nodes;
+                        q->nodes.clear();
+                        BOOST_FOREACH(cageaddr &addr, tmp) {
+                                if (*addr.id != *id.id)
+                                        q->nodes.push_back(addr);
+                        }
+
                         p_dtun->m_peers.add_timeout(id.id);
                         p_dtun->remove(*id.id);
                 }
@@ -312,6 +321,7 @@ namespace libcage {
                         tval.tv_usec = 0;
 
                         q->timers[i] = t;
+                        q->sent.insert(i);
 
                         m_timer.set_timer(t.get(), &tval);
 
@@ -413,7 +423,7 @@ namespace libcage {
                 dst.from_binary(find_node->hdr.dst,
                                 sizeof(find_node->hdr.dst));
 
-                if (dst != m_id && dst.is_zero()) {
+                if (dst != m_id && ! dst.is_zero()) {
                         return;
                 }
 
@@ -424,7 +434,6 @@ namespace libcage {
                 
                 // lookup rttable
                 id.from_binary(find_node->id, sizeof(find_node->id));
-
                 lookup(id, num_find_node, nodes);
 
                 uint16_t domain = m_udp.get_domain();
@@ -450,6 +459,7 @@ namespace libcage {
                                         min->port = in->sin_port;
                                         min->addr = in->sin_addr.s_addr;
                                 }
+                                addr.id->to_binary(min->id, sizeof(min->id));
 
                                 min++;
                         }
@@ -478,6 +488,7 @@ namespace libcage {
                                                in6->sin6_addr.s6_addr,
                                                sizeof(min6->addr));
                                 }
+                                addr.id->to_binary(min6->id, sizeof(min6->id));
 
                                 min6++;
                         }
@@ -594,6 +605,11 @@ namespace libcage {
 
                                 p_id->from_binary(min->id, sizeof(min->id));
 
+                                if (m_peers.is_timeout(p_id)) {
+                                        min++;
+                                        continue;
+                                }
+
                                 if (min->port == 0 && min->addr == 0) {
                                         memcpy(p_in.get(), from,
                                                sizeof(sockaddr_in));
@@ -630,6 +646,11 @@ namespace libcage {
                                 in6_ptr  p_in6(new sockaddr_in6);
 
                                 p_id->from_binary(min6->id, sizeof(min6->id));
+
+                                if (m_peers.is_timeout(p_id)) {
+                                        min6++;
+                                        continue;
+                                }
 
                                 if (min6->port == 0 &&
                                     memcmp(min6->addr, zero,
@@ -675,7 +696,8 @@ namespace libcage {
                 // merge
                 std::vector<cageaddr> tmp;
                 std::vector<cageaddr>::iterator it1, it2;
-                int n = 0;
+                std::set<uint160_t> already;
+                int                 n = 0;
 
                 tmp = q->nodes;
                 q->nodes.clear();
@@ -686,20 +708,38 @@ namespace libcage {
                 while (n < num_find_node) {
                         if (it1 == tmp.end() && it2 == nodes.end()) {
                                 break;
-                        } else if (it1 == tmp.end()) {
-                                q->nodes.push_back(*it2);
+                        } 
+
+                        if (it1 == tmp.end()) {
+                                if (already.find(*it2->id) == already.end()) {
+                                        q->nodes.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
                                 ++it2;
                         } else if (it2 == nodes.end()) {
-                                q->nodes.push_back(*it1);
+                                if (already.find(*it1->id) == already.end()) {
+                                        q->nodes.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
                         } else if (*it1->id == *it2->id) {
-                                q->nodes.push_back(*it1);
+                                if (already.find(*it1->id) == already.end()) {
+                                        q->nodes.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
                                 ++it1;
                                 ++it2;
                         } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
-                                q->nodes.push_back(*it1);
+                                if (already.find(*it1->id) == already.end()) {
+                                        q->nodes.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
                                 ++it1;
                         } else {
-                                q->nodes.push_back(*it2);
+                                if (already.find(*it2->id) == already.end()) {
+                                        q->nodes.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
                                 ++it2;
                         }
 

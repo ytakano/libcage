@@ -801,7 +801,6 @@ namespace libcage {
         void
         bn<T, N>::shift_left(int bits, T arr[], int size) const
         {
-                T               mask;
                 int             n, m;
                 int             i;
 
@@ -823,18 +822,16 @@ namespace libcage {
                         return;
 
                 for (i = 0; i < size - n; i++) {
+                        T msb;
+
+                        msb = arr[i + 1];
+                        msb >>= sizeof(T) * 8 - m;
+
                         arr[i] <<= m;
-
-                        mask = 1;
-                        mask <<= m;
-                        mask--;
-                        mask <<= sizeof(arr[0]) * 8 - m;
-
-                        arr[i] |= (mask & arr[i + 1]) >>
-                                (sizeof(arr[0]) * 8 - m);
+                        arr[i] |= msb;
                 }
 
-                arr[n] <<= m;
+                arr[i] <<= m;
         }
 
         template <typename T, int N>

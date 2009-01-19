@@ -1,4 +1,4 @@
-CXXFLAGS += -Wall -O2 -DDEBUG -DDEBUG_NAT
+CXXFLAGS += -Wall -O0 -DDEBUG -DDEBUG_NAT -g
 # ASFLAGS +=
 LDFLAGS += -levent -lcrypto
 # INCLUDES +=

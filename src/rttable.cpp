@@ -31,6 +31,8 @@
 
 #include "rttable.hpp"
 
+#include <boost/foreach.hpp>
+
 namespace libcage {
         const int       rttable::max_entry = 20;
         const int       rttable::ping_timeout = 2;
@@ -162,8 +164,8 @@ namespace libcage {
         rttable::lookup(const uint160_t &id, int num,
                         std::vector<cageaddr> &ret)
         {
-                std::vector<int> is;
-                int              n;
+                std::set<int> is;
+                int           n;
 
                 n = id2i4lookup(id, num, is);
 
@@ -173,8 +175,8 @@ namespace libcage {
                 std::vector<int>::iterator    i;
                 std::list<cageaddr>::iterator j;
 
-                for (i = is.begin(); i != is.end(); ++i) {
-                        if (*i == -1) {
+                BOOST_FOREACH(int i, is) {
+                        if (i == -1) {
                                 cageaddr addr;
                                 addr.id  = id_ptr(new uint160_t);
                                 *addr.id = m_id;
@@ -182,9 +184,8 @@ namespace libcage {
                                 addr.domain = domain_loopback;
                                 ret.push_back(addr);
                         } else {
-                                std::list<cageaddr> &row = m_table[*i];
-                                for (j = row.begin(); j != row.end(); ++j) {
-                                        ret.push_back(*j);
+                                BOOST_FOREACH(cageaddr &addr, m_table[i]) {
+                                        ret.push_back(addr);
                                 }
                         }
                 }
@@ -194,8 +195,10 @@ namespace libcage {
 
                 std::sort(ret.begin(), ret.end(), cmp);
 
-                if ((int)ret.size() > num)
-                        ret.resize(num);
+                while ((int)ret.size() > num) {
+                        ret.pop_back();
+                }
+
         }
 
         void
@@ -281,7 +284,7 @@ namespace libcage {
 
         int
         rttable::id2i4lookup(const uint160_t &id, int max,
-                             std::vector<int> &ret)
+                             std::set<int> &ret)
         {
                 uint160_t id0 = id;
                 uint160_t id1 = 1;
@@ -292,16 +295,19 @@ namespace libcage {
                         uint160_t id3 = m_id ^ id0;
                         if (id3.is_zero()) {
                                 n++;
-                                ret.push_back(-1);
+                                ret.insert(-1);
+                                break;
                         }
 
                         i = id2i(id0);
                         if (m_table.find(i) != m_table.end()) {
                                 n += m_table[i].size();
-                                ret.push_back(i);
+                                ret.insert(i);
                         }
 
-                        id0 ^= (id1 << i);
+                        uint160_t id2 = id1 << i;
+
+                        id0 ^= id2;
                 }
 
                 return n;
@@ -309,7 +315,7 @@ namespace libcage {
 
         int
         rttable::id2i4lookupR(const uint160_t &id, int max,
-                              std::vector<int> &ret)
+                              std::set<int> &ret)
         {
                 std::map<int, std::list<cageaddr> >::iterator it;
                 uint160_t id1 = 1;
@@ -324,7 +330,7 @@ namespace libcage {
 
                         if (! bits.is_zero()) {
                                 n += it->second.size();
-                                ret.push_back(it->first);
+                                ret.insert(it->first);
                         }
                 }
 

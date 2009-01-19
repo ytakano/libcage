@@ -132,6 +132,11 @@ namespace libcage {
         public:
                 void            set_state_nat() { m_state = nat; }
 #endif // DEBUG_NAT
+
+#ifdef DEBUG
+        public:
+                void            set_state_global() { m_state = global; }
+#endif // DEBUG
         };
 }
 

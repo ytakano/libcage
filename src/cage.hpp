@@ -75,6 +75,19 @@ namespace libcage {
                 static void     test_natdetect();
                 static void     test_nattypedetect();
 #endif // DEBUG_NAT
+
+
+#ifdef DEBUG
+                class dtun_find_node_callback {
+                public:
+                        void operator() (std::vector<cageaddr> &addrs);
+
+                        int n;
+                };
+
+        public:
+                static void     test_dtun_find_node();
+#endif // DEBUG
         };
 }
 
