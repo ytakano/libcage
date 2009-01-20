@@ -129,13 +129,15 @@ namespace libcage {
         };
 
         struct msg_inet {
-                uint32_t        port;
+                uint16_t        port;
+                uint16_t        reserved;
                 uint32_t        addr;
                 uint32_t        id[5];
         };
 
         struct msg_inet6 {
-                uint32_t        port;
+                uint16_t        port;
+                uint16_t        reserved;
                 uint32_t        addr[4];
                 uint32_t        id[5];
         };

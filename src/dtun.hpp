@@ -76,6 +76,10 @@ namespace libcage {
                                                int fromlen);
                 void            recv_find_node_reply(void *msg, int len,
                                                      sockaddr *from);
+                void            recv_find_value(void *msg, sockaddr *from,
+                                                int fromlen);
+                void            recv_find_value_reply(void *msg, int len,
+                                                      sockaddr *from);
                 void            recv_register(void *msg, sockaddr *from);
 
 
@@ -173,6 +177,22 @@ namespace libcage {
                 template<typename MSG>
                 void            send_find_nv(uint16_t type, cageaddr &dst,
                                              query_ptr q);
+
+
+                void            write_nodes_inet(msg_inet *min,
+                                                 std::vector<cageaddr> &nodes);
+                void            write_nodes_inet6(msg_inet6 *min6,
+                                                  std::vector<cageaddr> &nodes);
+                void            read_nodes_inet(msg_inet *min, int num,
+                                                std::vector<cageaddr> &nodes,
+                                                sockaddr *from);
+                void            read_nodes_inet6(msg_inet6 *min6, int num,
+                                                 std::vector<cageaddr> &nodes,
+                                                 sockaddr *from);
+                void            merge_nodes(const uint160_t &id,
+                                            std::vector<cageaddr> &dst,
+                                            const std::vector<cageaddr> &v1,
+                                            const std::vector<cageaddr> &v2);
 
 
                 const uint160_t        &m_id;

@@ -431,7 +431,7 @@ namespace libcage {
                 std::vector<cageaddr>     nodes;
                 uint160_t                 dst, id;
                 int                       size;
-                uint8_t                  *buf;
+                char                      buf[1024 * 2];
 
                 find_node = (msg_dtun_find_node*)msg;
 
@@ -456,57 +456,24 @@ namespace libcage {
                         msg_inet *min;
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 nodes.size() * sizeof(*min);
-                        buf = new uint8_t[size];
 
                         reply = (msg_dtun_find_node_reply*)buf;
                         min   = (msg_inet*)reply->addrs;
 
                         memset(reply, 0, size);
 
-                        BOOST_FOREACH(cageaddr &addr, nodes) {
-                                if (addr.domain == domain_loopback) {
-                                        min->port = 0;
-                                        min->addr = 0;
-                                } else {
-                                        in_ptr in;
-                                        in = boost::get<in_ptr>(addr.saddr);
-
-                                        min->port = in->sin_port;
-                                        min->addr = in->sin_addr.s_addr;
-                                }
-                                addr.id->to_binary(min->id, sizeof(min->id));
-
-                                min++;
-                        }
+                        write_nodes_inet(min, nodes);
                 } else if (domain == domain_inet6) {
                         msg_inet6 *min6;
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 nodes.size() * sizeof(*min6);
-                        buf = new uint8_t[size];
 
                         reply = (msg_dtun_find_node_reply*)buf;
                         min6  = (msg_inet6*)reply->addrs;
 
                         memset(reply, 0, size);
 
-                        BOOST_FOREACH(cageaddr &addr, nodes) {
-                                if (addr.domain == domain_loopback) {
-                                        min6->port = 0;
-                                        memset(min6->addr, 0,
-                                               sizeof(min6->addr));
-                                } else {
-                                        in6_ptr in6;
-                                        in6 = boost::get<in6_ptr>(addr.saddr);
-
-                                        min6->port = in6->sin6_port;
-                                        memcpy(min6->addr, 
-                                               in6->sin6_addr.s6_addr,
-                                               sizeof(min6->addr));
-                                }
-                                addr.id->to_binary(min6->id, sizeof(min6->id));
-
-                                min6++;
-                        }
+                        write_nodes_inet6(min6, nodes);
                 } else {
                         return;
                 }
@@ -542,8 +509,6 @@ namespace libcage {
                 }
 
                 m_peers.add_node(caddr);
-
-                delete buf;
         }
 
         void
@@ -575,6 +540,9 @@ namespace libcage {
                 q = m_query[nonce];
 
                 if (q->dst != id)
+                        return;
+
+                if (q->is_find_value)
                         return;
 
 
@@ -613,82 +581,19 @@ namespace libcage {
                                 return;
 
                         min = (msg_inet*)reply->addrs;
-                        for (int i = 0; i < reply->num; i++) {
-                                cageaddr caddr;
-                                id_ptr   p_id(new uint160_t);
-                                in_ptr   p_in(new sockaddr_in);
 
-                                p_id->from_binary(min->id, sizeof(min->id));
-
-                                if (m_peers.is_timeout(p_id)) {
-                                        min++;
-                                        continue;
-                                }
-
-                                if (min->port == 0 && min->addr == 0) {
-                                        memcpy(p_in.get(), from,
-                                               sizeof(sockaddr_in));
-                                } else {
-                                        memset(p_in.get(), 0,
-                                               sizeof(sockaddr_in));
-                                        p_in->sin_family      = PF_INET;
-                                        p_in->sin_port        = min->port;
-                                        p_in->sin_addr.s_addr = min->addr;
-                                }
-
-                                caddr.id     = p_id;
-                                caddr.domain = domain;
-                                caddr.saddr  = p_in;
-
-                                nodes.push_back(caddr);
-
-                                min++;
-                        }
+                        read_nodes_inet(min, reply->num, nodes, from);
                 } else if (domain == domain_inet6) {
                         msg_inet6 *min6;
-                        uint32_t   zero[4];
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 sizeof(*min6) * reply->num;
 
                         if (size != len)
                                 return;
 
-                        memset(zero, 0, sizeof(zero));
                         min6 = (msg_inet6*)reply->addrs;
-                        for (int i = 0; i < reply->num; i++) {
-                                cageaddr caddr;
-                                id_ptr   p_id(new uint160_t);
-                                in6_ptr  p_in6(new sockaddr_in6);
 
-                                p_id->from_binary(min6->id, sizeof(min6->id));
-
-                                if (m_peers.is_timeout(p_id)) {
-                                        min6++;
-                                        continue;
-                                }
-
-                                if (min6->port == 0 &&
-                                    memcmp(min6->addr, zero,
-                                           sizeof(zero)) == 0) {
-                                        memcpy(p_in6.get(), from,
-                                               sizeof(sockaddr_in6));
-                                } else {
-                                        memset(p_in6.get(), 0,
-                                               sizeof(sockaddr_in6));
-                                        p_in6->sin6_family = PF_INET6;
-                                        p_in6->sin6_port   = min6->port;
-                                        memcpy(p_in6->sin6_addr.s6_addr,
-                                               min6->addr, sizeof(min6->addr));
-                                }
-
-                                caddr.id     = p_id;
-                                caddr.domain = domain;
-                                caddr.saddr  = p_in6;
-
-                                nodes.push_back(caddr);
-
-                                min6++;
-                        }
+                        read_nodes_inet6(min6, reply->num, nodes, from);
                 }
 
 
@@ -714,56 +619,11 @@ namespace libcage {
 
                 // merge
                 std::vector<cageaddr> tmp;
-                std::vector<cageaddr>::iterator it1, it2;
-                std::set<uint160_t> already;
-                int                 n = 0;
 
                 tmp = q->nodes;
                 q->nodes.clear();
 
-                it1 = tmp.begin();
-                it2 = nodes.begin();
-
-                while (n < num_find_node) {
-                        if (it1 == tmp.end() && it2 == nodes.end()) {
-                                break;
-                        } 
-
-                        if (it1 == tmp.end()) {
-                                if (already.find(*it2->id) == already.end()) {
-                                        q->nodes.push_back(*it2);
-                                        already.insert(*it2->id);
-                                }
-                                ++it2;
-                        } else if (it2 == nodes.end()) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        q->nodes.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                        } else if (*it1->id == *it2->id) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        q->nodes.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                                ++it2;
-                        } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        q->nodes.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                        } else {
-                                if (already.find(*it2->id) == already.end()) {
-                                        q->nodes.push_back(*it2);
-                                        already.insert(*it2->id);
-                                }
-                                ++it2;
-                        }
-
-                        n++;
-                }
+                merge_nodes(id, q->nodes, tmp, nodes);
 
                 // send
                 send_find(q);
@@ -914,5 +774,446 @@ namespace libcage {
 
 
                 m_peers.add_node(r.addr, r.session);
+        }
+
+        void
+        dtun::recv_find_value(void *msg, sockaddr *from, int fromlen)
+        {
+                msg_dtun_find_value_reply      *reply;
+                msg_dtun_find_value *find_value;
+                cageaddr             caddr;
+                uint160_t            fromid;
+                uint16_t             domain;
+                char                 buf[1024 * 2];
+                id_ptr               id(new uint160_t);
+
+                find_value = (msg_dtun_find_value*)msg;
+
+                fromid.from_binary(find_value->hdr.dst,
+                                   sizeof(find_value->hdr.dst));
+
+                if (fromid != m_id)
+                        return;
+
+                domain = ntohs(find_value->domain);
+
+                if (domain != m_udp.get_domain())
+                        return;
+
+                memset(buf, 0, sizeof(buf));
+
+                // fill header
+                reply = (msg_dtun_find_value_reply*)buf;
+                reply->hdr.magic = htons(MAGIC_NUMBER);
+                reply->hdr.ver   = CAGE_VERSION;
+                reply->hdr.type  = type_dtun_find_value_reply;
+
+                memcpy(reply->hdr.dst, find_value->hdr.src,
+                       sizeof(reply->hdr.dst));
+                m_id.to_binary(reply->hdr.src, sizeof(reply->hdr.src));
+
+
+                reply->nonce  = find_value->nonce;
+                reply->domain = find_value->domain;
+
+                memcpy(reply->id, find_value->id, sizeof(reply->id));
+
+                id->from_binary(find_value->id, sizeof(find_value->id));
+
+                // add to rttable
+                if (find_value->state == state_global) {
+                        caddr = new_cageaddr(&find_value->hdr, from);
+                        add(caddr);
+                }
+                m_peers.add_node(caddr);
+
+
+                // send value
+                _id i;
+                i.id = id;
+
+                if (m_registerd_nodes.find(i) !=
+                    m_registerd_nodes.end()) {
+                        registerd reg = m_registerd_nodes[i];
+                        
+                        reply->num  = 1;
+                        reply->flag = 1;
+
+                        if (reg.addr.domain == domain_inet) {
+                                msg_inet *min;
+                                in_ptr    in;
+                                int       size;
+
+                                in  = boost::get<in_ptr>(reg.addr.saddr);
+                                min = (msg_inet*)reply->addrs;
+
+                                min->port = in->sin_port;
+                                min->addr = in->sin_addr.s_addr;
+
+                                reg.addr.id->to_binary(min->id,
+                                                       sizeof(min->id));
+
+                                size = sizeof(reply) - sizeof(reply->addrs) +
+                                        sizeof(min);
+
+                                m_udp.sendto(reply, size, from, fromlen);
+
+                                return;
+                        } else if (reg.addr.domain == domain_inet6) {
+                                msg_inet6 *min6;
+                                in6_ptr    in6;
+                                int        size;
+
+                                in6  = boost::get<in6_ptr>(reg.addr.saddr);
+                                min6 = (msg_inet6*)reply->addrs;
+
+                                min6->port = in6->sin6_port;
+                                memcpy(min6->addr, in6->sin6_addr.s6_addr,
+                                       sizeof(min6->addr));
+
+                                reg.addr.id->to_binary(min6->id,
+                                                       sizeof(min6->id));
+
+                                size = sizeof(reply) - sizeof(reply->addrs) +
+                                        sizeof(min6);
+
+                                m_udp.sendto(reply, size, from, fromlen);
+
+                                return;
+                        }
+                }
+
+                // send nodes
+                std::vector<cageaddr> nodes;
+                int size = 0;
+
+                lookup(*id, num_find_node, nodes);
+
+                if (domain == domain_inet) {
+                        msg_inet *min;
+
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                nodes.size() * sizeof(*min);
+
+                        min   = (msg_inet*)reply->addrs;
+
+                        write_nodes_inet(min, nodes);
+                } else if (domain == domain_inet6) {
+                        msg_inet6 *min6;
+
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                nodes.size() * sizeof(*min6);
+
+                        min6  = (msg_inet6*)reply->addrs;
+
+                        write_nodes_inet6(min6, nodes);
+                } else {
+                        return;
+                }
+
+                m_udp.sendto(reply, size, from, fromlen);
+        }
+
+        void
+        dtun::recv_find_value_reply(void *msg, int len, sockaddr *from)
+        {
+                msg_dtun_find_value_reply *reply;
+                std::vector<cageaddr>      nodes;
+                id_ptr    src(new uint160_t);
+                query_ptr q;
+                uint160_t dst, id;
+                uint32_t  nonce;
+                uint16_t  domain;
+                int       size;
+                _id       c_id;
+
+                
+                reply = (msg_dtun_find_value_reply*)msg;
+
+                nonce = ntohl(reply->nonce);
+                if (m_query.find(nonce) == m_query.end())
+                        return;
+
+                dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
+                if (dst != m_id)
+                        return;
+
+
+                id.from_binary(reply->id, sizeof(reply->id));
+                q = m_query[nonce];
+
+                if (q->dst != id)
+                        return;
+
+                if (! q->is_find_value)
+                        return;
+
+
+                // stop timer
+                src->from_binary(reply->hdr.src, sizeof(reply->hdr.src));
+                c_id.id = src;
+
+                if (q->timers.find(c_id) != q->timers.end()) {
+                        timer_ptr t;
+                        t = q->timers[c_id];
+                        m_timer.unset_timer(t.get());
+                        q->timers.erase(c_id);
+                }
+
+
+                // read nodes
+                domain = ntohs(reply->domain);
+                if (domain == domain_inet) {
+                        msg_inet *min;
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                sizeof(*min) * reply->num;
+
+                        if (size != len)
+                                return;
+
+                        min = (msg_inet*)reply->addrs;
+
+                        read_nodes_inet(min, reply->num, nodes, from);
+                } else if (domain == domain_inet6) {
+                        msg_inet6 *min6;
+                        size = sizeof(*reply) - sizeof(reply->addrs) +
+                                sizeof(*min6) * reply->num;
+
+                        if (size != len)
+                                return;
+
+                        min6 = (msg_inet6*)reply->addrs;
+
+                        read_nodes_inet6(min6, reply->num, nodes, from);
+                }
+
+
+                cageaddr  caddr;
+                timer_ptr t;
+                _id       i;
+
+                caddr = new_cageaddr(&reply->hdr, from);
+                i.id = caddr.id;
+
+                q->sent.insert(i);
+                q->num_query--;
+
+                // add to rttable
+                add(caddr);
+                m_peers.add_node(caddr);
+
+
+                // finish find value
+                if (reply->flag == 1 && nodes.size() > 0) {
+                        // stop all timer
+                        std::map<_id, timer_ptr>::iterator it;
+                        for (it = q->timers.begin(); it != q->timers.end();
+                             ++it) {
+                                m_timer.unset_timer(it->second.get());
+                        }
+
+                        // call callback
+                        callback_find_value func;
+                        func = boost::get<callback_find_value>(q->func);
+                        func(true, nodes[0]);
+
+                        return;
+                }
+
+
+                // sort
+                compare cmp;
+                cmp.m_id = &id;
+                std::sort(nodes.begin(), nodes.end(), cmp);
+
+                // merge
+                std::vector<cageaddr> tmp;
+
+                tmp = q->nodes;
+                q->nodes.clear();
+
+                merge_nodes(id, q->nodes, tmp, nodes);
+
+                // send
+                send_find(q);
+        }
+
+        void
+        dtun::write_nodes_inet(msg_inet *min, std::vector<cageaddr> &nodes)
+        {
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (addr.domain == domain_loopback) {
+                                min->port = 0;
+                                min->addr = 0;
+                        } else {
+                                in_ptr in;
+                                in = boost::get<in_ptr>(addr.saddr);
+
+                                min->port = in->sin_port;
+                                min->addr = in->sin_addr.s_addr;
+                        }
+                        addr.id->to_binary(min->id, sizeof(min->id));
+
+                        min++;
+                }
+        }
+
+        void
+        dtun::write_nodes_inet6(msg_inet6 *min6, std::vector<cageaddr> &nodes)
+        {
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (addr.domain == domain_loopback) {
+                                min6->port = 0;
+                                memset(min6->addr, 0,
+                                       sizeof(min6->addr));
+                        } else {
+                                in6_ptr in6;
+                                in6 = boost::get<in6_ptr>(addr.saddr);
+                                
+                                min6->port = in6->sin6_port;
+                                memcpy(min6->addr, 
+                                       in6->sin6_addr.s6_addr,
+                                       sizeof(min6->addr));
+                        }
+                        addr.id->to_binary(min6->id, sizeof(min6->id));
+                        
+                        min6++;
+                }
+        }
+        
+        void
+        dtun::read_nodes_inet(msg_inet *min, int num,
+                              std::vector<cageaddr> &nodes,
+                              sockaddr *from)
+        {
+                for (int i; i < num; i++) {
+                        cageaddr caddr;
+                        id_ptr   p_id(new uint160_t);
+                        in_ptr   p_in(new sockaddr_in);
+
+                        p_id->from_binary(min->id, sizeof(min->id));
+
+                        if (m_peers.is_timeout(p_id)) {
+                                min++;
+                                continue;
+                        }
+
+                        if (min->port == 0 && min->addr == 0) {
+                                memcpy(p_in.get(), from,
+                                       sizeof(sockaddr_in));
+                        } else {
+                                memset(p_in.get(), 0,
+                                       sizeof(sockaddr_in));
+                                p_in->sin_family      = PF_INET;
+                                p_in->sin_port        = min->port;
+                                p_in->sin_addr.s_addr = min->addr;
+                        }
+
+                        caddr.id     = p_id;
+                        caddr.domain = domain_inet;
+                        caddr.saddr  = p_in;
+
+                        nodes.push_back(caddr);
+
+                        min++;
+                }
+        }
+
+        void
+        dtun::read_nodes_inet6(msg_inet6 *min6, int num,
+                               std::vector<cageaddr> &nodes,
+                               sockaddr *from)
+        {
+                uint32_t   zero[4];
+
+                memset(zero, 0, sizeof(zero));
+
+                for (int i = 0; i < num; i++) {
+                        cageaddr caddr;
+                        id_ptr   p_id(new uint160_t);
+                        in6_ptr  p_in6(new sockaddr_in6);
+
+                        p_id->from_binary(min6->id, sizeof(min6->id));
+
+                        if (m_peers.is_timeout(p_id)) {
+                                min6++;
+                                continue;
+                        }
+
+                        if (min6->port == 0 &&
+                            memcmp(min6->addr, zero, sizeof(zero)) == 0) {
+                                memcpy(p_in6.get(), from,
+                                       sizeof(sockaddr_in6));
+                        } else {
+                                memset(p_in6.get(), 0,
+                                       sizeof(sockaddr_in6));
+                                p_in6->sin6_family = PF_INET6;
+                                p_in6->sin6_port   = min6->port;
+                                memcpy(p_in6->sin6_addr.s6_addr,
+                                       min6->addr, sizeof(min6->addr));
+                        }
+                        
+                        caddr.id     = p_id;
+                        caddr.domain = domain_inet6;
+                        caddr.saddr  = p_in6;
+
+                        nodes.push_back(caddr);
+                        
+                        min6++;
+                }
+        }
+                
+        void
+        dtun::merge_nodes(const uint160_t &id, std::vector<cageaddr> &dst,
+                          const std::vector<cageaddr> &v1,
+                          const std::vector<cageaddr> &v2)
+        {
+                std::vector<cageaddr>::const_iterator it1, it2;
+                std::set<uint160_t> already;
+                int                 n = 0;
+
+                it1 = v1.begin();
+                it2 = v2.begin();
+
+                while (n < num_find_node) {
+                        if (it1 == v1.end() && it2 == v2.end()) {
+                                break;
+                        } 
+
+                        if (it1 == v1.end()) {
+                                if (already.find(*it2->id) == already.end()) {
+                                        dst.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
+                                ++it2;
+                        } else if (it2 == v2.end()) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                        } else if (*it1->id == *it2->id) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                                ++it2;
+                        } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                        } else {
+                                if (already.find(*it2->id) == already.end()) {
+                                        dst.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
+                                ++it2;
+                        }
+
+                        n++;
+                }
         }
 }
