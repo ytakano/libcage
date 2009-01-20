@@ -107,8 +107,20 @@ namespace libcage {
                         break;
                 case type_dtun_register:
                         if (len == (int)sizeof(msg_dtun_register)) {
-                                printf("recv register\n");
                                 m_cage.m_dtun.recv_register(buf, from);
+                        }
+                        break;
+                case type_dtun_find_value:
+                        if (len == (int)sizeof(msg_dtun_find_value)) {
+                                m_cage.m_dtun.recv_find_value(buf, from,
+                                                              fromlen);
+                        }
+                        break;
+                case type_dtun_find_value_reply:
+                        if (len >= (int)(sizeof(msg_dtun_find_value_reply) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dtun.recv_find_value_reply(buf, len,
+                                                                    from);
                         }
                         break;
                 }
@@ -173,6 +185,8 @@ namespace libcage {
 #endif // DEBUG_NAT
 
 #ifdef DEBUG
+        #define NUM_NODES 100
+
         void
         cage::dtun_find_node_callback::operator() (std::vector<cageaddr> &addrs)
         {
@@ -184,44 +198,53 @@ namespace libcage {
                         printf("id = %s\n", addr.id->to_string().c_str());
                 }
 
-                p_cage->m_dtun.register_node();
+                p_cage[n].m_dtun.register_node();
+                p_cage[n].m_dtun.print_table();
 
-                if (n < 0)
-                        return;
+                n++;
 
-                dtun_find_node_callback func;
-                cage *c;
+                if (n < NUM_NODES) {
+                        p_cage[n].open(PF_INET, 11000 + n);
+                        p_cage[n].m_nat.set_state_global();
+                        p_cage[n].m_dtun.find_node("localhost", 10000,
+                                                    *this);
+                } else {
+                        dtun_find_value_callback func;
 
-                c = new cage;
-
-                c->open(PF_INET, 11000 + n);
-                c->m_nat.set_state_global();
-
-                func.n      = n - 1;
-                func.p_cage = c;
-
-                c->m_dtun.find_node("localhost", 10000, func);
+                        p_cage[0].m_dtun.find_value(p_cage[NUM_NODES - 2].m_id,
+                                                    func);
+                }
         }
 
         void
-        cage::test_dtun_find_node()
+        cage::dtun_find_value_callback::operator() (bool result, cageaddr &addr)
+        {
+                printf("recv find value reply\n");
+
+                if (result)
+                        printf("  true\n");
+                else
+                        printf("  false\n");
+        }
+
+        void
+        cage::test_dtun()
         {
                 dtun_find_node_callback func;
-                cage *c1, *c2;
+                cage *c;
 
-                c1 = new cage;
-                c2 = new cage;
+                // open bootstrap node
+                c = new cage;
+                c->open(PF_INET, 10000);
+                c->m_nat.set_state_global();
 
-                c1->open(PF_INET, 10000);
-                c2->open(PF_INET, 10001);
+                // connect to bootstrap
+                func.n = 0;
+                func.p_cage = new cage[NUM_NODES];
 
-                c1->m_nat.set_state_global();
-                c2->m_nat.set_state_global();
-
-                func.n      = 10;
-                func.p_cage = c2;
-
-                c2->m_dtun.find_node("localhost", 10000, func);
+                func.p_cage[0].open(PF_INET, 11000);
+                func.p_cage[0].m_nat.set_state_global();
+                func.p_cage[0].m_dtun.find_node("localhost", 10000, func);
         }
 #endif // DEBUG
 }

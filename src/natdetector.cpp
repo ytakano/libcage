@@ -119,6 +119,8 @@ namespace libcage {
                 echo.hdr.magic = htons(MAGIC_NUMBER);
                 echo.hdr.ver   = CAGE_VERSION;
                 echo.hdr.type  = type_nat_echo;
+                echo.hdr.len   = htons(sizeof(echo));
+
                 m_id.to_binary(echo.hdr.src, sizeof(echo.hdr.src));
 
                 uint32_t nonce;
@@ -165,6 +167,7 @@ namespace libcage {
                 reply.hdr.magic = htons(MAGIC_NUMBER);
                 reply.hdr.ver   = CAGE_VERSION;
                 reply.hdr.type  = type_nat_echo_reply;
+                reply.hdr.len   = htons(sizeof(reply));
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, echo->hdr.src, sizeof(reply.hdr.dst));
@@ -235,6 +238,7 @@ namespace libcage {
                 redirect.hdr.magic = htons(MAGIC_NUMBER);
                 redirect.hdr.ver   = CAGE_VERSION;
                 redirect.hdr.type  = type_nat_echo_redirect;
+                redirect.hdr.len   = htons(sizeof(redirect));
 
                 m_id.to_binary(redirect.hdr.src, sizeof(redirect.hdr.src));
                 memcpy(redirect.hdr.dst, reply->hdr.src,
@@ -304,6 +308,7 @@ namespace libcage {
                 reply.hdr.magic = htons(MAGIC_NUMBER);
                 reply.hdr.ver   = CAGE_VERSION;
                 reply.hdr.type  = type_nat_echo_redirect_reply;
+                reply.hdr.len   = htons(sizeof(reply));
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, redirect->hdr.src, sizeof(reply.hdr.dst));
@@ -372,6 +377,8 @@ namespace libcage {
                 echo.hdr.magic = htons(MAGIC_NUMBER);
                 echo.hdr.ver   = CAGE_VERSION;
                 echo.hdr.type  = type_nat_echo;
+                echo.hdr.len   = htons(sizeof(echo));
+
                 m_id.to_binary(echo.hdr.src, sizeof(echo.hdr.src));
 
                 uint32_t nonce;

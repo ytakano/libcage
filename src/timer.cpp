@@ -38,10 +38,11 @@ namespace libcage {
         timer_callback(int fd, short event, void *arg)
         {
                 timer::callback &func = *(timer::callback*)arg;
+                timer *t = func.get_timer();
 
                 func();
 
-                func.get_timer()->m_events.erase(&func);
+                t->m_events.erase(&func);
         }
 
         timer::~timer()

@@ -351,22 +351,35 @@ namespace libcage {
                         std::list<cageaddr> &row = i->second;
                         printf("  i = %d\n", i->first);
 
+                        int n = 1;
                         for (j = row.begin(); j != row.end(); ++j) {
                                 str = j->id->to_string();
-                                printf("    ID = %s,\n", str.c_str());
+                                printf("    %02d: ID = %s,\n", n, str.c_str());
 
                                 if (j->domain == domain_inet) {
-                                        in_ptr in;
+                                        in_ptr  in;
+                                        char   *addr; 
+
                                         in = boost::get<in_ptr>(j->saddr);
 
-                                        printf("    Port = %d\n", in->sin_port);
+                                        addr = (char*)&in->sin_addr.s_addr;
+
+                                        printf("        IP = %d.%d.%d.%d, ",
+                                               addr[0], addr[1],
+                                               addr[2], addr[3]);
+
+                                        printf("Port = %d\n",
+                                               ntohs(in->sin_port));
+
                                 } else if (j->domain == domain_inet6) {
                                         in6_ptr in6;
                                         in6 = boost::get<in6_ptr>(j->saddr);
 
-                                        printf("    Port = %d\n",
-                                               in6->sin6_port);
+                                        printf("        Port = %d\n",
+                                               ntohs(in6->sin6_port));
                                 }
+
+                                n++;
                         }
                 }
         }

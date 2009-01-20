@@ -86,8 +86,16 @@ namespace libcage {
                         cage   *p_cage;
                 };
 
+                class dtun_find_value_callback {
+                public:
+                        void operator() (bool result, cageaddr &addr);
+
+                        int     n;
+                        cage   *p_cage;
+                };
+
         public:
-                static void     test_dtun_find_node();
+                static void     test_dtun();
 #endif // DEBUG
         };
 }

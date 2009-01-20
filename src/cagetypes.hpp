@@ -78,6 +78,8 @@ namespace libcage {
                 uint16_t        magic;
                 uint8_t         ver;
                 uint8_t         type;
+                uint16_t        len;
+                uint16_t        reserved;
                 uint8_t         src[20];
                 uint8_t         dst[20];
         };

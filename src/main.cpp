@@ -61,7 +61,7 @@ main(int argc, char* argv[])
 
         // libcage::peers::test_peers();
 
-        libcage::cage::test_dtun_find_node();
+        libcage::cage::test_dtun();
 
         event_dispatch();
 

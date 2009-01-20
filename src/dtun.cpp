@@ -103,6 +103,7 @@ namespace libcage {
                 ping.hdr.magic = htons(MAGIC_NUMBER);
                 ping.hdr.ver   = CAGE_VERSION;
                 ping.hdr.type  = type_dtun_ping;
+                ping.hdr.len   = htons(sizeof(ping));
 
                 m_id.to_binary(ping.hdr.src, sizeof(ping.hdr.src));
                 dst.id->to_binary(ping.hdr.dst, sizeof(ping.hdr.dst));
@@ -110,14 +111,14 @@ namespace libcage {
                 ping.nonce = htonl(nonce);
 
                 if (dst.domain == domain_inet) {
-                        sockaddr* saddr;
-                        saddr = (sockaddr*)boost::get<sockaddr_in*>(dst.saddr);
-                        m_udp.sendto(&ping, sizeof(ping), saddr,
+                        in_ptr in;
+                        in = boost::get<in_ptr>(dst.saddr);
+                        m_udp.sendto(&ping, sizeof(ping), (sockaddr*)in.get(),
                                      sizeof(sockaddr_in));
                 } else {
-                        sockaddr* saddr;
-                        saddr = (sockaddr*)boost::get<sockaddr_in6*>(dst.saddr);
-                        m_udp.sendto(&ping, sizeof(ping), saddr,
+                        in6_ptr in6;
+                        in6 = boost::get<in6_ptr>(dst.saddr);
+                        m_udp.sendto(&ping, sizeof(ping), (sockaddr*)in6.get(),
                                      sizeof(sockaddr_in6));
                 }
         }
@@ -140,6 +141,7 @@ namespace libcage {
                 reply.hdr.magic = htons(MAGIC_NUMBER);
                 reply.hdr.ver   = CAGE_VERSION;
                 reply.hdr.type  = type_dtun_ping_reply;
+                reply.hdr.len   = htons(sizeof(reply));
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, ping->hdr.src, sizeof(reply.hdr.dst));
@@ -252,7 +254,7 @@ namespace libcage {
 
                 lookup(dst, num_find_node, q->nodes);
 
-                if (q->nodes.size()) {
+                if (q->nodes.size() == 0) {
                         if (is_find_value) {
                                 callback_find_value f;
                                 f = boost::get<callback_find_value>(func);
@@ -301,7 +303,6 @@ namespace libcage {
         dtun::find_value(const uint160_t &dst, callback_find_value func)
         {
                 // TODO: check local cache
-
                 find_nv(dst, func, true);
         }
 
@@ -383,6 +384,7 @@ namespace libcage {
                 msg.hdr.magic = htons(MAGIC_NUMBER);
                 msg.hdr.ver   = CAGE_VERSION;
                 msg.hdr.type  = type;
+                msg.hdr.len   = htons(sizeof(msg));
 
                 m_id.to_binary(msg.hdr.src, sizeof(msg.hdr.src));
                 dst.id->to_binary(msg.hdr.dst, sizeof(msg.hdr.dst));
@@ -483,6 +485,7 @@ namespace libcage {
                 reply->hdr.magic = htons(MAGIC_NUMBER);
                 reply->hdr.ver   = CAGE_VERSION;
                 reply->hdr.type  = type_dtun_find_node_reply;
+                reply->hdr.len   = htons(size);
 
                 m_id.to_binary(reply->hdr.src, sizeof(reply->hdr.src));
                 memcpy(reply->hdr.dst, find_node->hdr.src,
@@ -497,7 +500,7 @@ namespace libcage {
 
 
                 // send
-                m_udp.sendto(buf, size, from, fromlen);
+                m_udp.sendto(reply, size, from, fromlen);
 
 
                 // add to rttable and cache
@@ -653,6 +656,7 @@ namespace libcage {
                         reg.hdr.magic = htons(MAGIC_NUMBER);
                         reg.hdr.ver   = CAGE_VERSION;
                         reg.hdr.type  = type_dtun_register;
+                        reg.hdr.len   = htons(sizeof(reg));
 
                         p_dtun->m_id.to_binary(reg.hdr.src,
                                                sizeof(reg.hdr.src));
@@ -821,8 +825,8 @@ namespace libcage {
                 id->from_binary(find_value->id, sizeof(find_value->id));
 
                 // add to rttable
+                caddr = new_cageaddr(&find_value->hdr, from);
                 if (find_value->state == state_global) {
-                        caddr = new_cageaddr(&find_value->hdr, from);
                         add(caddr);
                 }
                 m_peers.add_node(caddr);
@@ -853,8 +857,10 @@ namespace libcage {
                                 reg.addr.id->to_binary(min->id,
                                                        sizeof(min->id));
 
-                                size = sizeof(reply) - sizeof(reply->addrs) +
-                                        sizeof(min);
+                                size = sizeof(*reply) - sizeof(reply->addrs) +
+                                        sizeof(*min);
+
+                                reply->hdr.len = htons(size);
 
                                 m_udp.sendto(reply, size, from, fromlen);
 
@@ -874,8 +880,10 @@ namespace libcage {
                                 reg.addr.id->to_binary(min6->id,
                                                        sizeof(min6->id));
 
-                                size = sizeof(reply) - sizeof(reply->addrs) +
-                                        sizeof(min6);
+                                size = sizeof(*reply) - sizeof(reply->addrs) +
+                                        sizeof(*min6);
+
+                                reply->hdr.len = htons(size);
 
                                 m_udp.sendto(reply, size, from, fromlen);
 
@@ -910,6 +918,9 @@ namespace libcage {
                 } else {
                         return;
                 }
+
+                reply->hdr.len = htons(size);
+                reply->num     = nodes.size();
 
                 m_udp.sendto(reply, size, from, fromlen);
         }
@@ -947,7 +958,6 @@ namespace libcage {
 
                 if (! q->is_find_value)
                         return;
-
 
                 // stop timer
                 src->from_binary(reply->hdr.src, sizeof(reply->hdr.src));
@@ -987,7 +997,6 @@ namespace libcage {
                         read_nodes_inet6(min6, reply->num, nodes, from);
                 }
 
-
                 cageaddr  caddr;
                 timer_ptr t;
                 _id       i;
@@ -1016,6 +1025,8 @@ namespace libcage {
                         callback_find_value func;
                         func = boost::get<callback_find_value>(q->func);
                         func(true, nodes[0]);
+
+                        m_query.erase(nonce);
 
                         return;
                 }
@@ -1086,7 +1097,7 @@ namespace libcage {
                               std::vector<cageaddr> &nodes,
                               sockaddr *from)
         {
-                for (int i; i < num; i++) {
+                for (int i = 0; i < num; i++) {
                         cageaddr caddr;
                         id_ptr   p_id(new uint160_t);
                         in_ptr   p_in(new sockaddr_in);
