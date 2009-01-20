@@ -123,6 +123,16 @@ namespace libcage {
                                                                     from);
                         }
                         break;
+                case type_dtun_request:
+                        if (len == (int)sizeof(msg_dtun_request)) {
+                                m_cage.m_dtun.recv_request(buf, from, fromlen);
+                        }
+                        break;
+                case type_dtun_request_reply:
+                        if (len == (int)sizeof(msg_dtun_request_reply)) {
+                                m_cage.m_dtun.recv_request_reply(buf, from);
+                        }
+                        break;
                 }
         }
 
@@ -209,11 +219,27 @@ namespace libcage {
                         p_cage[n].m_dtun.find_node("localhost", 10000,
                                                     *this);
                 } else {
-                        dtun_find_value_callback func;
-
+                        // test find value
+                        dtun_find_value_callback func1;
                         p_cage[0].m_dtun.find_value(p_cage[NUM_NODES - 2].m_id,
-                                                    func);
+                                                    func1);
+
+                        // test request
+                        dtun_request_callback func2;
+                        p_cage[1].m_dtun.request(p_cage[NUM_NODES - 3].m_id,
+                                                 func2);
                 }
+        }
+
+        void
+        cage::dtun_request_callback::operator() (bool result, cageaddr &addr)
+        {
+                printf("recv request reply\n");
+
+                if (result)
+                        printf("  true\n");
+                else
+                        printf("  false\n");
         }
 
         void

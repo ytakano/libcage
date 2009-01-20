@@ -40,6 +40,8 @@ namespace libcage {
         const int       dtun::max_query        = 3;
         const int       dtun::query_timeout    = 2;
         const int       dtun::register_timeout = 10;
+        const int       dtun::request_retry    = 2;
+        const int       dtun::request_timeout  = 2;
 
         void
         dtun::timer_query::operator() ()
@@ -1226,5 +1228,179 @@ namespace libcage {
 
                         n++;
                 }
+        }
+
+        void
+        dtun::timer_request::operator() ()
+        {
+                cageaddr addr;
+                req_ptr  q;
+
+                q = p_dtun->m_request[nonce];
+
+                q->func(false, addr);
+
+                p_dtun->m_request.erase(nonce);
+        }
+
+        void
+        dtun::request_find_value::operator() (bool result, cageaddr &addr)
+        {
+                req_ptr q;
+
+                q = p_dtun->m_request[nonce];
+
+                if (! result) {
+                        q->retry--;
+                        if (q->retry > 0) {
+                                p_dtun->find_value(q->dst, *this);
+                        } else {
+                                q->func(result, addr);
+                                p_dtun->m_request.erase(nonce);
+                        }
+                        return;
+                }
+
+                // start timer
+                timeval tval;
+
+                tval.tv_sec  = 2;
+                tval.tv_usec = 0;
+
+                q->timer_req.nonce     = nonce;
+                q->timer_req.p_dtun    = p_dtun;
+                q->finished_find_value = true;
+
+                p_dtun->m_timer.set_timer(&q->timer_req, &tval);
+
+
+                // send request
+                msg_dtun_request req;
+
+                memset(&req, 0, sizeof(req));
+
+                req.hdr.magic = htons(MAGIC_NUMBER);
+                req.hdr.ver   = CAGE_VERSION;
+                req.hdr.type  = type_dtun_request;
+                req.hdr.len   = htons(sizeof(req));
+
+                p_dtun->m_id.to_binary(req.hdr.src, sizeof(req.hdr.src));
+                addr.id->to_binary(req.hdr.dst, sizeof(req.hdr.dst));
+
+                req.nonce = htonl(nonce);
+
+                // send
+                if (addr.domain == domain_inet) {
+                        in_ptr in;
+                        in = boost::get<in_ptr>(addr.saddr);
+                        p_dtun->m_udp.sendto(&req, sizeof(req),
+                                             (sockaddr*)in.get(),
+                                             sizeof(sockaddr_in));
+                } else if (addr.domain == domain_inet6) {
+                        in6_ptr in6;
+                        in6 = boost::get<in6_ptr>(addr.saddr);
+                        p_dtun->m_udp.sendto(&req, sizeof(req),
+                                             (sockaddr*)in6.get(),
+                                             sizeof(sockaddr_in6));
+                }
+        }
+
+        void
+        dtun::request(const uint160_t &dst, callback_request func)
+        {
+                request_find_value fv;
+                req_ptr  q(new request_query);
+                uint32_t nonce;
+
+                do {
+                        nonce = mrand48();
+                } while (m_request.find(nonce) != m_request.end());
+
+                q->func   = func;
+                q->retry  = request_retry;
+                q->p_dtun = this;
+                q->dst    = dst;
+                q->finished_find_value = false;
+
+                m_request[nonce] = q;
+
+                
+                fv.nonce  = nonce;
+                fv.p_dtun = this;
+
+                find_value(dst, fv);
+        }
+
+        void
+        dtun::recv_request(void *msg, sockaddr *from, int fromlen)
+        {
+                msg_dtun_request       *req;
+                msg_dtun_request_reply  reply;
+                cageaddr                addr;
+                uint160_t               dst;
+
+                req = (msg_dtun_request*)msg;
+
+                dst.from_binary(req->hdr.dst, sizeof(req->hdr.dst));
+
+                if (dst != m_id)
+                        return;
+
+                // add to request cache
+                addr = new_cageaddr(&req->hdr, from);
+                m_peers.add_node(addr);
+
+                // fill packet
+                reply.hdr.magic = htons(MAGIC_NUMBER);
+                reply.hdr.ver   = CAGE_VERSION;
+                reply.hdr.type  = type_dtun_request_reply;
+                reply.hdr.len   = htons(sizeof(reply));
+
+                m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
+                memcpy(reply.hdr.dst, req->hdr.src, sizeof(reply.hdr.dst));
+
+                reply.nonce = req->nonce;
+
+                // send
+                m_udp.sendto(&reply, sizeof(reply), from, fromlen);
+        }
+
+        void
+        dtun::recv_request_reply(void *msg, sockaddr *from)
+        {
+                msg_dtun_request_reply *reply;
+                req_ptr   q;
+                cageaddr  addr;
+                uint160_t dst;
+                uint32_t  nonce;
+
+                reply = (msg_dtun_request_reply*)msg;
+
+                dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
+                if (dst != m_id)
+                        return;
+
+                nonce = ntohl(reply->nonce);
+                if (m_request.find(nonce) == m_request.end())
+                        return;
+
+                q = m_request[nonce];
+
+
+                addr = new_cageaddr(&reply->hdr, from);
+                if (q->dst != *addr.id)
+                        return;
+
+
+                m_request.erase(nonce);
+
+                // stop timer
+                m_timer.unset_timer(&q->timer_req);
+
+                // add to request cache
+                m_peers.add_node(addr);
+
+                // call callback function
+                q->func(true, addr);
         }
 }

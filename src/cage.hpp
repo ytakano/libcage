@@ -94,6 +94,14 @@ namespace libcage {
                         cage   *p_cage;
                 };
 
+                class dtun_request_callback {
+                public:
+                        void operator() (bool result, cageaddr &addr);
+
+                        int     n;
+                        cage   *p_cage;
+                };
+
         public:
                 static void     test_dtun();
 #endif // DEBUG

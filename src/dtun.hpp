@@ -56,11 +56,16 @@ namespace libcage {
                 static const int        max_query;
                 static const int        query_timeout;
                 static const int        register_timeout;
+                static const int        request_retry;
+                static const int        request_timeout;
+
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
                 typedef boost::function<void (bool, cageaddr&)>
                 callback_find_value;
+                typedef boost::function<void (bool, cageaddr&)>
+                callback_request;
                 typedef boost::variant<callback_find_node,
                                        callback_find_value> callback_func;
 
@@ -81,6 +86,9 @@ namespace libcage {
                 void            recv_find_value_reply(void *msg, int len,
                                                       sockaddr *from);
                 void            recv_register(void *msg, sockaddr *from);
+                void            recv_request(void *msg, sockaddr *from,
+                                             int fromlen);
+                void            recv_request_reply(void *msg, sockaddr *from);
 
 
                 void            find_node(const uint160_t &dst,
@@ -93,6 +101,8 @@ namespace libcage {
 
                 void            register_node();
 
+                void            request(const uint160_t &dst,
+                                        callback_request func);
 
         private:
                 class _id : private boost::totally_ordered<_id> {
@@ -110,6 +120,8 @@ namespace libcage {
                         }
                 };
 
+
+                // for find node or value
                 class timer_query : public timer::callback {
                 public:
                         virtual void operator() ();
@@ -119,7 +131,6 @@ namespace libcage {
                         dtun           *p_dtun;
                 };
 
-                friend class timer_query;
                 typedef boost::shared_ptr<timer_query>  timer_ptr;
 
                 class timer_register : public timer::callback {
@@ -129,13 +140,6 @@ namespace libcage {
                         timer_register(dtun &d) : m_dtun(d) {}
 
                         dtun   &m_dtun;
-                };
-
-                class register_callback {
-                public:
-                        void operator() (std::vector<cageaddr> &nodes);
-
-                        dtun   *p_dtun;
                 };
 
                 class query {
@@ -152,6 +156,16 @@ namespace libcage {
                                        callback_find_value> func;
                 };
 
+                typedef boost::shared_ptr<query> query_ptr;
+
+                // register
+                class register_callback {
+                public:
+                        void operator() (std::vector<cageaddr> &nodes);
+
+                        dtun   *p_dtun;
+                };
+
                 class registerd : private boost::totally_ordered<_id> {
                 public:
                         cageaddr        addr;
@@ -161,8 +175,34 @@ namespace libcage {
                         bool operator== (const registerd &rhs) const;
                 };
 
+                // for request
+                class request_find_value {
+                public:
+                        void operator() (bool result, cageaddr &addr);
 
-                typedef boost::shared_ptr<query> query_ptr;
+                        uint32_t        nonce;
+                        dtun           *p_dtun;
+                };
+
+                class timer_request : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        uint32_t        nonce;
+                        dtun           *p_dtun;
+                };
+
+                class request_query {
+                public:
+                        callback_request        func;
+                        timer_request   timer_req;
+                        uint160_t       dst;
+                        bool            finished_find_value;
+                        dtun           *p_dtun;
+                        int             retry;
+                };
+
+                typedef boost::shared_ptr<request_query> req_ptr;
 
 
                 void            find_nv(const uint160_t &dst,
@@ -206,6 +246,7 @@ namespace libcage {
                 time_t                  m_last_registerd;
                 uint32_t                m_register_session;
                 std::map<_id, registerd>        m_registerd_nodes;
+                std::map<uint32_t, req_ptr>     m_request;
         };
 }
 

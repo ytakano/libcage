@@ -73,6 +73,8 @@ namespace libcage {
         static const uint8_t type_dtun_find_value         = 8;
         static const uint8_t type_dtun_find_value_reply   = 9;
         static const uint8_t type_dtun_register           = 10;
+        static const uint8_t type_dtun_request            = 11;
+        static const uint8_t type_dtun_request_reply      = 12;
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -175,6 +177,16 @@ namespace libcage {
         struct msg_dtun_register {
                 msg_hdr         hdr;
                 uint32_t        session;
+        };
+
+        struct msg_dtun_request {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+        };
+
+        struct msg_dtun_request_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
         };
 
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
