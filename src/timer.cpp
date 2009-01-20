@@ -31,13 +31,14 @@
 
 #include "timer.hpp"
 
+#include <iostream>
+
 namespace libcage {
         void
         timer_callback(int fd, short event, void *arg)
         {
                 timer::callback &func = *(timer::callback*)arg;
 
-                printf("invoked timer: %p\n", arg);
                 func();
 
                 func.get_timer()->m_events.erase(&func);

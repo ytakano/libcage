@@ -82,7 +82,8 @@ namespace libcage {
                 public:
                         void operator() (std::vector<cageaddr> &addrs);
 
-                        int n;
+                        int     n;
+                        cage   *p_cage;
                 };
 
         public:

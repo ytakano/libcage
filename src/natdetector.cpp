@@ -72,7 +72,7 @@ namespace libcage {
                         if (len == (int)sizeof(msg_nat_echo_redirect_reply)) {
                                 msg_hdr *hdr = (msg_hdr*)buf;
 
-                                if (ntohs(hdr->type) ==
+                                if (hdr->type ==
                                     type_nat_echo_redirect_reply) {
 #ifdef DEBUG_NAT
                                         printf("recv nat_echo_redirect_reply\n");
@@ -117,8 +117,8 @@ namespace libcage {
                 memset(&echo, 0, sizeof(echo));
 
                 echo.hdr.magic = htons(MAGIC_NUMBER);
-                echo.hdr.ver   = htons(CAGE_VERSION);
-                echo.hdr.type  = htons(type_nat_echo);
+                echo.hdr.ver   = CAGE_VERSION;
+                echo.hdr.type  = type_nat_echo;
                 m_id.to_binary(echo.hdr.src, sizeof(echo.hdr.src));
 
                 uint32_t nonce;
@@ -163,8 +163,8 @@ namespace libcage {
                 memset(&reply, 0, sizeof(reply));
 
                 reply.hdr.magic = htons(MAGIC_NUMBER);
-                reply.hdr.ver   = htons(CAGE_VERSION);
-                reply.hdr.type  = htons(type_nat_echo_reply);
+                reply.hdr.ver   = CAGE_VERSION;
+                reply.hdr.type  = type_nat_echo_reply;
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, echo->hdr.src, sizeof(reply.hdr.dst));
@@ -233,8 +233,8 @@ namespace libcage {
                 memset(&redirect, 0, sizeof(redirect));
                 
                 redirect.hdr.magic = htons(MAGIC_NUMBER);
-                redirect.hdr.ver   = htons(CAGE_VERSION);
-                redirect.hdr.type  = htons(type_nat_echo_redirect);
+                redirect.hdr.ver   = CAGE_VERSION;
+                redirect.hdr.type  = type_nat_echo_redirect;
 
                 m_id.to_binary(redirect.hdr.src, sizeof(redirect.hdr.src));
                 memcpy(redirect.hdr.dst, reply->hdr.src,
@@ -302,8 +302,8 @@ namespace libcage {
                 redirect = (msg_nat_echo_redirect*)msg;
 
                 reply.hdr.magic = htons(MAGIC_NUMBER);
-                reply.hdr.ver   = htons(CAGE_VERSION);
-                reply.hdr.type  = htons(type_nat_echo_redirect_reply);
+                reply.hdr.ver   = CAGE_VERSION;
+                reply.hdr.type  = type_nat_echo_redirect_reply;
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, redirect->hdr.src, sizeof(reply.hdr.dst));
@@ -370,8 +370,8 @@ namespace libcage {
                 memset(&echo, 0, sizeof(echo));
 
                 echo.hdr.magic = htons(MAGIC_NUMBER);
-                echo.hdr.ver   = htons(CAGE_VERSION);
-                echo.hdr.type  = htons(type_nat_echo);
+                echo.hdr.ver   = CAGE_VERSION;
+                echo.hdr.type  = type_nat_echo;
                 m_id.to_binary(echo.hdr.src, sizeof(echo.hdr.src));
 
                 uint32_t nonce;

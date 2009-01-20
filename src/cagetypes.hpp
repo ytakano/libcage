@@ -53,7 +53,7 @@ namespace libcage {
         };
 
         static const uint16_t MAGIC_NUMBER = 0xbabe;
-        static const uint16_t CAGE_VERSION = 0;
+        static const uint8_t  CAGE_VERSION = 0;
 
         static const uint16_t domain_loopback = 0;
         static const uint16_t domain_inet     = 1;
@@ -62,23 +62,22 @@ namespace libcage {
         static const uint16_t state_global = 1;
         static const uint16_t state_nat    = 2;
 
-        static const uint16_t type_nat_echo                = 0;
-        static const uint16_t type_nat_echo_reply          = 1;
-        static const uint16_t type_nat_echo_redirect       = 2;
-        static const uint16_t type_nat_echo_redirect_reply = 3;
-        static const uint16_t type_dtun_ping               = 4;
-        static const uint16_t type_dtun_ping_reply         = 5;
-        static const uint16_t type_dtun_find_node          = 6;
-        static const uint16_t type_dtun_find_node_reply    = 7;
-        static const uint16_t type_dtun_find_value         = 8;
-        static const uint16_t type_dtun_find_value_reply   = 9;
-        static const uint16_t type_dtun_register           = 10;
+        static const uint8_t type_nat_echo                = 0;
+        static const uint8_t type_nat_echo_reply          = 1;
+        static const uint8_t type_nat_echo_redirect       = 2;
+        static const uint8_t type_nat_echo_redirect_reply = 3;
+        static const uint8_t type_dtun_ping               = 4;
+        static const uint8_t type_dtun_ping_reply         = 5;
+        static const uint8_t type_dtun_find_node          = 6;
+        static const uint8_t type_dtun_find_node_reply    = 7;
+        static const uint8_t type_dtun_find_value         = 8;
+        static const uint8_t type_dtun_find_value_reply   = 9;
+        static const uint8_t type_dtun_register           = 10;
 
         struct msg_hdr {
                 uint16_t        magic;
-                uint16_t        ver;
-                uint16_t        type;
-                uint16_t        reserved;
+                uint8_t         ver;
+                uint8_t         type;
                 uint8_t         src[20];
                 uint8_t         dst[20];
         };

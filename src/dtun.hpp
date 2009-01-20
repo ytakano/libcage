@@ -76,6 +76,7 @@ namespace libcage {
                                                int fromlen);
                 void            recv_find_node_reply(void *msg, int len,
                                                      sockaddr *from);
+                void            recv_register(void *msg, sockaddr *from);
 
 
                 void            find_node(const uint160_t &dst,
@@ -147,6 +148,15 @@ namespace libcage {
                                        callback_find_value> func;
                 };
 
+                class registerd : private boost::totally_ordered<_id> {
+                public:
+                        cageaddr        addr;
+                        uint32_t        session;
+                        time_t          t;
+
+                        bool operator== (const registerd &rhs) const;
+                };
+
 
                 typedef boost::shared_ptr<query> query_ptr;
 
@@ -175,6 +185,7 @@ namespace libcage {
                 bool                    m_registering;
                 time_t                  m_last_registerd;
                 uint32_t                m_register_session;
+                std::map<_id, registerd>        m_registerd_nodes;
         };
 }
 

@@ -50,11 +50,11 @@ namespace libcage {
                 msg_hdr *hdr = (msg_hdr*)buf;
 
                 if (ntohs(hdr->magic) != MAGIC_NUMBER ||
-                    ntohs(hdr->ver)   != CAGE_VERSION) {
+                    hdr->ver != CAGE_VERSION) {
                         return;
                 }
 
-                switch (ntohs(hdr->type)) {
+                switch (hdr->type) {
                 case type_nat_echo:
                         if (len == (int)sizeof(msg_nat_echo)) {
 #ifdef DEBUG_NAT
@@ -100,14 +100,18 @@ namespace libcage {
                         break;
                 case type_dtun_find_node_reply:
                         if (len >= (int)(sizeof(msg_dtun_find_node_reply) -
-                                         sizeof(uint32_t)))
-                        {
+                                         sizeof(uint32_t))) {
                                 m_cage.m_dtun.recv_find_node_reply(buf, len,
                                                                    from);
                         }
                         break;
+                case type_dtun_register:
+                        if (len == (int)sizeof(msg_dtun_register)) {
+                                printf("recv register\n");
+                                m_cage.m_dtun.recv_register(buf, from);
+                        }
+                        break;
                 }
-
         }
 
         cage::cage() : m_nat(m_udp, m_timer, m_id),
@@ -180,6 +184,8 @@ namespace libcage {
                         printf("id = %s\n", addr.id->to_string().c_str());
                 }
 
+                p_cage->m_dtun.register_node();
+
                 if (n < 0)
                         return;
 
@@ -191,7 +197,8 @@ namespace libcage {
                 c->open(PF_INET, 11000 + n);
                 c->m_nat.set_state_global();
 
-                func.n = n - 1;
+                func.n      = n - 1;
+                func.p_cage = c;
 
                 c->m_dtun.find_node("localhost", 10000, func);
         }
@@ -211,7 +218,8 @@ namespace libcage {
                 c1->m_nat.set_state_global();
                 c2->m_nat.set_state_global();
 
-                func.n = 10;
+                func.n      = 10;
+                func.p_cage = c2;
 
                 c2->m_dtun.find_node("localhost", 10000, func);
         }

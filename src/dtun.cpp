@@ -101,8 +101,8 @@ namespace libcage {
                 memset(&ping, 0, sizeof(ping));
 
                 ping.hdr.magic = htons(MAGIC_NUMBER);
-                ping.hdr.ver   = htons(CAGE_VERSION);
-                ping.hdr.type  = htons(type_dtun_ping);
+                ping.hdr.ver   = CAGE_VERSION;
+                ping.hdr.type  = type_dtun_ping;
 
                 m_id.to_binary(ping.hdr.src, sizeof(ping.hdr.src));
                 dst.id->to_binary(ping.hdr.dst, sizeof(ping.hdr.dst));
@@ -138,8 +138,8 @@ namespace libcage {
                 memset(&reply, 0, sizeof(reply));
 
                 reply.hdr.magic = htons(MAGIC_NUMBER);
-                reply.hdr.ver   = htons(CAGE_VERSION);
-                reply.hdr.type  = htons(type_dtun_ping_reply);
+                reply.hdr.ver   = CAGE_VERSION;
+                reply.hdr.type  = type_dtun_ping_reply;
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
                 memcpy(reply.hdr.dst, ping->hdr.src, sizeof(reply.hdr.dst));
@@ -343,6 +343,8 @@ namespace libcage {
                         } else {
                                 send_find_node(addr, q);
                         }
+
+                        q->num_query++;
                 }
 
                 if (q->num_query == 0) {
@@ -379,8 +381,8 @@ namespace libcage {
                 memset(&msg, 0, sizeof(msg));
 
                 msg.hdr.magic = htons(MAGIC_NUMBER);
-                msg.hdr.ver   = htons(CAGE_VERSION);
-                msg.hdr.type  = htons(type);
+                msg.hdr.ver   = CAGE_VERSION;
+                msg.hdr.type  = type;
 
                 m_id.to_binary(msg.hdr.src, sizeof(msg.hdr.src));
                 dst.id->to_binary(msg.hdr.dst, sizeof(msg.hdr.dst));
@@ -512,8 +514,8 @@ namespace libcage {
 
                 // fill header
                 reply->hdr.magic = htons(MAGIC_NUMBER);
-                reply->hdr.ver   = htons(CAGE_VERSION);
-                reply->hdr.type  = htons(type_dtun_find_node_reply);
+                reply->hdr.ver   = CAGE_VERSION;
+                reply->hdr.type  = type_dtun_find_node_reply;
 
                 m_id.to_binary(reply->hdr.src, sizeof(reply->hdr.src));
                 memcpy(reply->hdr.dst, find_node->hdr.src,
@@ -700,6 +702,10 @@ namespace libcage {
                 q->sent.insert(i);
                 q->num_query--;
 
+                // add to rttable
+                add(caddr);
+                m_peers.add_node(caddr);
+
 
                 // sort
                 compare cmp;
@@ -773,20 +779,26 @@ namespace libcage {
         void
         dtun::register_callback::operator() (std::vector<cageaddr> &nodes)
         {
+                p_dtun->m_timer.unset_timer(&p_dtun->m_timer_register);
+                p_dtun->m_registering = false;
+
                 BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (*addr.id == p_dtun->m_id)
+                                continue;
+
                         msg_dtun_register reg;
 
                         memset(&reg, 0, sizeof(reg));
 
                         reg.hdr.magic = htons(MAGIC_NUMBER);
-                        reg.hdr.ver   = htons(CAGE_VERSION);
-                        reg.hdr.type  = htons(type_dtun_register);
+                        reg.hdr.ver   = CAGE_VERSION;
+                        reg.hdr.type  = type_dtun_register;
 
                         p_dtun->m_id.to_binary(reg.hdr.src,
                                                sizeof(reg.hdr.src));
                         addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
 
-                        reg.session = p_dtun->m_register_session;
+                        reg.session = htonl(p_dtun->m_register_session);
 
                         if (addr.domain == domain_inet) {
                                 in_ptr in = boost::get<in_ptr>(addr.saddr);
@@ -808,15 +820,6 @@ namespace libcage {
                 if (m_registering)
                         return;
 
-                register_callback func;
-
-                func.p_dtun = this;
-
-                find_node(m_id, func);
-
-                m_registering = true;
-
-
                 // start timer
                 timeval tval;
 
@@ -824,5 +827,92 @@ namespace libcage {
                 tval.tv_usec = 0;
 
                 m_timer.set_timer(&m_timer_register, &tval);
+
+
+                // find node
+                register_callback func;
+
+                func.p_dtun = this;
+
+                find_node(m_id, func);
+
+                m_registering = true;
+        }
+
+        bool
+        dtun::registerd::operator== (const registerd &rhs) const
+        {
+                if (*addr.id != *rhs.addr.id) {
+                        return false;
+                } else if (addr.domain != rhs.addr.domain) {
+                        return false;
+                } else if (addr.domain == domain_inet) {
+                        in_ptr in1, in2;
+                        
+                        in1 = boost::get<in_ptr>(addr.saddr);
+                        in2 = boost::get<in_ptr>(rhs.addr.saddr);
+
+                        if (in1->sin_port != in2->sin_port) {
+                                return false;
+                        } else if (in1->sin_addr.s_addr !=
+                                   in2->sin_addr.s_addr) {
+                                return false;
+                        } else {
+                                return true;
+                        }
+                } else if (addr.domain == domain_inet6) {
+                        in6_ptr in1, in2;
+                        
+                        in1 = boost::get<in6_ptr>(addr.saddr);
+                        in2 = boost::get<in6_ptr>(rhs.addr.saddr);
+
+                        if (in1->sin6_port != in2->sin6_port) {
+                                return false;
+                        } else if (memcmp(in1->sin6_addr.s6_addr,
+                                          in2->sin6_addr.s6_addr,
+                                          sizeof(in6_addr)) != 0) {
+                                return false;
+                        } else {
+                                return true;
+                        }
+                }
+                
+                throw "must not reach";
+
+                return false;
+        }
+
+        void
+        dtun::recv_register(void *msg, sockaddr *from)
+        {
+                msg_dtun_register *reg = (msg_dtun_register*)msg;
+                registerd          r;
+                uint160_t          fromid;
+                _id                i;
+
+                fromid.from_binary(reg->hdr.dst, sizeof(reg->hdr.dst));
+                if (fromid != m_id)
+                        return;
+
+                r.addr    = new_cageaddr(&reg->hdr, from);
+                r.session = ntohl(reg->session);
+                r.t       = time(NULL);
+
+                i.id = r.addr.id;
+
+
+                std::map<_id, registerd>::iterator it;
+                it = m_registerd_nodes.find(i);
+
+                if (it == m_registerd_nodes.end()) {
+                        m_registerd_nodes[i] = r;
+                } else if (it->second.session == r.session) {
+                        it->second = r;
+                } else if (it->second == r) {
+                        it->second.t = r.t;
+                }
+
+
+                m_peers.add_node(r.addr, r.session);
         }
 }
