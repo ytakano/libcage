@@ -126,7 +126,20 @@ namespace libcage {
                 public:
                         virtual void operator() ();
 
-                        timer_refresh(dtun &d) : m_dtun(d), n(0) {}
+                        timer_refresh(dtun &d) : m_dtun(d), n(0)
+                        {
+                                timeval       tval;
+                                tval.tv_sec  = (registered_ttl - 1) / 2;
+                                tval.tv_usec = 0;
+
+                                m_dtun.m_timer.set_timer(this, &tval);
+                        }
+
+                        virtual ~timer_refresh()
+                        {
+
+                                m_dtun.m_timer.unset_timer(this);
+                        }
 
                         dtun           &m_dtun;
                         int             n;

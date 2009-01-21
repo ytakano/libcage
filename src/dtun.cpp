@@ -31,6 +31,8 @@
 
 #include "dtun.hpp"
 
+#include "ping.hpp"
+
 #include <openssl/rand.h>
 
 #include <boost/foreach.hpp>
@@ -96,13 +98,6 @@ namespace libcage {
         {
                 RAND_pseudo_bytes((unsigned char*)&m_register_session,
                                   sizeof(m_register_session));
-
-                timeval       tval;
-
-                tval.tv_sec  = (registered_ttl - 1) / 2;
-                tval.tv_usec = 0;
-
-                m_timer.set_timer(&m_timer_refresh, &tval);
         }
 
         dtun::~dtun()
@@ -113,83 +108,24 @@ namespace libcage {
         void
         dtun::send_ping(cageaddr &dst, uint32_t nonce)
         {
-                msg_dtun_ping ping;
-
-                memset(&ping, 0, sizeof(ping));
-
-                ping.hdr.magic = htons(MAGIC_NUMBER);
-                ping.hdr.ver   = CAGE_VERSION;
-                ping.hdr.type  = type_dtun_ping;
-                ping.hdr.len   = htons(sizeof(ping));
-
-                m_id.to_binary(ping.hdr.src, sizeof(ping.hdr.src));
-                dst.id->to_binary(ping.hdr.dst, sizeof(ping.hdr.dst));
-
-                ping.nonce = htonl(nonce);
-
-                if (dst.domain == domain_inet) {
-                        in_ptr in;
-                        in = boost::get<in_ptr>(dst.saddr);
-                        m_udp.sendto(&ping, sizeof(ping), (sockaddr*)in.get(),
-                                     sizeof(sockaddr_in));
-                } else {
-                        in6_ptr in6;
-                        in6 = boost::get<in6_ptr>(dst.saddr);
-                        m_udp.sendto(&ping, sizeof(ping), (sockaddr*)in6.get(),
-                                     sizeof(sockaddr_in6));
-                }
+                send_ping_tmpl<msg_dtun_ping>(dst, nonce, type_dtun_ping,
+                                              m_id, m_udp);
         }
 
         void
         dtun::recv_ping(void *msg, sockaddr *from, int fromlen)
         {
-                msg_dtun_ping       *ping = (msg_dtun_ping*)msg;
-                msg_dtun_ping_reply  reply;
-                uint160_t            fromid;
-
-                fromid.from_binary(ping->hdr.dst, sizeof(ping->hdr.dst));
-                if (fromid != m_id)
-                        return;
-
-
-                // send ping reply
-                memset(&reply, 0, sizeof(reply));
-
-                reply.hdr.magic = htons(MAGIC_NUMBER);
-                reply.hdr.ver   = CAGE_VERSION;
-                reply.hdr.type  = type_dtun_ping_reply;
-                reply.hdr.len   = htons(sizeof(reply));
-
-                m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
-                memcpy(reply.hdr.dst, ping->hdr.src, sizeof(reply.hdr.dst));
-
-                reply.nonce = ping->nonce;
-
-                m_udp.sendto(&reply, sizeof(reply), from, fromlen);
-
-
-                // add to peers
-                cageaddr addr = new_cageaddr(&ping->hdr, from);
-                m_peers.add_node(addr);
+                recv_ping_tmpl<msg_dtun_ping,
+                        msg_dtun_ping_reply>(msg, from, fromlen,
+                                             type_dtun_ping_reply,
+                                             m_id, m_udp, m_peers);
         }
 
         void
         dtun::recv_ping_reply(void *msg, sockaddr *from, int fromlen)
         {
-                msg_dtun_ping_reply *reply = (msg_dtun_ping_reply*)msg;
-                uint160_t            fromid;
-
-                fromid.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
-                if (fromid != m_id)
-                        return;
-
-                cageaddr addr = new_cageaddr(&reply->hdr, from);
-
-                rttable::recv_ping_reply(addr, ntohl(reply->nonce));
-
-
-                // add to peers
-                m_peers.add_node(addr);
+                recv_ping_reply_tmpl<msg_dtun_ping_reply>(msg, from, fromlen,
+                                                          m_id, m_peers, this);
         }
 
         void
@@ -1647,6 +1583,6 @@ namespace libcage {
                 tval.tv_sec  = (registered_ttl - 1) / 2;
                 tval.tv_usec = 0;
 
-                m_dtun.m_timer.set_timer(&m_dtun.m_timer_refresh, &tval);
+                m_dtun.m_timer.set_timer(this, &tval);
         }
 }

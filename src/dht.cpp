@@ -29,80 +29,69 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "timer.hpp"
+#include "dht.hpp"
 
-#include <iostream>
+#include "ping.hpp"
 
 namespace libcage {
-        void
-        timer_callback(int fd, short event, void *arg)
+        dht::dht(const uint160_t &id, timer &t, peers &p, udphandler &udp,
+                 dtun &dt) :
+                rttable(id, t, p),
+                m_id(id),
+                m_timer(t),
+                m_peers(p),
+                m_udp(udp),
+                m_dtun(dt)
         {
-                timer::callback &func = *(timer::callback*)arg;
-                timer *t = func.get_timer();
 
-                t->m_events.erase(&func);
-
-                func();
         }
 
-        timer::~timer()
+        dht::~dht()
         {
-                boost::unordered_map<callback*,
-                        boost::shared_ptr<event> >::iterator it;
 
-                for (it = m_events.begin(); it != m_events.end(); ++it) {
-                        evtimer_del(it->second.get());
+        }
+
+        void
+        dht::ping_func::operator() (bool result, cageaddr &addr)
+        {
+                if (result) {
+                        send_ping_tmpl<msg_dht_ping>(addr, nonce, type_dht_ping,
+                                                     p_dht->m_id,
+                                                     p_dht->m_udp);
                 }
         }
 
         void
-        timer::set_timer(callback *func, timeval *t)
+        dht::send_ping(cageaddr &dst, uint32_t nonce)
         {
-                typedef boost::shared_ptr<event> ev_ptr;
-                ev_ptr ev = ev_ptr(new event);
+                try {
+                        m_peers.get_addr(dst.id);
+                        send_ping_tmpl<msg_dht_ping>(dst, nonce, type_dht_ping,
+                                                     m_id, m_udp);
+                } catch (std::out_of_range) {
+                        ping_func func;
 
-                // delete old event
-                unset_timer(func);
+                        func.dst   = dst;
+                        func.nonce = nonce;
+                        func.p_dht = this;
 
-                func->m_timer = this;
-
-                // add new event
-                m_events[func] = ev;
-                evtimer_set(ev.get(), timer_callback, func);
-                evtimer_add(ev.get(), t);
-        }
-
-        void
-        timer::unset_timer(callback *func)
-        {
-                if (m_events[func] != NULL) {
-                        evtimer_del(m_events[func].get());
+                        m_dtun.request(*dst.id, func);
                 }
         }
 
-#ifdef DEBUG
-        class timer_func : public timer::callback {
-        public:
-                virtual void operator() () {
-                        printf("test timer: ok\n");
-                }
-        };
+        void
+        dht::recv_ping(void *msg, sockaddr *from, int fromlen)
+        {
+                recv_ping_tmpl<msg_dht_ping,
+                        msg_dht_ping_reply>(msg, from, fromlen,
+                                            type_dht_ping_reply,
+                                            m_id, m_udp, m_peers);
+        }
 
         void
-        timer::test_timer()
+        dht::recv_ping_reply(void *msg, sockaddr *from, int fromlen)
         {
-                timeval tval1;
-
-                tval1.tv_sec  = 2;
-                tval1.tv_usec = 0;
-
-                timer      *t;
-                timer_func *func;
-
-                t    = new timer();
-                func = new timer_func();
-
-                t->set_timer(func, &tval1);
+                recv_ping_reply_tmpl<msg_dht_ping_reply>(msg, from, fromlen,
+                                                         m_id, m_peers, this);
         }
-#endif // DEBUG
 }

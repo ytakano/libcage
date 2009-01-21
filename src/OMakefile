@@ -5,6 +5,7 @@ LDFLAGS += -levent -lcrypto
 
 
 SRC[] =
+	dht
 	cagetypes
 	dtun
 	peers

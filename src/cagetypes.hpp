@@ -77,6 +77,8 @@ namespace libcage {
         static const uint8_t type_dtun_request            = 12;
         static const uint8_t type_dtun_request_by         = 13;
         static const uint8_t type_dtun_request_reply      = 14;
+        static const uint8_t type_dht_ping                = 15;
+        static const uint8_t type_dht_ping_reply          = 16;
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -198,6 +200,16 @@ namespace libcage {
                 uint16_t        domain;
                 uint16_t        reserved;
                 uint32_t        addr[1];
+        };
+
+        struct msg_dht_ping {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+        };
+
+        struct msg_dht_ping_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
         };
 
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
