@@ -37,11 +37,15 @@
 
 #include "bn.hpp"
 
+#include <vector>
+
 #include <boost/shared_ptr.hpp>
 #include <boost/variant.hpp>
 
 
 namespace libcage {
+        class peers;
+
         typedef boost::shared_ptr<sockaddr_in>  in_ptr;
         typedef boost::shared_ptr<sockaddr_in6> in6_ptr;
         typedef boost::shared_ptr<uint160_t>    id_ptr;
@@ -79,6 +83,8 @@ namespace libcage {
         static const uint8_t type_dtun_request_reply      = 14;
         static const uint8_t type_dht_ping                = 15;
         static const uint8_t type_dht_ping_reply          = 16;
+        static const uint8_t type_dht_find_node           = 17;
+        static const uint8_t type_dht_find_node_reply     = 18;
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -212,7 +218,36 @@ namespace libcage {
                 uint32_t        nonce;
         };
 
+        struct msg_dht_find_node {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        id[5];
+                uint16_t        domain;
+                uint16_t        padding;
+        };
+
+        struct msg_dht_find_node_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        id[5];
+                uint16_t        domain;
+                uint8_t         num;
+                uint8_t         padding;
+                uint32_t        addrs[1];
+        };
+
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
+        void            write_nodes_inet(msg_inet *min,
+                                         std::vector<cageaddr> &nodes);
+        void            write_nodes_inet6(msg_inet6 *min6,
+                                          std::vector<cageaddr> &nodes);
+        void            read_nodes_inet(msg_inet *min, int num,
+                                        std::vector<cageaddr> &nodes,
+                                        sockaddr *from, peers &p);
+        void            read_nodes_inet6(msg_inet6 *min6, int num,
+                                         std::vector<cageaddr> &nodes,
+                                         sockaddr *from, peers &p);
+
 }
 
 #endif // CAGETYPES_HPP

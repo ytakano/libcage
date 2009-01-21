@@ -31,6 +31,8 @@
 
 #include "rttable.hpp"
 
+#include <set>
+
 #include <boost/foreach.hpp>
 
 namespace libcage {
@@ -381,6 +383,60 @@ namespace libcage {
 
                                 n++;
                         }
+                }
+        }
+
+        void
+        rttable::merge_nodes(const uint160_t &id, std::vector<cageaddr> &dst,
+                             const std::vector<cageaddr> &v1,
+                             const std::vector<cageaddr> &v2, int max)
+        {
+                std::vector<cageaddr>::const_iterator it1, it2;
+                std::set<uint160_t> already;
+                int                 n = 0;
+
+                it1 = v1.begin();
+                it2 = v2.begin();
+
+                while (n < max) {
+                        if (it1 == v1.end() && it2 == v2.end()) {
+                                break;
+                        } 
+
+                        if (it1 == v1.end()) {
+                                if (already.find(*it2->id) == already.end()) {
+                                        dst.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
+                                ++it2;
+                        } else if (it2 == v2.end()) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                        } else if (*it1->id == *it2->id) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                                ++it2;
+                        } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
+                                if (already.find(*it1->id) == already.end()) {
+                                        dst.push_back(*it1);
+                                        already.insert(*it1->id);
+                                }
+                                ++it1;
+                        } else {
+                                if (already.find(*it2->id) == already.end()) {
+                                        dst.push_back(*it2);
+                                        already.insert(*it2->id);
+                                }
+                                ++it2;
+                        }
+
+                        n++;
                 }
         }
 

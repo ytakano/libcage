@@ -538,7 +538,7 @@ namespace libcage {
 
                         min = (msg_inet*)reply->addrs;
 
-                        read_nodes_inet(min, reply->num, nodes, from);
+                        read_nodes_inet(min, reply->num, nodes, from, m_peers);
                 } else if (domain == domain_inet6) {
                         msg_inet6 *min6;
                         size = sizeof(*reply) - sizeof(reply->addrs) +
@@ -549,12 +549,14 @@ namespace libcage {
 
                         min6 = (msg_inet6*)reply->addrs;
 
-                        read_nodes_inet6(min6, reply->num, nodes, from);
+                        read_nodes_inet6(min6, reply->num, nodes, from,
+                                         m_peers);
+                } else {
+                        return;
                 }
 
 
                 cageaddr  caddr;
-                timer_ptr t;
                 _id       i;
 
                 caddr = new_cageaddr(&reply->hdr, from);
@@ -579,7 +581,7 @@ namespace libcage {
                 tmp = q->nodes;
                 q->nodes.clear();
 
-                merge_nodes(id, q->nodes, tmp, nodes);
+                merge_nodes(id, q->nodes, tmp, nodes, num_find_node);
 
                 // send
                 send_find(q);
@@ -936,7 +938,8 @@ namespace libcage {
 
                         min = (msg_inet*)reply->addrs;
 
-                        read_nodes_inet(min, reply->num, nodes, from);
+                        read_nodes_inet(min, reply->num, nodes, from,
+                                        m_peers);
                 } else if (domain == domain_inet6) {
                         msg_inet6 *min6;
                         size = sizeof(*reply) - sizeof(reply->addrs) +
@@ -947,7 +950,8 @@ namespace libcage {
 
                         min6 = (msg_inet6*)reply->addrs;
 
-                        read_nodes_inet6(min6, reply->num, nodes, from);
+                        read_nodes_inet6(min6, reply->num, nodes, from,
+                                         m_peers);
                 }
 
                 cageaddr  caddr;
@@ -996,189 +1000,10 @@ namespace libcage {
                 tmp = q->nodes;
                 q->nodes.clear();
 
-                merge_nodes(id, q->nodes, tmp, nodes);
+                merge_nodes(id, q->nodes, tmp, nodes, num_find_node);
 
                 // send
                 send_find(q);
-        }
-
-        void
-        dtun::write_nodes_inet(msg_inet *min, std::vector<cageaddr> &nodes)
-        {
-                BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (addr.domain == domain_loopback) {
-                                min->port = 0;
-                                min->addr = 0;
-                        } else {
-                                in_ptr in;
-                                in = boost::get<in_ptr>(addr.saddr);
-
-                                min->port = in->sin_port;
-                                min->addr = in->sin_addr.s_addr;
-                        }
-                        addr.id->to_binary(min->id, sizeof(min->id));
-
-                        min++;
-                }
-        }
-
-        void
-        dtun::write_nodes_inet6(msg_inet6 *min6, std::vector<cageaddr> &nodes)
-        {
-                BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (addr.domain == domain_loopback) {
-                                min6->port = 0;
-                                memset(min6->addr, 0,
-                                       sizeof(min6->addr));
-                        } else {
-                                in6_ptr in6;
-                                in6 = boost::get<in6_ptr>(addr.saddr);
-                                
-                                min6->port = in6->sin6_port;
-                                memcpy(min6->addr, 
-                                       in6->sin6_addr.s6_addr,
-                                       sizeof(min6->addr));
-                        }
-                        addr.id->to_binary(min6->id, sizeof(min6->id));
-                        
-                        min6++;
-                }
-        }
-        
-        void
-        dtun::read_nodes_inet(msg_inet *min, int num,
-                              std::vector<cageaddr> &nodes,
-                              sockaddr *from)
-        {
-                for (int i = 0; i < num; i++) {
-                        cageaddr caddr;
-                        id_ptr   p_id(new uint160_t);
-                        in_ptr   p_in(new sockaddr_in);
-
-                        p_id->from_binary(min->id, sizeof(min->id));
-
-                        if (m_peers.is_timeout(p_id)) {
-                                min++;
-                                continue;
-                        }
-
-                        if (min->port == 0 && min->addr == 0) {
-                                memcpy(p_in.get(), from,
-                                       sizeof(sockaddr_in));
-                        } else {
-                                memset(p_in.get(), 0,
-                                       sizeof(sockaddr_in));
-                                p_in->sin_family      = PF_INET;
-                                p_in->sin_port        = min->port;
-                                p_in->sin_addr.s_addr = min->addr;
-                        }
-
-                        caddr.id     = p_id;
-                        caddr.domain = domain_inet;
-                        caddr.saddr  = p_in;
-
-                        nodes.push_back(caddr);
-
-                        min++;
-                }
-        }
-
-        void
-        dtun::read_nodes_inet6(msg_inet6 *min6, int num,
-                               std::vector<cageaddr> &nodes,
-                               sockaddr *from)
-        {
-                uint32_t   zero[4];
-
-                memset(zero, 0, sizeof(zero));
-
-                for (int i = 0; i < num; i++) {
-                        cageaddr caddr;
-                        id_ptr   p_id(new uint160_t);
-                        in6_ptr  p_in6(new sockaddr_in6);
-
-                        p_id->from_binary(min6->id, sizeof(min6->id));
-
-                        if (m_peers.is_timeout(p_id)) {
-                                min6++;
-                                continue;
-                        }
-
-                        if (min6->port == 0 &&
-                            memcmp(min6->addr, zero, sizeof(zero)) == 0) {
-                                memcpy(p_in6.get(), from,
-                                       sizeof(sockaddr_in6));
-                        } else {
-                                memset(p_in6.get(), 0,
-                                       sizeof(sockaddr_in6));
-                                p_in6->sin6_family = PF_INET6;
-                                p_in6->sin6_port   = min6->port;
-                                memcpy(p_in6->sin6_addr.s6_addr,
-                                       min6->addr, sizeof(min6->addr));
-                        }
-                        
-                        caddr.id     = p_id;
-                        caddr.domain = domain_inet6;
-                        caddr.saddr  = p_in6;
-
-                        nodes.push_back(caddr);
-                        
-                        min6++;
-                }
-        }
-                
-        void
-        dtun::merge_nodes(const uint160_t &id, std::vector<cageaddr> &dst,
-                          const std::vector<cageaddr> &v1,
-                          const std::vector<cageaddr> &v2)
-        {
-                std::vector<cageaddr>::const_iterator it1, it2;
-                std::set<uint160_t> already;
-                int                 n = 0;
-
-                it1 = v1.begin();
-                it2 = v2.begin();
-
-                while (n < num_find_node) {
-                        if (it1 == v1.end() && it2 == v2.end()) {
-                                break;
-                        } 
-
-                        if (it1 == v1.end()) {
-                                if (already.find(*it2->id) == already.end()) {
-                                        dst.push_back(*it2);
-                                        already.insert(*it2->id);
-                                }
-                                ++it2;
-                        } else if (it2 == v2.end()) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        dst.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                        } else if (*it1->id == *it2->id) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        dst.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                                ++it2;
-                        } else if ((*it1->id ^ id) < (*it2->id ^ id)) {
-                                if (already.find(*it1->id) == already.end()) {
-                                        dst.push_back(*it1);
-                                        already.insert(*it1->id);
-                                }
-                                ++it1;
-                        } else {
-                                if (already.find(*it2->id) == already.end()) {
-                                        dst.push_back(*it2);
-                                        already.insert(*it2->id);
-                                }
-                                ++it2;
-                        }
-
-                        n++;
-                }
         }
 
         void

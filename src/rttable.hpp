@@ -65,6 +65,11 @@ namespace libcage {
 
         protected:
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
+                void            merge_nodes(const uint160_t &id,
+                                            std::vector<cageaddr> &dst,
+                                            const std::vector<cageaddr> &v1,
+                                            const std::vector<cageaddr> &v2,
+                                            int max);
 
         public:
                 class compare {

@@ -41,8 +41,30 @@
 #include "rttable.hpp"
 #include "udphandler.hpp"
 
+#include <vector>
+
+#include <boost/function.hpp>
+#include <boost/shared_array.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/unordered_set.hpp>
+#include <boost/variant.hpp>
+
+
 namespace libcage {
         class dht : public rttable {
+        private:
+                static const int        num_find_node;
+                static const int        max_query;
+                static const int        query_timeout;
+
+
+                typedef boost::function<void (std::vector<cageaddr>&)>
+                callback_find_node;
+                typedef boost::function<void (bool, void *buf, int len)>
+                callback_find_value;
+                typedef boost::variant<callback_find_node,
+                                       callback_find_value> callback_func;
+
         public:
                 dht(const uint160_t &id, timer &t, peers &p, udphandler &udp,
                     dtun &dt);
@@ -52,10 +74,28 @@ namespace libcage {
                                           int fromlen);
                 void            recv_ping_reply(void *msg, sockaddr *from,
                                                 int fromlen);
+                void            recv_find_node(void *msg, sockaddr *from);
+                void            recv_find_node_reply(void *msg, int len,
+                                                     sockaddr *from);
+
+
+                void            find_node(const uint160_t &dst,
+                                          callback_find_node func);
 
         private:
-                virtual void    send_ping(cageaddr &dst, uint32_t nonce);
+                class _id {
+                public:
+                        id_ptr  id;
 
+                        bool operator== (const _id &rhs) const
+                        {
+                                return *id == *rhs.id;
+                        }
+                };
+
+                friend size_t hash_value(const _id &i);
+
+                // for ping
                 class ping_func {
                 public:
                         void operator() (bool result, cageaddr &addr);
@@ -65,11 +105,65 @@ namespace libcage {
                         dht            *p_dht;
                 };
 
+                // for find node or value
+                class find_node_func {
+                public:
+                        void operator() (bool result, cageaddr &addr);
+
+                        id_ptr          dst;
+                        uint32_t        nonce;
+                        dht            *p_dht;
+                };
+
+                class timer_query : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        _id             id;
+                        uint32_t        nonce;
+                        dht            *p_dht;
+                };
+
+                typedef boost::shared_ptr<timer_query>  timer_ptr;
+
+                class query {
+                public:
+                        std::vector<cageaddr>           nodes;
+                        boost::unordered_map<_id, timer_ptr>    timers;
+                        boost::unordered_set<_id>       sent;
+                        id_ptr          dst;
+                        uint32_t        nonce;
+                        int             num_query;
+                        bool            is_find_value;
+
+                        boost::shared_array<char>       key;
+                        int             keylen;
+
+                        callback_func   func;
+                };
+
+                typedef boost::shared_ptr<query> query_ptr;
+
+
+                virtual void    send_ping(cageaddr &dst, uint32_t nonce);
+
+                void            send_msg(msg_hdr *msg, uint16_t len,
+                                         uint8_t type, cageaddr &dst);
+
+                void            find_nv(const uint160_t &dst,
+                                        callback_func func, bool is_find_value,
+                                        char *key, int keylen);
+                void            send_find(query_ptr q);
+                void            send_find_node(cageaddr &dst, query_ptr q);
+
+
                 const uint160_t         &m_id;
                 timer          &m_timer;
                 peers          &m_peers;
                 udphandler     &m_udp;
                 dtun           &m_dtun;
+
+                boost::unordered_map<uint32_t, query_ptr>       m_query;
         };
 }
 

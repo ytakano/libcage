@@ -60,7 +60,7 @@ namespace libcage {
                 static const int        request_timeout;
                 static const int        registered_ttl;
 
-        public:
+
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
                 typedef boost::function<void (bool, cageaddr&, cageaddr &)>
@@ -70,6 +70,7 @@ namespace libcage {
                 typedef boost::variant<callback_find_node,
                                        callback_find_value> callback_func;
 
+        public:
                 dtun(const uint160_t &id, timer &t, peers &p,
                      const natdetector &nat, udphandler &hdp);
                 virtual ~dtun();
@@ -176,8 +177,7 @@ namespace libcage {
                         int             num_query;
                         bool            is_find_value;
 
-                        boost::variant<callback_find_node,
-                                       callback_find_value> func;
+                        callback_func   func;
                 };
 
                 typedef boost::shared_ptr<query> query_ptr;
@@ -242,22 +242,6 @@ namespace libcage {
                 template<typename MSG>
                 void            send_find_nv(uint16_t type, cageaddr &dst,
                                              query_ptr q);
-
-
-                void            write_nodes_inet(msg_inet *min,
-                                                 std::vector<cageaddr> &nodes);
-                void            write_nodes_inet6(msg_inet6 *min6,
-                                                  std::vector<cageaddr> &nodes);
-                void            read_nodes_inet(msg_inet *min, int num,
-                                                std::vector<cageaddr> &nodes,
-                                                sockaddr *from);
-                void            read_nodes_inet6(msg_inet6 *min6, int num,
-                                                 std::vector<cageaddr> &nodes,
-                                                 sockaddr *from);
-                void            merge_nodes(const uint160_t &id,
-                                            std::vector<cageaddr> &dst,
-                                            const std::vector<cageaddr> &v1,
-                                            const std::vector<cageaddr> &v2);
 
 
                 const uint160_t        &m_id;
