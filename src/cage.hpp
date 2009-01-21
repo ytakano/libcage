@@ -88,7 +88,8 @@ namespace libcage {
 
                 class dtun_find_value_callback {
                 public:
-                        void operator() (bool result, cageaddr &addr);
+                        void operator() (bool result, cageaddr &addr,
+                                         cageaddr &from);
 
                         int     n;
                         cage   *p_cage;

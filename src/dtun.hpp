@@ -45,7 +45,6 @@
 #include <vector>
 
 #include <boost/function.hpp>
-#include <boost/operators.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 #include <boost/variant.hpp>
@@ -59,12 +58,12 @@ namespace libcage {
                 static const int        register_timeout;
                 static const int        request_retry;
                 static const int        request_timeout;
-                static const int        registerd_ttl;
+                static const int        registered_ttl;
 
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
-                typedef boost::function<void (bool, cageaddr&)>
+                typedef boost::function<void (bool, cageaddr&, cageaddr &)>
                 callback_find_value;
                 typedef boost::function<void (bool, cageaddr&)>
                 callback_request;
@@ -90,6 +89,8 @@ namespace libcage {
                 void            recv_register(void *msg, sockaddr *from);
                 void            recv_request(void *msg, sockaddr *from,
                                              int fromlen);
+                void            recv_request_by(void *msg, int len,
+                                                sockaddr *from);
                 void            recv_request_reply(void *msg, sockaddr *from);
 
 
@@ -125,7 +126,10 @@ namespace libcage {
                 public:
                         virtual void operator() ();
 
-                        dtun           *p_dtun;
+                        timer_refresh(dtun &d) : m_dtun(d), n(0) {}
+
+                        dtun           &m_dtun;
+                        int             n;
                 };
 
                 // for find node or value
@@ -173,19 +177,20 @@ namespace libcage {
                         dtun   *p_dtun;
                 };
 
-                class registerd : private boost::totally_ordered<_id> {
+                class registered {
                 public:
                         cageaddr        addr;
                         uint32_t        session;
                         time_t          t;
 
-                        bool operator== (const registerd &rhs) const;
+                        bool operator== (const registered &rhs) const;
                 };
 
                 // for request
                 class request_find_value {
                 public:
-                        void operator() (bool result, cageaddr &addr);
+                        void operator() (bool result, cageaddr &addr,
+                                         cageaddr &from);
 
                         uint32_t        nonce;
                         dtun           *p_dtun;
@@ -250,10 +255,11 @@ namespace libcage {
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
                 timer_register          m_timer_register;
                 bool                    m_registering;
-                time_t                  m_last_registerd;
+                time_t                  m_last_registered;
                 uint32_t                m_register_session;
-                boost::unordered_map<_id, registerd>    m_registerd_nodes;
+                boost::unordered_map<_id, registered>   m_registered_nodes;
                 boost::unordered_map<uint32_t, req_ptr>         m_request;
+                timer_refresh           m_timer_refresh;
         };
 }
 

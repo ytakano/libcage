@@ -62,19 +62,21 @@ namespace libcage {
         static const uint16_t state_global = 1;
         static const uint16_t state_nat    = 2;
 
-        static const uint8_t type_nat_echo                = 0;
-        static const uint8_t type_nat_echo_reply          = 1;
-        static const uint8_t type_nat_echo_redirect       = 2;
-        static const uint8_t type_nat_echo_redirect_reply = 3;
-        static const uint8_t type_dtun_ping               = 4;
-        static const uint8_t type_dtun_ping_reply         = 5;
-        static const uint8_t type_dtun_find_node          = 6;
-        static const uint8_t type_dtun_find_node_reply    = 7;
-        static const uint8_t type_dtun_find_value         = 8;
-        static const uint8_t type_dtun_find_value_reply   = 9;
-        static const uint8_t type_dtun_register           = 10;
-        static const uint8_t type_dtun_request            = 11;
-        static const uint8_t type_dtun_request_reply      = 12;
+        static const uint8_t type_undefined               = 0;
+        static const uint8_t type_nat_echo                = 1;
+        static const uint8_t type_nat_echo_reply          = 2;
+        static const uint8_t type_nat_echo_redirect       = 3;
+        static const uint8_t type_nat_echo_redirect_reply = 4;
+        static const uint8_t type_dtun_ping               = 5;
+        static const uint8_t type_dtun_ping_reply         = 6;
+        static const uint8_t type_dtun_find_node          = 7;
+        static const uint8_t type_dtun_find_node_reply    = 8;
+        static const uint8_t type_dtun_find_value         = 9;
+        static const uint8_t type_dtun_find_value_reply   = 10;
+        static const uint8_t type_dtun_register           = 11;
+        static const uint8_t type_dtun_request            = 12;
+        static const uint8_t type_dtun_request_by         = 13;
+        static const uint8_t type_dtun_request_reply      = 14;
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -182,11 +184,20 @@ namespace libcage {
         struct msg_dtun_request {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+                uint32_t        id[5];
         };
 
         struct msg_dtun_request_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+        };
+
+        struct msg_dtun_request_by {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint16_t        domain;
+                uint16_t        reserved;
+                uint32_t        addr[1];
         };
 
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);

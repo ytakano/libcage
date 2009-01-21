@@ -42,7 +42,7 @@ namespace libcage {
         const int       dtun::register_timeout = 10;
         const int       dtun::request_retry    = 2;
         const int       dtun::request_timeout  = 2;
-        const int       dtun::registerd_ttl    = 300;
+        const int       dtun::registered_ttl   = 300;
 
         size_t
         hash_value(const dtun::_id &i)
@@ -91,10 +91,18 @@ namespace libcage {
                 m_udp(udp),
                 m_timer_register(*this),
                 m_registering(false),
-                m_last_registerd(0)
+                m_last_registered(0),
+                m_timer_refresh(*this)
         {
                 RAND_pseudo_bytes((unsigned char*)&m_register_session,
                                   sizeof(m_register_session));
+
+                timeval       tval;
+
+                tval.tv_sec  = (registered_ttl - 1) / 2;
+                tval.tv_usec = 0;
+
+                m_timer.set_timer(&m_timer_refresh, &tval);
         }
 
         dtun::~dtun()
@@ -267,8 +275,8 @@ namespace libcage {
                         if (is_find_value) {
                                 callback_find_value f;
                                 f = boost::get<callback_find_value>(func);
-                                cageaddr addr;
-                                f(false, addr);
+                                cageaddr addr1, addr2;
+                                f(false, addr1, addr2);
                         } else {
                                 callback_find_node f;
                                 f = boost::get<callback_find_node>(func);
@@ -360,10 +368,10 @@ namespace libcage {
                 if (q->num_query == 0) {
                         // call callback functions
                         if (q->is_find_value) {
-                                cageaddr addr;
+                                cageaddr addr1, addr2;
                                 callback_find_value func;
                                 func = boost::get<callback_find_value>(q->func);
-                                func(false, addr);
+                                func(false, addr1, addr2);
                         } else {
                                 callback_find_node func;
                                 func = boost::get<callback_find_node>(q->func);
@@ -713,7 +721,7 @@ namespace libcage {
         }
 
         bool
-        dtun::registerd::operator== (const registerd &rhs) const
+        dtun::registered::operator== (const registered &rhs) const
         {
                 if (*addr.id != *rhs.addr.id) {
                         return false;
@@ -759,7 +767,7 @@ namespace libcage {
         dtun::recv_register(void *msg, sockaddr *from)
         {
                 msg_dtun_register *reg = (msg_dtun_register*)msg;
-                registerd          r;
+                registered         r;
                 uint160_t          fromid;
                 _id                i;
 
@@ -774,11 +782,11 @@ namespace libcage {
                 i.id = r.addr.id;
 
 
-                boost::unordered_map<_id, registerd>::iterator it;
-                it = m_registerd_nodes.find(i);
+                boost::unordered_map<_id, registered>::iterator it;
+                it = m_registered_nodes.find(i);
 
-                if (it == m_registerd_nodes.end()) {
-                        m_registerd_nodes[i] = r;
+                if (it == m_registered_nodes.end()) {
+                        m_registered_nodes[i] = r;
                 } else if (it->second.session == r.session) {
                         it->second = r;
                 } else if (it->second == r) {
@@ -845,9 +853,9 @@ namespace libcage {
                 _id i;
                 i.id = id;
 
-                if (m_registerd_nodes.find(i) !=
-                    m_registerd_nodes.end()) {
-                        registerd reg = m_registerd_nodes[i];
+                if (m_registered_nodes.find(i) !=
+                    m_registered_nodes.end()) {
+                        registered reg = m_registered_nodes[i];
                         
                         reply->num  = 1;
                         reply->flag = 1;
@@ -1033,7 +1041,7 @@ namespace libcage {
                         // call callback
                         callback_find_value func;
                         func = boost::get<callback_find_value>(q->func);
-                        func(true, nodes[0]);
+                        func(true, nodes[0], caddr);
 
                         m_query.erase(nonce);
 
@@ -1251,7 +1259,8 @@ namespace libcage {
         }
 
         void
-        dtun::request_find_value::operator() (bool result, cageaddr &addr)
+        dtun::request_find_value::operator() (bool result, cageaddr &addr,
+                                              cageaddr &from)
         {
                 req_ptr q;
 
@@ -1281,6 +1290,32 @@ namespace libcage {
                 p_dtun->m_timer.set_timer(&q->timer_req, &tval);
 
 
+                // send ping
+                msg_hdr hdr;
+
+                hdr.magic = htons(MAGIC_NUMBER);
+                hdr.ver   = CAGE_VERSION;
+                hdr.type  = type_undefined;
+                hdr.len   = htons(sizeof(hdr));
+
+                p_dtun->m_id.to_binary(hdr.src, sizeof(hdr.src));
+                addr.id->to_binary(hdr.dst, sizeof(hdr.dst));
+
+                if (addr.domain == domain_inet) {
+                        in_ptr in;
+                        in = boost::get<in_ptr>(addr.saddr);
+                        p_dtun->m_udp.sendto(&hdr, sizeof(hdr),
+                                             (sockaddr*)in.get(),
+                                             sizeof(sockaddr_in));
+                } else if (addr.domain == domain_inet6) {
+                        in6_ptr in6;
+                        in6 = boost::get<in6_ptr>(addr.saddr);
+                        p_dtun->m_udp.sendto(&hdr, sizeof(hdr),
+                                             (sockaddr*)in6.get(),
+                                             sizeof(sockaddr_in6));
+                }
+
+
                 // send request
                 msg_dtun_request req;
 
@@ -1292,20 +1327,22 @@ namespace libcage {
                 req.hdr.len   = htons(sizeof(req));
 
                 p_dtun->m_id.to_binary(req.hdr.src, sizeof(req.hdr.src));
-                addr.id->to_binary(req.hdr.dst, sizeof(req.hdr.dst));
+                from.id->to_binary(req.hdr.dst, sizeof(req.hdr.dst));
+
+                addr.id->to_binary(req.id, sizeof(req.id));
 
                 req.nonce = htonl(nonce);
 
                 // send
-                if (addr.domain == domain_inet) {
+                if (from.domain == domain_inet) {
                         in_ptr in;
-                        in = boost::get<in_ptr>(addr.saddr);
+                        in = boost::get<in_ptr>(from.saddr);
                         p_dtun->m_udp.sendto(&req, sizeof(req),
                                              (sockaddr*)in.get(),
                                              sizeof(sockaddr_in));
-                } else if (addr.domain == domain_inet6) {
+                } else if (from.domain == domain_inet6) {
                         in6_ptr in6;
-                        in6 = boost::get<in6_ptr>(addr.saddr);
+                        in6 = boost::get<in6_ptr>(from.saddr);
                         p_dtun->m_udp.sendto(&req, sizeof(req),
                                              (sockaddr*)in6.get(),
                                              sizeof(sockaddr_in6));
@@ -1341,10 +1378,10 @@ namespace libcage {
         void
         dtun::recv_request(void *msg, sockaddr *from, int fromlen)
         {
-                msg_dtun_request       *req;
-                msg_dtun_request_reply  reply;
-                cageaddr                addr;
-                uint160_t               dst;
+                msg_dtun_request *req;
+                cageaddr          addr;
+                uint160_t         dst;
+                id_ptr            id(new uint160_t);
 
                 req = (msg_dtun_request*)msg;
 
@@ -1357,19 +1394,182 @@ namespace libcage {
                 addr = new_cageaddr(&req->hdr, from);
                 m_peers.add_node(addr);
 
-                // fill packet
+
+                id->from_binary(req->id, sizeof(req->id));
+
+                if (*id == m_id) {
+                        // send request reply
+                        msg_dtun_request_reply reply;
+
+                        reply.hdr.magic = htons(MAGIC_NUMBER);
+                        reply.hdr.ver   = CAGE_VERSION;
+                        reply.hdr.type  = type_dtun_request_reply;
+                        reply.hdr.len   = htons(sizeof(reply));
+
+                        m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
+                        memcpy(reply.hdr.dst, req->hdr.src,
+                               sizeof(reply.hdr.dst));
+
+                        reply.nonce = req->nonce;
+
+                        // send
+                        m_udp.sendto(&reply, sizeof(reply), from, fromlen);
+                } else {
+                        // send request by
+                        msg_dtun_request_by *req_by;
+                        registered reg;
+                        uint16_t   size;
+                        char       buf[1024];
+                        _id        i;
+
+                        i.id = id;
+
+                        if (m_registered_nodes.find(i) ==
+                            m_registered_nodes.end()) {
+                                return;
+                        }
+
+                        reg = m_registered_nodes[i];
+
+                        if (reg.addr.domain != addr.domain)
+                                return;
+
+                        memset(buf, 0, sizeof(buf));
+                        req_by = (msg_dtun_request_by*)buf;
+
+                        req_by->hdr.magic = htons(MAGIC_NUMBER);
+                        req_by->hdr.ver   = CAGE_VERSION;
+                        req_by->hdr.type  = type_dtun_request_by;
+
+                        m_id.to_binary(req_by->hdr.src,
+                                       sizeof(req_by->hdr.src));
+                        reg.addr.id->to_binary(req_by->hdr.dst,
+                                               sizeof(req_by->hdr.dst));
+
+                        req_by->nonce = req->nonce;
+
+                        if (addr.domain == domain_inet) {
+                                sockaddr_in *sin;
+                                in_ptr       in;
+                                msg_inet    *min;
+
+                                size = sizeof(*req_by) - sizeof(req_by->addr) +
+                                        sizeof(*min);
+
+                                req_by->hdr.len = htons(size);
+                                req_by->domain  = htons(domain_inet);
+
+                                sin = (sockaddr_in*)from;
+                                min = (msg_inet*)req_by->addr;
+
+                                min->port = sin->sin_port;
+                                min->addr = sin->sin_addr.s_addr;
+
+                                addr.id->to_binary(min->id,
+                                                   sizeof(min->id));
+
+                                in = boost::get<in_ptr>(reg.addr.saddr);
+
+                                m_udp.sendto(req_by, size,
+                                             (sockaddr*)in.get(),
+                                             sizeof(sockaddr_in));
+                        } else if (addr.domain == domain_inet6) {
+                                sockaddr_in6 *sin6;
+                                in6_ptr       in6;
+                                msg_inet6    *min6;
+
+                                size = sizeof(*req_by) - sizeof(req_by->addr) +
+                                        sizeof(*min6);
+
+                                req_by->hdr.len = htons(size);
+                                req_by->domain  = htons(domain_inet6);
+
+                                sin6 = (sockaddr_in6*)from;
+                                min6 = (msg_inet6*)req_by->addr;
+
+                                min6->port = sin6->sin6_port;
+
+                                memcpy(min6->addr, sin6->sin6_addr.s6_addr,
+                                       sizeof(in6_addr));
+
+                                addr.id->to_binary(min6->id,
+                                                   sizeof(min6->id));
+
+                                in6 = boost::get<in6_ptr>(reg.addr.saddr);
+                                m_udp.sendto(req_by, size,
+                                             (sockaddr*)in6.get(),
+                                             sizeof(sockaddr_in6));
+                        }
+                }
+        }
+
+        void
+        dtun::recv_request_by(void *msg, int len, sockaddr *from)
+        {
+                msg_dtun_request_reply  reply;
+                msg_dtun_request_by    *req;
+                uint160_t dst;
+                uint16_t  domain;
+                int       size;
+
+                req = (msg_dtun_request_by*)msg;
+
+                dst.from_binary(req->hdr.dst, sizeof(req->hdr.dst));
+                if (dst != m_id)
+                        return;
+
                 reply.hdr.magic = htons(MAGIC_NUMBER);
                 reply.hdr.ver   = CAGE_VERSION;
                 reply.hdr.type  = type_dtun_request_reply;
                 reply.hdr.len   = htons(sizeof(reply));
 
                 m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
-                memcpy(reply.hdr.dst, req->hdr.src, sizeof(reply.hdr.dst));
 
                 reply.nonce = req->nonce;
 
-                // send
-                m_udp.sendto(&reply, sizeof(reply), from, fromlen);
+                domain = ntohs(req->domain);
+                if (domain == domain_inet) {
+                        sockaddr_in  sin;
+                        msg_inet    *min;
+
+                        size = sizeof(*req) - sizeof(req->addr) + sizeof(*min);
+
+                        if (size != len)
+                                return;
+
+                        min = (msg_inet*)req->addr;
+
+                        memcpy(reply.hdr.dst, min->id, sizeof(reply.hdr.dst));
+                        memset(&sin, 0, sizeof(sin));
+
+                        sin.sin_family = PF_INET;
+                        sin.sin_port   = min->port;
+                        sin.sin_addr.s_addr = min->addr;
+
+                        m_udp.sendto(&reply, sizeof(reply), (sockaddr*)&sin,
+                                     sizeof(sin));
+                } else if (domain == domain_inet6) {
+                        sockaddr_in6  sin6;
+                        msg_inet6    *min6;
+
+                        size = sizeof(*req) - sizeof(req->addr) + sizeof(*min6);
+                        
+                        if (size != len)
+                                return;
+
+                        min6 = (msg_inet6*)req->addr;
+
+                        memcpy(reply.hdr.dst, min6->id, sizeof(reply.hdr.dst));
+                        memset(&sin6, 0, sizeof(sin6));
+
+                        sin6.sin6_family = PF_INET6;
+                        sin6.sin6_port   = min6->port;
+                        memcpy(sin6.sin6_addr.s6_addr, min6->addr,
+                               sizeof(in6_addr));
+
+                        m_udp.sendto(&reply, sizeof(reply), (sockaddr*)&sin6,
+                                     sizeof(sin6));
+                }
         }
 
         void
@@ -1414,17 +1614,17 @@ namespace libcage {
         void
         dtun::refresh()
         {
-                boost::unordered_map<_id, registerd>::iterator it, it_del;
+                boost::unordered_map<_id, registered>::iterator it, it_del;
                 time_t now = time(NULL);
 
-                for (it = m_registerd_nodes.begin();
-                     it != m_registerd_nodes.end();) {
+                for (it = m_registered_nodes.begin();
+                     it != m_registered_nodes.end();) {
                         it_del = it;
                         ++it;
 
                         time_t diff = now - it_del->second.t;
-                        if (diff > registerd_ttl) {
-                                m_registerd_nodes.erase(it_del);
+                        if (diff > registered_ttl) {
+                                m_registered_nodes.erase(it_del);
                         }
                 }
         }
@@ -1432,6 +1632,21 @@ namespace libcage {
         void
         dtun::timer_refresh::operator() ()
         {
+                m_dtun.refresh();
 
+                if (n > 0) {
+                        m_dtun.register_node();
+                        n = 0;
+                } else {
+                        n++;
+                }
+
+                // reschedule
+                timeval       tval;
+
+                tval.tv_sec  = (registered_ttl - 1) / 2;
+                tval.tv_usec = 0;
+
+                m_dtun.m_timer.set_timer(&m_dtun.m_timer_refresh, &tval);
         }
 }

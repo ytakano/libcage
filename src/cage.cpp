@@ -128,6 +128,12 @@ namespace libcage {
                                 m_cage.m_dtun.recv_request(buf, from, fromlen);
                         }
                         break;
+                case type_dtun_request_by:
+                        if (len >= (int)(sizeof(msg_dtun_request) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dtun.recv_request_by(buf, len, from);
+                        }
+                        break;
                 case type_dtun_request_reply:
                         if (len == (int)sizeof(msg_dtun_request_reply)) {
                                 m_cage.m_dtun.recv_request_reply(buf, from);
@@ -243,7 +249,8 @@ namespace libcage {
         }
 
         void
-        cage::dtun_find_value_callback::operator() (bool result, cageaddr &addr)
+        cage::dtun_find_value_callback::operator() (bool result, cageaddr &addr,
+                                                    cageaddr &from)
         {
                 printf("recv find value reply\n");
 
