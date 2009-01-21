@@ -37,7 +37,8 @@
 #include "timer.hpp"
 #include "udphandler.hpp"
 
-#include <map>
+#include <boost/unordered_map.hpp>
+
 #include <string>
 
 namespace libcage {
@@ -120,9 +121,9 @@ namespace libcage {
                 uint16_t                m_global_port;
                 uint8_t                 m_global_addr[16];
 
-                std::map<uint32_t, callback_ptr>        m_timers;
-                std::map<uint32_t, udp_ptr>             m_udps;
-                std::map<uint32_t, uint16_t>            m_reply;
+                boost::unordered_map<uint32_t, callback_ptr>    m_timers;
+                boost::unordered_map<uint32_t, udp_ptr>         m_udps;
+                boost::unordered_map<uint32_t, uint16_t>        m_reply;
 
                 void            recv_echo_reply_wait1(void *msg, sockaddr *from,
                                                       int fromlen);

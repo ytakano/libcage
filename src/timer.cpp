@@ -47,7 +47,8 @@ namespace libcage {
 
         timer::~timer()
         {
-                std::map<callback*, boost::shared_ptr<event> >::iterator it;
+                boost::unordered_map<callback*,
+                        boost::shared_ptr<event> >::iterator it;
 
                 for (it = m_events.begin(); it != m_events.end(); ++it) {
                         evtimer_del(it->second.get());

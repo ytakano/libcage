@@ -41,12 +41,13 @@
 #include "peers.hpp"
 #include "rttable.hpp"
 
-#include <map>
 #include <string>
 #include <vector>
 
 #include <boost/function.hpp>
 #include <boost/operators.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/unordered_set.hpp>
 #include <boost/variant.hpp>
 
 namespace libcage {
@@ -58,6 +59,7 @@ namespace libcage {
                 static const int        register_timeout;
                 static const int        request_retry;
                 static const int        request_timeout;
+                static const int        registerd_ttl;
 
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -104,8 +106,10 @@ namespace libcage {
                 void            request(const uint160_t &dst,
                                         callback_request func);
 
+                void            refresh();
+
         private:
-                class _id : private boost::totally_ordered<_id> {
+                class _id {
                 public:
                         id_ptr  id;
 
@@ -113,13 +117,16 @@ namespace libcage {
                         {
                                 return *id == *rhs.id;
                         }
-
-                        bool operator< (const _id &rhs) const
-                        {
-                                return *id < *rhs.id;
-                        }
                 };
 
+                friend size_t hash_value(const _id &i);
+
+                class timer_refresh : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        dtun           *p_dtun;
+                };
 
                 // for find node or value
                 class timer_query : public timer::callback {
@@ -145,8 +152,8 @@ namespace libcage {
                 class query {
                 public:
                         std::vector<cageaddr>           nodes;
-                        std::map<_id, timer_ptr>        timers;
-                        std::set<_id>   sent;
+                        boost::unordered_map<_id, timer_ptr>    timers;
+                        boost::unordered_set<_id>       sent;
                         uint160_t       dst;
                         uint32_t        nonce;
                         int             num_query;
@@ -240,13 +247,13 @@ namespace libcage {
                 peers                  &m_peers;
                 const natdetector      &m_nat;
                 udphandler             &m_udp;
-                std::map<uint32_t, query_ptr>    m_query;
+                boost::unordered_map<uint32_t, query_ptr>       m_query;
                 timer_register          m_timer_register;
                 bool                    m_registering;
                 time_t                  m_last_registerd;
                 uint32_t                m_register_session;
-                std::map<_id, registerd>        m_registerd_nodes;
-                std::map<uint32_t, req_ptr>     m_request;
+                boost::unordered_map<_id, registerd>    m_registerd_nodes;
+                boost::unordered_map<uint32_t, req_ptr>         m_request;
         };
 }
 

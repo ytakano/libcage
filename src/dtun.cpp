@@ -42,6 +42,13 @@ namespace libcage {
         const int       dtun::register_timeout = 10;
         const int       dtun::request_retry    = 2;
         const int       dtun::request_timeout  = 2;
+        const int       dtun::registerd_ttl    = 300;
+
+        size_t
+        hash_value(const dtun::_id &i)
+        {
+                return i.id->hash_value();
+        }
 
         void
         dtun::timer_query::operator() ()
@@ -364,7 +371,7 @@ namespace libcage {
                         }
 
                         // stop all timers
-                        std::map<_id, timer_ptr>::iterator it;
+                        boost::unordered_map<_id, timer_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
@@ -767,7 +774,7 @@ namespace libcage {
                 i.id = r.addr.id;
 
 
-                std::map<_id, registerd>::iterator it;
+                boost::unordered_map<_id, registerd>::iterator it;
                 it = m_registerd_nodes.find(i);
 
                 if (it == m_registerd_nodes.end()) {
@@ -1017,7 +1024,7 @@ namespace libcage {
                 // finish find value
                 if (reply->flag == 1 && nodes.size() > 0) {
                         // stop all timer
-                        std::map<_id, timer_ptr>::iterator it;
+                        boost::unordered_map<_id, timer_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
@@ -1402,5 +1409,29 @@ namespace libcage {
 
                 // call callback function
                 q->func(true, addr);
+        }
+
+        void
+        dtun::refresh()
+        {
+                boost::unordered_map<_id, registerd>::iterator it, it_del;
+                time_t now = time(NULL);
+
+                for (it = m_registerd_nodes.begin();
+                     it != m_registerd_nodes.end();) {
+                        it_del = it;
+                        ++it;
+
+                        time_t diff = now - it_del->second.t;
+                        if (diff > registerd_ttl) {
+                                m_registerd_nodes.erase(it_del);
+                        }
+                }
+        }
+
+        void
+        dtun::timer_refresh::operator() ()
+        {
+
         }
 }

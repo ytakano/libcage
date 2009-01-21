@@ -38,6 +38,12 @@ namespace libcage {
         const time_t    peers::map_ttl        = 360;
         const time_t    peers::timer_interval = 120;
 
+        size_t
+        hash_value(const peers::_id &i)
+        {
+                return i.id->hash_value();
+        }
+
         bool
         peers::_addr::operator== (const peers::_addr &rhs) const
         {
@@ -238,24 +244,26 @@ namespace libcage {
         {
                 time_t now = time(NULL);
 
-                std::set<_id>::iterator it1;
+                boost::unordered_set<_id>::iterator it1, it1_del;;
                 for (it1 = m_timeout.begin(); it1 != m_timeout.end();) {
                         time_t diff = now - it1->t;
+                        it1_del = it1;
                         ++it1;
 
                         if (diff > timeout_ttl) {
-                                m_timeout.erase(it1);
+                                m_timeout.erase(it1_del);
                         }
                 }
 
 
-                _bimap::left_iterator it2;
+                _bimap::left_iterator it2, it2_del;
                 for (it2 = m_map.left.begin(); it2 != m_map.left.end();) {
                         time_t diff = now - it2->first.t;
+                        it2_del = it2;
                         ++it2;
 
                         if (diff > map_ttl) {
-                                m_map.left.erase(it2);
+                                m_map.left.erase(it2_del);
                         }
                 }
         }

@@ -37,11 +37,12 @@
 #include "cagetypes.hpp"
 #include "timer.hpp"
 
-#include <set>
 #include <vector>
 
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/multiset_of.hpp>
+#include <boost/bimap/unordered_set_of.hpp> 
+#include <boost/unordered_set.hpp> 
 
 namespace libcage {
         class peers {
@@ -83,7 +84,7 @@ namespace libcage {
 
                 friend class    timer_func;
 
-                class _id : private boost::totally_ordered<_id> {
+                class _id {
                 public:
                         id_ptr          id;
                         mutable time_t  t;
@@ -93,12 +94,9 @@ namespace libcage {
                         {
                                 return *id == *rhs.id;
                         }
-
-                        bool operator< (const _id &rhs) const
-                        {
-                                return *id < *rhs.id;
-                        }
                 };
+                
+                friend size_t hash_value(const _id &i);
 
                 class _addr : private boost::totally_ordered<_addr> {
                 public:
@@ -109,10 +107,11 @@ namespace libcage {
                         bool operator< (const _addr &rhs) const;
                 };
 
-                typedef boost::bimaps::multiset_of<_addr> _addr_set;
-                typedef boost::bimaps::bimap<_id,
+                typedef boost::bimaps::multiset_of<_addr>    _addr_set;
+                typedef boost::bimaps::unordered_set_of<_id> _id_set;
+                typedef boost::bimaps::bimap<_id_set,
                                              _addr_set>::value_type value_t;
-                typedef boost::bimaps::bimap<_id, _addr_set> _bimap;
+                typedef boost::bimaps::bimap<_id_set, _addr_set>    _bimap;
 
         public:
                 peers(timer &t);
@@ -135,7 +134,7 @@ namespace libcage {
 
         private:
                 _bimap          m_map;
-                std::set<_id>   m_timeout;
+                boost::unordered_set<_id>       m_timeout;
 
                 timer           m_timer;
                 timer_func      m_timer_func;

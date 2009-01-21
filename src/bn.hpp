@@ -43,6 +43,7 @@
 #include <iostream>
 #include <string>
 
+#include <boost/functional/hash.hpp>
 
 namespace libcage {
 // this is a sizeof(T) * N bytes integer class
@@ -125,6 +126,8 @@ namespace libcage {
                 bool            is_zero() const;
 
                 std::string     to_string() const;
+
+                size_t          hash_value() const;
 
 //  operator -(const bn &rhs);
 //  operator *(const bn &rhs);
@@ -943,6 +946,20 @@ namespace libcage {
                 return str;
         }
 
+        template <typename T, int N>
+        size_t
+        bn<T, N>::hash_value() const
+        {
+                size_t h = 0;
+
+                for (int i = 0; i < N; i++) {
+                        boost::hash_combine(h, m_num[i]);
+                }
+
+                return h;
+
+        }
+
 #ifdef DEBUG
         template <typename T, int N>
         void
@@ -969,6 +986,20 @@ namespace libcage {
 
         typedef bn<uint32_t, 4> uint128_t;
         typedef bn<uint32_t, 5> uint160_t;
+
+        inline
+        size_t
+        hash_value(const uint128_t &num)
+        {
+                return num.hash_value();
+        }
+
+        inline
+        size_t
+        hash_value(const uint160_t &num)
+        {
+                return num.hash_value();
+        }
 }
 
 #endif // BN_HPP

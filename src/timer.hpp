@@ -37,7 +37,7 @@
 #include <event.h>
 
 #include <boost/shared_ptr.hpp>
-#include <map>
+#include <boost/unordered_map.hpp>
 
 namespace libcage {
         class timer {
@@ -65,7 +65,8 @@ namespace libcage {
                 void            unset_timer(callback *func);
 
         private:
-                std::map<callback*, boost::shared_ptr<event> >  m_events;
+                boost::unordered_map<callback*,
+                                     boost::shared_ptr<event> >  m_events;
 
 
 #ifdef DEBUG
