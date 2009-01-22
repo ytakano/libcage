@@ -78,6 +78,10 @@ namespace libcage {
                 void            recv_find_node(void *msg, sockaddr *from);
                 void            recv_find_node_reply(void *msg, int len,
                                                      sockaddr *from);
+                void            recv_find_value(void *msg, int len,
+                                                sockaddr *from);
+                void            recv_find_value_reply(void *msg, int len,
+                                                      sockaddr *from);
                 void            recv_store(void *msg, int len, sockaddr *from);
 
 
@@ -85,9 +89,12 @@ namespace libcage {
                                           callback_find_node func);
                 void            find_node(std::string host, int port,
                                           callback_find_node func);
+                void            find_value(const uint160_t &dst,
+                                           void *key, uint16_t keylen,
+                                           callback_find_value func);
                 void            store(const uint160_t &id,
-                                      char *key, uint16_t keylen,
-                                      char *value, uint16_t valuelen,
+                                      void *key, uint16_t keylen,
+                                      void *value, uint16_t valuelen,
                                       uint16_t ttl);
 
                 void            use_dtun(bool flag);
@@ -165,6 +172,17 @@ namespace libcage {
                 };
 
                 // for find node or value
+                class find_value_func {
+                public:
+                        void operator() (bool result, cageaddr &addr);
+
+                        boost::shared_array<char>       key;
+                        uint16_t        keylen;
+                        id_ptr          dst;
+                        uint32_t        nonce;
+                        dht            *p_dht;
+                };
+
                 class find_node_func {
                 public:
                         void operator() (bool result, cageaddr &addr);
@@ -211,9 +229,10 @@ namespace libcage {
 
                 void            find_nv(const uint160_t &dst,
                                         callback_func func, bool is_find_value,
-                                        char *key, int keylen);
+                                        void *key, int keylen);
                 void            send_find(query_ptr q);
                 void            send_find_node(cageaddr &dst, query_ptr q);
+                void            send_find_value(cageaddr &dst, query_ptr q);
 
 
                 const uint160_t         &m_id;

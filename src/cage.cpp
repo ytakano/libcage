@@ -158,6 +158,19 @@ namespace libcage {
                                 m_cage.m_dht.recv_store(buf, len, from);
                         }
                         break;
+                case type_dht_find_value:
+                        if (len >= (int)(sizeof(msg_dht_find_value) - 
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dht.recv_find_value(buf, len, from);
+                        }
+                        break;
+                case type_dht_find_value_reply:
+                        if (len >= (int)(sizeof(msg_dht_find_value_reply) - 
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dht.recv_find_value_reply(buf, len,
+                                                                   from);
+                        }
+                        break;
                 }
         }
 
@@ -192,7 +205,7 @@ namespace libcage {
         }
 
         void
-        cage::put(char *key, uint16_t keylen, char *value, uint16_t valuelen,
+        cage::put(void *key, uint16_t keylen, void *value, uint16_t valuelen,
                   uint16_t ttl)
         {
                 EVP_MD_CTX      ctx;
@@ -208,7 +221,30 @@ namespace libcage {
 
                 id.from_binary(buf, sizeof(buf));
 
+                printf("put id = %s\n", id.to_string().c_str());
+
                 m_dht.store(id, key, keylen, value, valuelen, ttl);
+        }
+
+        void
+        cage::get(void *key, uint16_t keylen, callback_get func)
+        {
+                EVP_MD_CTX      ctx;
+                uint160_t       id;
+                uint32_t        len;
+                uint8_t         buf[20];
+
+                EVP_MD_CTX_init(&ctx);
+                EVP_DigestInit_ex(&ctx, EVP_sha1(), NULL);
+                EVP_DigestUpdate(&ctx, key, keylen);
+                EVP_DigestFinal_ex(&ctx, buf, &len);
+                EVP_MD_CTX_cleanup(&ctx);
+
+                id.from_binary(buf, sizeof(buf));
+                printf("get id = %s\n", id.to_string().c_str());
+
+
+                m_dht.find_value(id, key, keylen, func);
         }
 
 #ifdef DEBUG_NAT
@@ -326,8 +362,25 @@ namespace libcage {
                         printf("id = %s\n", addr.id->to_string().c_str());
                 }
 
+                dht_get_callback func;
+                int k = 50;
+
                 p_cage[n].m_dht.print_table();
-                p_cage[n].put((char*)&n, sizeof(n), (char*)&n, sizeof(n), 300);
+
+                printf("put: n = %d\n", n);
+                p_cage[n].put((void*)&n, sizeof(n), (void*)&n, sizeof(n), 300);
+                p_cage[n].get((void*)&k, sizeof(k), func);
+        }
+
+        void
+        cage::dht_get_callback::operator() (bool result, void *buf, int len)
+        {
+                printf("dht: get\n");
+
+                if (result)
+                        printf("  true\n");
+                else
+                        printf("  false\n");
         }
 
         void

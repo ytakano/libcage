@@ -151,7 +151,7 @@ namespace libcage {
 
         void
         dht::find_nv(const uint160_t &dst, callback_func func,
-                     bool is_find_value, char *key = NULL, int keylen = 0)
+                     bool is_find_value, void *key = NULL, int keylen = 0)
         {
                 query_ptr q(new query);
 
@@ -177,6 +177,13 @@ namespace libcage {
                 q->num_query     = 0;
                 q->is_find_value = is_find_value;
                 q->func          = func;
+
+                if (is_find_value) {
+                        q->key = boost::shared_array<char>(new char[keylen]);
+                        q->keylen = keylen;
+
+                        memcpy(q->key.get(), key, keylen);
+                }
 
                 if (is_find_value) {
                         q->key    = boost::shared_array<char>(new char[keylen]);
@@ -244,8 +251,7 @@ namespace libcage {
 
                         // send find node
                         if (q->is_find_value) {
-                                // TODO:
-                                // send_find_value(addr, q);
+                                send_find_value(addr, q);
                         } else {
                                 send_find_node(addr, q);
                         }
@@ -619,8 +625,8 @@ namespace libcage {
         }
 
         void
-        dht::store(const uint160_t &id, char *key, uint16_t keylen,
-                   char *value, uint16_t valuelen, uint16_t ttl)
+        dht::store(const uint160_t &id, void *key, uint16_t keylen,
+                   void *value, uint16_t valuelen, uint16_t ttl)
         {
                 store_func func;
                 id_ptr     p_id(new uint160_t);
@@ -718,7 +724,7 @@ namespace libcage {
 
                 id->from_binary(req->id, sizeof(req->id));
                 memcpy(key.get(), req->data, keylen);
-                memcpy(value.get(), req->data + keylen, valuelen);
+                memcpy(value.get(), (char*)req->data + keylen, valuelen);
 
                 ik.key    = key;
                 ik.keylen = keylen;
@@ -756,6 +762,384 @@ namespace libcage {
                         data.recvd.insert(i);
 
                         m_stored[ik] = data;
+                }
+        }
+
+        void
+        dht::find_value(const uint160_t &dst, void *key, uint16_t keylen,
+                        callback_find_value func)
+        {
+                find_nv(dst, func, true, key, keylen);
+        }
+
+        void
+        dht::find_value_func::operator() (bool result, cageaddr &addr)
+        {
+                if (! result)
+                        return;
+
+                msg_dht_find_value *msg;
+                int  size;
+                char buf[1024 * 4];
+
+                size = sizeof(*msg) - sizeof(msg->key)
+                        + keylen;
+
+                if (size > (int)sizeof(buf))
+                        return;
+
+                msg = (msg_dht_find_value*)buf;
+
+                memset(msg, 0, size);
+
+                msg->nonce  = htonl(nonce);
+                msg->domain = htons(addr.domain);
+                msg->keylen = htons(keylen);
+
+                memcpy(msg->key, key.get(), keylen);
+
+                dst->to_binary(msg->id, sizeof(msg->id));
+
+                p_dht->send_msg(&msg->hdr, size, type_dht_find_value, addr);
+        }
+
+        void
+        dht::send_find_value(cageaddr &dst, query_ptr q)
+        {
+                try {
+                        if (m_is_dtun && ! dst.id->is_zero())
+                                m_peers.get_addr(dst.id);
+
+                        msg_dht_find_value *msg;
+                        int  size;
+                        char buf[1024 * 4];
+
+                        size = sizeof(*msg) - sizeof(msg->key)
+                                + q->keylen;
+
+                        if (size > (int)sizeof(buf))
+                                return;
+
+                        msg = (msg_dht_find_value*)buf;
+
+                        memset(msg, 0, size);
+
+                        msg->nonce  = htonl(q->nonce);
+                        msg->domain = htons(dst.domain);
+                        msg->keylen = htons(q->keylen);
+
+                        memcpy(msg->key, q->key.get(), q->keylen);
+
+                        q->dst->to_binary(msg->id, sizeof(msg->id));
+
+                        send_msg(&msg->hdr, size, type_dht_find_value,
+                                 dst);
+                } catch (std::out_of_range) {
+                        find_value_func func;
+
+                        func.key    = q->key;
+                        func.keylen = q->keylen;
+                        func.dst    = q->dst;
+                        func.nonce  = q->nonce;
+                        func.p_dht  = this;
+
+                        m_dtun.request(*dst.id, func);
+                }
+        }
+
+        void
+        dht::recv_find_value(void *msg, int len, sockaddr *from)
+        {
+                boost::shared_array<char> key;
+                msg_dht_find_value_reply *reply;
+                msg_dht_find_value       *req;
+                cageaddr  addr;
+                uint160_t dst;
+                uint16_t  size;
+                uint16_t  keylen;
+                id_key    ik;
+                id_ptr    id(new uint160_t);
+                char      buf[1024 * 4];
+
+
+                req = (msg_dht_find_value*)msg;
+
+                dst.from_binary(req->hdr.dst, sizeof(req->hdr.dst));
+                if (dst != m_id)
+                        return;
+
+                keylen = ntohs(req->keylen);
+
+                size = sizeof(*req) - sizeof(req->key) + keylen;
+                if (size != len)
+                        return;
+
+                // add to rttable and request cache
+                addr = new_cageaddr(&req->hdr, from);
+                add(addr);
+                m_peers.add_node(addr);
+
+                // lookup stored data
+                key = boost::shared_array<char>(new char[keylen]);
+                memcpy(key.get(), req->key, keylen);
+
+                id->from_binary(req->id, sizeof(req->id));
+
+                ik.keylen = keylen;
+                ik.key    = key;
+                ik.id     = id;
+
+                boost::unordered_map<id_key, stored_data>::iterator it;
+                it = m_stored.find(ik);
+
+                reply = (msg_dht_find_value_reply*)buf;
+
+                if (it != m_stored.end()) {
+                        // reply data
+                        msg_data *data;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*data) - sizeof(data->data) +
+                                it->second.keylen + it->second.valuelen;
+
+                        memset(reply, 0, size);
+
+                        reply->nonce = req->nonce;
+                        reply->flag  = 1;
+
+                        memcpy(reply->id, req->id, sizeof(reply->id));
+
+                        data  = (msg_data*)reply->data;
+
+                        data->keylen   = htons(it->second.keylen);
+                        data->valuelen = htons(it->second.valuelen);
+
+                        memcpy(data->data, it->second.key.get(),
+                               it->second.keylen);
+                        memcpy((char*)data->data + it->second.keylen,
+                               it->second.value.get(), it->second.valuelen);
+
+                        send_msg(&reply->hdr, size, type_dht_find_value_reply,
+                                 addr);
+                } else {
+                        // reply nodes
+                        msg_nodes *data;
+                        std::vector<cageaddr>    nodes;
+                        uint16_t domain;
+
+                        lookup(*id, num_find_node, nodes);
+
+                        domain = ntohs(req->domain);
+
+                        if (domain == domain_inet) {
+                                msg_inet *min;
+
+                                size = sizeof(*reply) - sizeof(reply->data) +
+                                        sizeof(*data) - sizeof(data->addrs) +
+                                        sizeof(*min) * nodes.size();
+
+                                memset(reply, 0, size);
+
+                                reply->nonce = req->nonce;
+                                reply->flag  = 0;
+
+                                memcpy(reply->id, req->id, sizeof(reply->id));
+                                
+                                data = (msg_nodes*)reply->data;
+
+                                data->num    = nodes.size();
+                                data->domain = req->domain;
+
+                                min = (msg_inet*)data->addrs;
+                                write_nodes_inet(min, nodes);
+                        } else if (domain == domain_inet6) {
+                                msg_inet6 *min6;
+
+                                size = sizeof(*reply) - sizeof(reply->data) +
+                                        sizeof(*data) - sizeof(data->addrs) +
+                                        sizeof(*min6) * nodes.size();
+
+                                memset(reply, 0, size);
+
+                                reply->nonce = req->nonce;
+                                reply->flag  = 0;
+
+                                memcpy(reply->id, req->id, sizeof(reply->id));
+                                
+                                data = (msg_nodes*)reply->data;
+
+                                data->num    = nodes.size();
+                                data->domain = req->domain;
+
+                                min6 = (msg_inet6*)data->addrs;
+                                write_nodes_inet6(min6, nodes);
+                        } else {
+                                return;
+                        }
+
+                        send_msg(&reply->hdr, size, type_dht_find_value_reply,
+                                 addr);
+                }
+        }
+
+        void
+        dht::recv_find_value_reply(void *msg, int len, sockaddr *from)
+        {
+                boost::unordered_map<uint32_t, query_ptr>::iterator it;
+                msg_dht_find_value_reply *reply;
+                cageaddr  addr;
+                timer_ptr t;
+                query_ptr q;
+                uint160_t dst;
+                uint160_t id;
+                uint32_t  nonce;
+                int       size;
+                _id       i;
+
+                reply = (msg_dht_find_value_reply*)msg;
+
+                dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
+                if (dst != m_id)
+                        return;
+
+                nonce = ntohl(reply->nonce);
+
+                it = m_query.find(nonce);
+                if (it == m_query.end())
+                        return;
+
+                q = it->second;
+
+                id.from_binary(reply->id, sizeof(reply->id));
+                if (id != *q->dst)
+                        return;
+
+                addr = new_cageaddr(&reply->hdr, from);
+
+                i.id = addr.id;
+                if (q->timers.find(i) == q->timers.end())
+                        return;
+
+                if (! q->is_find_value)
+                        return;
+
+                // stop timer
+                t = q->timers[i];
+                m_timer.unset_timer(t.get());
+                q->timers.erase(i);
+
+                // add to rttale and request cache
+                add(addr);
+                m_peers.add_node(addr);
+
+
+                q->sent.insert(i);
+                q->num_query--;
+
+                if (reply->flag == 1) {
+                        msg_data *data;
+                        uint16_t  keylen;
+                        uint16_t  valuelen;
+                        char     *key, *value;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*data) - sizeof(data->data);
+
+                        if (len < size)
+                                return;
+
+                        data = (msg_data*)reply->data;
+
+                        keylen   = ntohs(data->keylen);
+                        valuelen = ntohs(data->valuelen);
+
+                        size += keylen + valuelen;
+
+                        if (size != len)
+                                return;
+
+                        key   = (char*)data->data;
+                        value = key + keylen;
+
+                        if (keylen != q->keylen)
+                                return;
+
+                        if (memcmp(key, q->key.get(), keylen) != 0)
+                                return;
+
+                        // call callback function
+                        callback_find_value func;
+
+                        func = boost::get<callback_find_value>(q->func);
+                        func(true, value, valuelen);
+
+                        // stop all timer
+                        boost::unordered_map<_id, timer_ptr>::iterator it_tm;
+                        for (it_tm = q->timers.begin();
+                             it_tm != q->timers.end(); ++it_tm) {
+                                m_timer.unset_timer(it_tm->second.get());
+                        }
+
+                        // remove query
+                        m_query.erase(nonce);
+                } else if (reply->flag == 0) {
+                        std::vector<cageaddr> nodes;
+                        msg_nodes *addrs;
+                        uint16_t   domain;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*addrs) - sizeof(addrs->addrs);
+
+                        if (len < size)
+                                return;
+
+                        addrs = (msg_nodes*)reply->data;
+
+                        // read nodes
+                        domain = ntohs(addrs->domain);
+                        if (domain == domain_inet) {
+                                msg_inet *min;
+                                
+                                size += addrs->num * sizeof(*min);
+
+                                if (size != len)
+                                        return;
+
+                                min = (msg_inet*)addrs->addrs;
+
+                                read_nodes_inet(min, addrs->num, nodes, from,
+                                                m_peers);
+                        } else if (domain == domain_inet6) {
+                                msg_inet6 *min6;
+
+                                size += addrs->num * sizeof(*min6);
+
+                                if (size != len)
+                                        return;
+
+                                min6 = (msg_inet6*)addrs->addrs;
+
+                                read_nodes_inet6(min6, addrs->num, nodes, from,
+                                                 m_peers);
+                        } else {
+                                return;
+                        }
+
+                        // sort
+                        compare cmp;
+                        cmp.m_id = &id;
+                        std::sort(nodes.begin(), nodes.end(), cmp);
+
+                        // merge
+                        std::vector<cageaddr> tmp;
+
+                        tmp = q->nodes;
+                        q->nodes.clear();
+
+                        merge_nodes(id, q->nodes, tmp, nodes, num_find_node);
+
+                        // send
+                        send_find(q);
                 }
         }
 }

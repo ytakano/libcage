@@ -87,7 +87,7 @@ namespace libcage {
         static const uint8_t type_dht_find_node_reply     = 18;
         static const uint8_t type_dht_find_value          = 19;
         static const uint8_t type_dht_find_value_reply    = 20;
-        static const uint8_t type_dht_store               = 21;
+        static const uint8_t type_dht_store               = 22;
         
 
         struct msg_hdr {
@@ -238,6 +238,37 @@ namespace libcage {
                 uint8_t         num;
                 uint8_t         padding;
                 uint32_t        addrs[1];
+        };
+
+        struct msg_dht_find_value {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        id[5];
+                uint16_t        domain;
+                uint16_t        keylen;
+                uint32_t        key[1];
+        };
+
+        struct msg_nodes {
+                uint16_t        domain;
+                uint8_t         num;
+                uint8_t         padding;
+                uint32_t        addrs[1];
+        };
+
+        struct msg_data {
+                uint16_t        keylen;
+                uint16_t        valuelen;
+                uint32_t        data[1];
+        };
+
+        struct msg_dht_find_value_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        id[5];
+                uint8_t         flag;
+                uint8_t         padding[3];
+                uint32_t        data[1];
         };
 
         struct msg_dht_store {

@@ -48,10 +48,14 @@ namespace libcage {
                 cage();
                 virtual ~cage();
 
+                typedef boost::function<void (bool, void *buf, int len)>
+                callback_get;
+
                 bool            open(int domain, uint16_t port);
-                void            put(char *key, uint16_t keylen,
-                                    char *value, uint16_t valuelen,
+                void            put(void *key, uint16_t keylen,
+                                    void *value, uint16_t valuelen,
                                     uint16_t ttl);
+                void            get(void *key, uint16_t keylen, callback_get); 
 
         private:
                 class udp_receiver : public udphandler::callback {
@@ -115,6 +119,11 @@ namespace libcage {
 
                         int     n;
                         cage   *p_cage;
+                };
+
+                class dht_get_callback {
+                public:
+                        void operator() (bool result, void *buf, int len);
                 };
 
         public:
