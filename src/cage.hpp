@@ -36,6 +36,7 @@
 
 #include "bn.hpp"
 #include "dtun.hpp"
+#include "dht.hpp"
 #include "natdetector.hpp"
 #include "peers.hpp"
 #include "timer.hpp"
@@ -45,8 +46,12 @@ namespace libcage {
         class cage {
         public:
                 cage();
+                virtual ~cage();
 
                 bool            open(int domain, uint16_t port);
+                void            put(char *key, uint16_t keylen,
+                                    char *value, uint16_t valuelen,
+                                    uint16_t ttl);
 
         private:
                 class udp_receiver : public udphandler::callback {
@@ -69,6 +74,7 @@ namespace libcage {
                 udp_receiver    m_receiver;
                 peers           m_peers;
                 dtun            m_dtun;
+                dht             m_dht;
 
 #ifdef DEBUG_NAT
         public:
@@ -90,6 +96,14 @@ namespace libcage {
                 public:
                         void operator() (bool result, cageaddr &addr,
                                          cageaddr &from);
+
+                        int     n;
+                        cage   *p_cage;
+                };
+
+                class dht_find_node_callback {
+                public:
+                        void operator() (std::vector<cageaddr> &addrs);
 
                         int     n;
                         cage   *p_cage;

@@ -41,6 +41,7 @@
 #include "rttable.hpp"
 #include "udphandler.hpp"
 
+#include <string>
 #include <vector>
 
 #include <boost/function.hpp>
@@ -77,10 +78,19 @@ namespace libcage {
                 void            recv_find_node(void *msg, sockaddr *from);
                 void            recv_find_node_reply(void *msg, int len,
                                                      sockaddr *from);
+                void            recv_store(void *msg, int len, sockaddr *from);
 
 
                 void            find_node(const uint160_t &dst,
                                           callback_find_node func);
+                void            find_node(std::string host, int port,
+                                          callback_find_node func);
+                void            store(const uint160_t &id,
+                                      char *key, uint16_t keylen,
+                                      char *value, uint16_t valuelen,
+                                      uint16_t ttl);
+
+                void            use_dtun(bool flag);
 
         private:
                 class _id {
@@ -94,6 +104,55 @@ namespace libcage {
                 };
 
                 friend size_t hash_value(const _id &i);
+
+                // for store
+                class store_func {
+                public:
+                        void operator() (std::vector<cageaddr>& nodes);
+
+                        boost::shared_array<char>       key;
+                        boost::shared_array<char>       value;
+                        uint16_t        keylen;
+                        uint16_t        valuelen;
+                        uint16_t        ttl;
+                        id_ptr          id;
+                        dht            *p_dht;
+                };
+
+                class id_key {
+                public:
+                        boost::shared_array<char>       key;
+                        uint16_t        keylen;
+                        id_ptr          id;
+
+                        bool operator== (const id_key &rhs) const
+                        {
+                                if (keylen != keylen) {
+                                        return false;
+                                } else if (*id != *rhs.id) {
+                                        return false;
+                                } else if (memcmp(key.get(), rhs.key.get(),
+                                                  keylen) != 0) {
+                                        return false;
+                                }
+
+                                return true;
+                        }
+                };
+
+                friend size_t hash_value(const id_key &ik);
+
+                class stored_data {
+                public:
+                        boost::shared_array<char>       key;
+                        boost::shared_array<char>       value;
+                        boost::unordered_set<_id>       recvd;
+                        uint16_t        keylen;
+                        uint16_t        valuelen;
+                        uint16_t        ttl;
+                        time_t          stored_time;
+                        id_ptr          id;
+                };
 
                 // for ping
                 class ping_func {
@@ -162,8 +221,10 @@ namespace libcage {
                 peers          &m_peers;
                 udphandler     &m_udp;
                 dtun           &m_dtun;
+                bool            m_is_dtun;
 
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
+                boost::unordered_map<id_key, stored_data>       m_stored;
         };
 }
 

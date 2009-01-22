@@ -62,6 +62,7 @@ namespace libcage {
                 void            recv_ping_reply(cageaddr &src, uint32_t nonce);
 
                 void            print_table();
+                bool            is_zero();
 
         protected:
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);

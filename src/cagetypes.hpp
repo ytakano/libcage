@@ -85,6 +85,10 @@ namespace libcage {
         static const uint8_t type_dht_ping_reply          = 16;
         static const uint8_t type_dht_find_node           = 17;
         static const uint8_t type_dht_find_node_reply     = 18;
+        static const uint8_t type_dht_find_value          = 19;
+        static const uint8_t type_dht_find_value_reply    = 20;
+        static const uint8_t type_dht_store               = 21;
+        
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -236,6 +240,16 @@ namespace libcage {
                 uint32_t        addrs[1];
         };
 
+        struct msg_dht_store {
+                msg_hdr         hdr;
+                uint32_t        id[5];
+                uint16_t        keylen;
+                uint16_t        valuelen;
+                uint16_t        ttl;
+                uint16_t        reserved;
+                uint32_t        data[1];
+        };
+
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
         void            write_nodes_inet(msg_inet *min,
                                          std::vector<cageaddr> &nodes);
@@ -247,7 +261,6 @@ namespace libcage {
         void            read_nodes_inet6(msg_inet6 *min6, int num,
                                          std::vector<cageaddr> &nodes,
                                          sockaddr *from, peers &p);
-
 }
 
 #endif // CAGETYPES_HPP

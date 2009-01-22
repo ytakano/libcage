@@ -31,6 +31,7 @@
 
 #include "cage.hpp"
 
+#include <openssl/evp.h>
 #include <openssl/rand.h>
 
 #include <boost/foreach.hpp>
@@ -139,18 +140,44 @@ namespace libcage {
                                 m_cage.m_dtun.recv_request_reply(buf, from);
                         }
                         break;
+                case type_dht_find_node:
+                        if (len == (int)sizeof(msg_dht_find_node)) {
+                                m_cage.m_dht.recv_find_node(buf, from);
+                        }
+                        break;
+                case type_dht_find_node_reply:
+                        if (len >= (int)(sizeof(msg_dht_find_node_reply) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dht.recv_find_node_reply(buf, len,
+                                                                  from);
+                        }
+                        break;
+                case type_dht_store:
+                        if (len >= (int)(sizeof(msg_dht_store) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_dht.recv_store(buf, len, from);
+                        }
+                        break;
                 }
         }
 
         cage::cage() : m_nat(m_udp, m_timer, m_id),
                        m_receiver(*this),
                        m_peers(m_timer),
-                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp)
+                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
+                       m_dht(m_id, m_timer, m_peers, m_udp, m_dtun)
         {
                 unsigned char buf[20];
 
                 RAND_pseudo_bytes(buf, sizeof(buf));
                 m_id.from_binary(buf, sizeof(buf));
+
+                srand48(time(NULL));
+        }
+
+        cage::~cage()
+        {
+
         }
 
         bool
@@ -162,6 +189,26 @@ namespace libcage {
                 m_udp.set_callback(&m_receiver);
 
                 return true;
+        }
+
+        void
+        cage::put(char *key, uint16_t keylen, char *value, uint16_t valuelen,
+                  uint16_t ttl)
+        {
+                EVP_MD_CTX      ctx;
+                uint160_t       id;
+                uint32_t        len;
+                uint8_t         buf[20];
+
+                EVP_MD_CTX_init(&ctx);
+                EVP_DigestInit_ex(&ctx, EVP_sha1(), NULL);
+                EVP_DigestUpdate(&ctx, key, keylen);
+                EVP_DigestFinal_ex(&ctx, buf, &len);
+                EVP_MD_CTX_cleanup(&ctx);
+
+                id.from_binary(buf, sizeof(buf));
+
+                m_dht.store(id, key, keylen, value, valuelen, ttl);
         }
 
 #ifdef DEBUG_NAT
@@ -206,7 +253,7 @@ namespace libcage {
         void
         cage::dtun_find_node_callback::operator() (std::vector<cageaddr> &addrs)
         {
-                printf("recv find node reply\n");
+                printf("dtun: recv find node reply\n");
 
                 BOOST_FOREACH(cageaddr &addr, addrs) {
                         in_ptr in = boost::get<in_ptr>(addr.saddr);
@@ -224,6 +271,14 @@ namespace libcage {
                         p_cage[n].m_nat.set_state_global();
                         p_cage[n].m_dtun.find_node("localhost", 10000,
                                                     *this);
+
+
+                        dht_find_node_callback  func;
+                        func.n = n;
+                        func.p_cage = p_cage;
+
+                        p_cage[n].m_dht.find_node("localhost", 10000, func);
+
                 } else {
                         // test find value
                         dtun_find_value_callback func1;
@@ -240,7 +295,7 @@ namespace libcage {
         void
         cage::dtun_request_callback::operator() (bool result, cageaddr &addr)
         {
-                printf("recv request reply\n");
+                printf("dtun: recv request reply\n");
 
                 if (result)
                         printf("  true\n");
@@ -252,7 +307,7 @@ namespace libcage {
         cage::dtun_find_value_callback::operator() (bool result, cageaddr &addr,
                                                     cageaddr &from)
         {
-                printf("recv find value reply\n");
+                printf("dtun: recv find value reply\n");
 
                 if (result)
                         printf("  true\n");
@@ -261,9 +316,25 @@ namespace libcage {
         }
 
         void
+        cage::dht_find_node_callback::operator() (std::vector<cageaddr> &addrs)
+        {
+                printf("dht: recv find node reply\n");
+
+                BOOST_FOREACH(cageaddr &addr, addrs) {
+                        in_ptr in = boost::get<in_ptr>(addr.saddr);
+                        printf("  port = %d, ", ntohs(in->sin_port));
+                        printf("id = %s\n", addr.id->to_string().c_str());
+                }
+
+                p_cage[n].m_dht.print_table();
+                p_cage[n].put((char*)&n, sizeof(n), (char*)&n, sizeof(n), 300);
+        }
+
+        void
         cage::test_dtun()
         {
                 dtun_find_node_callback func;
+                dht_find_node_callback  func2;
                 cage *c;
 
                 // open bootstrap node
@@ -275,9 +346,13 @@ namespace libcage {
                 func.n = 0;
                 func.p_cage = new cage[NUM_NODES];
 
+                func2.n = 0;
+                func2.p_cage = func.p_cage;
+
                 func.p_cage[0].open(PF_INET, 11000);
                 func.p_cage[0].m_nat.set_state_global();
                 func.p_cage[0].m_dtun.find_node("localhost", 10000, func);
+                func.p_cage[0].m_dht.find_node("localhost", 10000, func2);
         }
 #endif // DEBUG
 }

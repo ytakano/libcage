@@ -70,6 +70,15 @@ namespace libcage {
 
         }
 
+        bool
+        rttable::is_zero()
+        {
+                if (m_table.size() == 0)
+                        return true;
+                else
+                        return false;
+        }
+
         void
         rttable::add(const cageaddr &addr)
         {
@@ -158,8 +167,10 @@ namespace libcage {
                         }
                 }
 
+                if (row.size() == 0)
+                        m_table.erase(i);
+
                 m_nodes.erase(id);
-                
         }
 
         void
@@ -375,9 +386,21 @@ namespace libcage {
 
                                 } else if (j->domain == domain_inet6) {
                                         in6_ptr in6;
+                                        char   *addr;
+
                                         in6 = boost::get<in6_ptr>(j->saddr);
 
-                                        printf("        Port = %d\n",
+                                        addr = (char*)in6->sin6_addr.s6_addr;
+
+                                        printf("        IP = %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x, ",
+                                               addr[ 0], addr[ 1], addr[ 2],
+                                               addr[ 3], addr[ 4], addr[ 5],
+                                               addr[ 6], addr[ 7], addr[ 8],
+                                               addr[ 9], addr[10], addr[11],
+                                               addr[12], addr[13], addr[14],
+                                               addr[15]);
+
+                                        printf("Port = %d\n",
                                                ntohs(in6->sin6_port));
                                 }
 

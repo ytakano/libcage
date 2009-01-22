@@ -100,7 +100,7 @@ namespace libcage {
 
                 class _addr : private boost::totally_ordered<_addr> {
                 public:
-                        sa_family_t     domain;
+                        uint16_t        domain;
                         boost::variant<in_ptr, in6_ptr> saddr;
 
                         bool operator== (const _addr &rhs) const;
