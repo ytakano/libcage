@@ -39,6 +39,9 @@ namespace libcage {
         const int       dht::num_find_node    = 6;
         const int       dht::max_query        = 3;
         const int       dht::query_timeout    = 3;
+        const int       dht::restore_interval = 360;
+        const int       dht::timer_interval   = 180;
+
 
         size_t
         hash_value(const dht::_id &i)
@@ -59,15 +62,18 @@ namespace libcage {
                 return h;
         }
 
-        dht::dht(const uint160_t &id, timer &t, peers &p, udphandler &udp,
-                 dtun &dt) :
+        dht::dht(const uint160_t &id, timer &t, peers &p,
+                 const natdetector &nat, udphandler &udp, dtun &dt) :
                 rttable(id, t, p),
                 m_id(id),
                 m_timer(t),
                 m_peers(p),
+                m_nat(nat),
                 m_udp(udp),
                 m_dtun(dt),
-                m_is_dtun(true)
+                m_is_dtun(true),
+                m_last_restore(0),
+                m_timer_dht(*this)
         {
 
         }
@@ -214,6 +220,11 @@ namespace libcage {
         void
         dht::find_node(const uint160_t &dst, callback_find_node func)
         {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
                 find_nv(dst, func, false);
         }
 
@@ -547,6 +558,12 @@ namespace libcage {
         void
         dht::find_node(std::string host, int port, callback_find_node func)
         {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
+
                 sockaddr_storage saddr;
 
                 if (! m_udp.get_sockaddr(&saddr, host, port))
@@ -769,6 +786,12 @@ namespace libcage {
         dht::find_value(const uint160_t &dst, void *key, uint16_t keylen,
                         callback_find_value func)
         {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
+
                 find_nv(dst, func, true, key, keylen);
         }
 
@@ -1140,6 +1163,118 @@ namespace libcage {
 
                         // send
                         send_find(q);
+                }
+        }
+
+        void
+        dht::refresh()
+        {
+                boost::unordered_map<id_key, stored_data>::iterator it;
+                time_t now = time(NULL);
+
+                for(it = m_stored.begin(); it != m_stored.end();) {
+                        time_t diff;
+                        diff = now - it->second.stored_time;
+                        if (diff > it->second.ttl)
+                                m_stored.erase(it++);
+                        else
+                                ++it;
+                }
+        }
+
+        void
+        dht::restore_func::operator() (std::vector<cageaddr> &n)
+        {
+                boost::unordered_map<id_key, stored_data>::iterator it;
+                std::vector<cageaddr> nodes;
+                time_t now = time(NULL);
+
+                for(it = p_dht->m_stored.begin();
+                    it != p_dht->m_stored.end();) {
+                        msg_dht_store *msg;
+                        uint16_t       ttl;
+                        int            size;
+                        char           buf[1024 * 4];
+                        char          *p_key, *p_value;
+                        bool           me = false;
+                        time_t         diff;
+                        
+                        p_dht->lookup(*it->second.id, num_find_node, nodes);
+
+                        if (nodes.size() == 0)
+                                continue;
+
+                        size = sizeof(*msg) - sizeof(msg->data) +
+                                it->second.keylen + it->second.valuelen;
+
+                        if (size > (int)sizeof(buf))
+                                continue;
+
+                        msg = (msg_dht_store*)buf;
+
+                        diff = now - it->second.stored_time;
+                        if (diff >= it->second.ttl)
+                                continue;
+
+                        ttl = it->second.ttl - diff;
+
+                        msg->keylen   = htons(it->second.keylen);
+                        msg->valuelen = htons(it->second.valuelen);
+                        msg->ttl      = htons(ttl);
+
+                        it->second.id->to_binary(msg->id, sizeof(msg->id));
+
+                        p_key   = (char*)msg->data;
+                        p_value = p_key + it->second.keylen;
+
+                        memcpy(p_key, it->second.key.get(), 
+                               it->second.keylen);
+                        memcpy(p_value, it->second.value.get(),
+                               it->second.valuelen);
+
+
+                        BOOST_FOREACH(cageaddr &addr, nodes) {
+                                if (p_dht->m_id == *addr.id) {
+                                        me = true;
+                                        continue;
+                                }
+
+                                _id    i;
+
+                                i.id = addr.id;
+                                if (it->second.recvd.find(i) !=
+                                    it->second.recvd.end()) {
+                                        continue;
+                                }
+
+                                p_dht->send_msg(&msg->hdr, size, type_dht_store,
+                                                addr);
+                        }
+
+                        if (! me)
+                                p_dht->m_stored.erase(it++);
+                        else
+                                ++it;
+                }
+        }
+
+        void
+        dht::restore()
+        {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
+
+                time_t diff;
+                diff = time(NULL) - m_last_restore;
+
+                if (diff >= restore_interval) {
+                        restore_func func;
+
+                        func.p_dht = this;
+                        find_node(m_id, func);
                 }
         }
 }

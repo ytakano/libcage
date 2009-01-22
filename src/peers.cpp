@@ -201,6 +201,7 @@ namespace libcage {
                                 a.domain = addr.domain;
                                 a.saddr  = addr.saddr;
                                 m_map.insert(value_t(i, a));
+                                m_timeout.erase(i);
                         } else {
                                 _addr a1, a2;
                                 a1 = m_map.left.at(i);
@@ -210,6 +211,7 @@ namespace libcage {
                                 if (a1 == a2) {
                                         // update time
                                         it->first.t = i.t;
+                                        m_timeout.erase(i);
                                 }
                         }
                 } else {
@@ -217,6 +219,7 @@ namespace libcage {
                         a.domain = addr.domain;
                         a.saddr  = addr.saddr;
                         m_map.insert(value_t(i, a));
+                        m_timeout.erase(i);
                 }
         }
 
@@ -244,26 +247,26 @@ namespace libcage {
         {
                 time_t now = time(NULL);
 
-                boost::unordered_set<_id>::iterator it1, it1_del;;
+                boost::unordered_set<_id>::iterator it1;
                 for (it1 = m_timeout.begin(); it1 != m_timeout.end();) {
                         time_t diff = now - it1->t;
-                        it1_del = it1;
-                        ++it1;
 
                         if (diff > timeout_ttl) {
-                                m_timeout.erase(it1_del);
+                                m_timeout.erase(it1++);
+                        } else {
+                                ++it1;
                         }
                 }
 
 
-                _bimap::left_iterator it2, it2_del;
+                _bimap::left_iterator it2;
                 for (it2 = m_map.left.begin(); it2 != m_map.left.end();) {
                         time_t diff = now - it2->first.t;
-                        it2_del = it2;
-                        ++it2;
 
                         if (diff > map_ttl) {
-                                m_map.left.erase(it2_del);
+                                m_map.left.erase(it2++);
+                        } else {
+                                ++it2;
                         }
                 }
         }

@@ -178,7 +178,7 @@ namespace libcage {
                        m_receiver(*this),
                        m_peers(m_timer),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
-                       m_dht(m_id, m_timer, m_peers, m_udp, m_dtun)
+                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun)
         {
                 unsigned char buf[20];
 

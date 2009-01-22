@@ -57,6 +57,8 @@ namespace libcage {
                 static const int        num_find_node;
                 static const int        max_query;
                 static const int        query_timeout;
+                static const int        restore_interval;
+                static const int        timer_interval;
 
 
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -67,8 +69,8 @@ namespace libcage {
                                        callback_find_value> callback_func;
 
         public:
-                dht(const uint160_t &id, timer &t, peers &p, udphandler &udp,
-                    dtun &dt);
+                dht(const uint160_t &id, timer &t, peers &p,
+                    const natdetector &nat, udphandler &udp, dtun &dt);
                 virtual ~dht();
 
                 void            recv_ping(void *msg, sockaddr *from,
@@ -221,6 +223,48 @@ namespace libcage {
 
                 typedef boost::shared_ptr<query> query_ptr;
 
+                // for restore
+                class restore_func {
+                public:
+                        void operator() (std::vector<cageaddr> &n);
+
+                        dht    *p_dht;
+                };
+
+                class timer_dht : public timer::callback {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_dht.refresh();
+                                m_dht.restore();
+
+                                // reschedule
+                                timeval tval;
+
+                                tval.tv_sec  = dht::timer_interval;
+                                tval.tv_usec = 0;
+
+                                m_dht.m_timer.set_timer(this, &tval);
+                        }
+
+                        timer_dht(dht &d) : m_dht(d)
+                        {
+                                timeval tval;
+
+                                tval.tv_sec  = dht::timer_interval;
+                                tval.tv_usec = 0;
+
+                                m_dht.m_timer.set_timer(this, &tval);
+                        }
+
+                        virtual ~timer_dht()
+                        {
+                                m_dht.m_timer.unset_timer(this);
+                        }
+
+                        dht    &m_dht;
+                };
+
 
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
 
@@ -234,13 +278,19 @@ namespace libcage {
                 void            send_find_node(cageaddr &dst, query_ptr q);
                 void            send_find_value(cageaddr &dst, query_ptr q);
 
+                void            refresh();
+                void            restore();
+
 
                 const uint160_t         &m_id;
-                timer          &m_timer;
-                peers          &m_peers;
-                udphandler     &m_udp;
-                dtun           &m_dtun;
-                bool            m_is_dtun;
+                timer                   &m_timer;
+                peers                   &m_peers;
+                const natdetector       &m_nat;
+                udphandler              &m_udp;
+                dtun                    &m_dtun;
+                bool                     m_is_dtun;
+                time_t                   m_last_restore;
+                timer_dht                m_timer_dht;
 
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
                 boost::unordered_map<id_key, stored_data>       m_stored;

@@ -415,4 +415,29 @@ namespace libcage {
                 m_reply[nonce]  = 0;
                 m_state         = echo_wait2;
         }
+
+        node_state
+        natdetector::get_state() const
+        {
+                switch (m_state) {
+                case undefined:
+                        return node_undefined;
+                case echo_wait1:
+                        return node_undefined;
+                case echo_redirect_wait:
+                        return node_undefined;
+                case global:
+                        return node_global;
+                case nat:
+                        return node_nat;
+                case echo_wait2:
+                        return node_nat;
+                case symmetric_nat:
+                        return node_symmetric;
+                case cone_nat:
+                        return node_cone;
+                }
+
+                return node_state(undefined);
+        }
 }

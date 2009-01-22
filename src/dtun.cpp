@@ -345,7 +345,7 @@ namespace libcage {
                 msg.nonce  = htonl(q->nonce);
                 msg.domain = htons(m_udp.get_domain());
 
-                if (m_nat.is_global()) {
+                if (m_nat.get_state() == node_global) {
                         msg.state = htons(state_global);
                 } else {
                         msg.state = htons(state_nat);
@@ -1375,17 +1375,17 @@ namespace libcage {
         void
         dtun::refresh()
         {
-                boost::unordered_map<_id, registered>::iterator it, it_del;
+                boost::unordered_map<_id, registered>::iterator it;
                 time_t now = time(NULL);
 
                 for (it = m_registered_nodes.begin();
                      it != m_registered_nodes.end();) {
-                        it_del = it;
-                        ++it;
 
-                        time_t diff = now - it_del->second.t;
+                        time_t diff = now - it->second.t;
                         if (diff > registered_ttl) {
-                                m_registered_nodes.erase(it_del);
+                                m_registered_nodes.erase(it++);
+                        } else {
+                                ++it;
                         }
                 }
         }

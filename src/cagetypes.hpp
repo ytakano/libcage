@@ -281,6 +281,14 @@ namespace libcage {
                 uint32_t        data[1];
         };
 
+        enum node_state {
+                node_undefined,
+                node_nat,
+                node_cone,
+                node_symmetric,
+                node_global
+        };
+
         cageaddr        new_cageaddr(msg_hdr *hdr, sockaddr *saddr);
         void            write_nodes_inet(msg_inet *min,
                                          std::vector<cageaddr> &nodes);

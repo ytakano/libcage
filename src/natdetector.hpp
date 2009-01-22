@@ -34,6 +34,7 @@
 
 #include "common.hpp"
 #include "bn.hpp"
+#include "cagetypes.hpp"
 #include "timer.hpp"
 #include "udphandler.hpp"
 
@@ -70,10 +71,7 @@ namespace libcage {
                 void            recv_echo_redirect_reply(void *msg);
 
 
-                bool is_global() const
-                {
-                        return m_state == global ? true : false;
-                }
+                node_state      get_state() const;
 
         private:
                 class timer_echo_wait1 : public timer::callback {
