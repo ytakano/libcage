@@ -1317,7 +1317,7 @@ namespace libcage {
                                 }
                         }
 
-                        m_interval = 1;
+                        m_interval = 3;
                 } else {
                         m_interval = 60;
                 }

@@ -50,6 +50,8 @@ namespace libcage {
 
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
+                typedef boost::function<void (bool)>
+                callback_join;
 
                 bool            open(int domain, uint16_t port, bool is_dtun);
                 void            put(void *key, uint16_t keylen,
@@ -57,7 +59,8 @@ namespace libcage {
                                     uint16_t ttl);
                 void            get(void *key, uint16_t keylen,
                                     callback_get func);
-                void            join(std::string host, int port);
+                void            join(std::string host, int port,
+                                     callback_join func);
 
                 void            set_global() { m_nat.set_state_global(); }
 
@@ -76,6 +79,13 @@ namespace libcage {
                         cage   &m_cage;
                 };
 
+                class join_func {
+                public:
+                        void operator() (std::vector<cageaddr> &nodes);
+
+                        callback_join   func;
+                };
+
                 udphandler      m_udp;
                 timer           m_timer;
                 uint160_t       m_id;
@@ -84,6 +94,7 @@ namespace libcage {
                 natdetector     m_nat;
                 dtun            m_dtun;
                 dht             m_dht;
+                bool            m_is_dtun;
 
 #ifdef DEBUG_NAT
         public:

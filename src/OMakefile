@@ -1,8 +1,11 @@
-CXXFLAGS += -Wall -O0 -DDEBUG -DDEBUG_NAT -g
+CXXFLAGS += -Wall -O0 -DDEBUG -DDEBUG_NAT -g -fPIC
 # ASFLAGS +=
 LDFLAGS += -levent -lcrypto
 # INCLUDES +=
 
+if $(equal $(SYSNAME), Darwin)
+	EXT_DLL = .dylib
+	export
 
 SRC[] =
 	dht
@@ -14,12 +17,17 @@ SRC[] =
 	timer
 	natdetector
 	udphandler
-	main
 
-MAIN = main
+LIBNAME = libcage
 
-.DEFAULT: $(CXXProgram $(MAIN), $(SRC))
+.PHONY: clean shared static install
 
-.PHONY: clean
+shared: $(DynamicCXXLibrary $(LIBNAME), $(SRC))
+
+static: $(StaticCXXLibrary $(LIBNAME), $(SRC))
+
 clean:
-	rm -f *~ $(MAIN) *.o
+	rm -f *~ *.a *.o *.so *.dylib
+
+
+.DEFAULT: shared static

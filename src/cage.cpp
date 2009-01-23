@@ -202,13 +202,15 @@ namespace libcage {
                 if (domain == PF_INET6) {
                         m_dtun.set_enabled(false);
                         m_dht.set_enabled_dtun(false);
+                        m_nat.set_state_global();
+                        m_is_dtun = false;
+                } else {
+                        m_dtun.set_enabled(is_dtun);
+                        m_dht.set_enabled_dtun(is_dtun);
+                        m_is_dtun = true;
                 }
 
                 m_udp.set_callback(&m_receiver);
-
-                m_dtun.set_enabled(is_dtun);
-                m_dht.set_enabled_dtun(is_dtun);
-                m_nat.set_state_global();
 
                 return true;
         }
@@ -259,11 +261,30 @@ namespace libcage {
         }
 
         void
-        cage::join(std::string host, int port)
+        cage::join_func::operator() (std::vector<cageaddr> &nodes)
         {
+                if (nodes.size() > 1)
+                        func(true);
+                else
+                        func(false);
+        }
+
+        void
+        cage::join(std::string host, int port, callback_join func)
+        {
+                join_func f;
+
+                f.func = func;
+
                 m_nat.detect(host, port);
-                m_dtun.find_node(host, port, &no_action);
-                m_dht.find_node(host, port, &no_action);
+
+                if (m_is_dtun) {
+                        m_dtun.find_node(host, port, f);
+                        m_dht.find_node(host, port, &no_action);
+                } else {
+                        m_dtun.find_node(host, port, &no_action);
+                        m_dht.find_node(host, port, f);
+                }
         }
 
 #ifdef DEBUG_NAT

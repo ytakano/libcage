@@ -25,6 +25,34 @@
 
 # .PHONY: all install clean
 
+.PHONY: clean install uninstall
+
+clean:
+	rm -f *~
+
+
+if $(not $(defined PREFIX))
+	PREFIX = /usr/local
+	export
+
+install:
+	mkdir($(PREFIX)/include/libcage -p)
+	mkdir($(PREFIX)/lib -p)
+
+	if $(equal $(SYSNAME), Darwin)
+		cp -f src/*.a src/*.dylib $(PREFIX)/lib
+	else
+		cp -f src/*.a src/*.so $(PREFIX)/lib
+
+	cp -f src/*.hpp $(PREFIX)/include/libcage
+
+uninstall:
+	rm -rf $(PREFIX)/include/libcage
+	rm -f $(PREFIX)/lib/libcage.a
+	rm -f $(PREFIX)/lib/libcage.a
+	rm -f $(PREFIX)/lib/libcage.dylib
+
+
 ########################################################################
 # Subdirectories.
 # You may want to include some subdirectories in this project.
@@ -32,6 +60,7 @@
 #
 
 .SUBDIRS: src
+
 
 ########################################################################
 # C configuration.
@@ -156,7 +185,3 @@
 # OCAML_LIB_FLAGS +=
 #
 # .DEFAULT: $(OCamlProgram $(PROGRAM), $(FILES))
-
-.PHONY: clean
-clean:
-	rm -f *~

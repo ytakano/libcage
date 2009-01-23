@@ -275,7 +275,7 @@ namespace libcage {
                         dht    &m_dht;
                         time_t  m_interval;
 
-                        dht_join(dht &d) : m_dht(d), m_interval(1)
+                        dht_join(dht &d) : m_dht(d), m_interval(3)
                         {
                                 timeval tval;
 
