@@ -280,6 +280,7 @@ namespace libcage {
                 i.id = id;
 
                 m_timeout.insert(i);
+                m_map.left.erase(i);
         }
 
         bool
@@ -294,6 +295,49 @@ namespace libcage {
 
                 return true;
         }
+
+        cageaddr
+        peers::get_first()
+        {
+                if (m_map.size() == 0)
+                        throw std::out_of_range("no element");
+
+                cageaddr addr;
+
+                _bimap::left_iterator it;
+                it = m_map.left.begin();
+
+                addr.id     = it->first.id;
+                addr.domain = it->second.domain;
+                addr.saddr  = it->second.saddr;
+
+                return addr;
+        }
+
+        cageaddr
+        peers::get_next(id_ptr id)
+        {
+                cageaddr addr;
+                _id      i;
+
+                i.id = id;
+
+                _bimap::left_iterator it;
+                it = m_map.left.find(i);
+
+                if (it == m_map.left.end())
+                        throw std::out_of_range("no element");
+
+                if (++it == m_map.left.end())
+                        throw std::out_of_range("no more element");
+
+                addr.id     = it->first.id;
+                addr.domain = it->second.domain;
+                addr.saddr  = it->second.saddr;
+
+                return addr;
+        }
+
 
 #ifdef DEBUG
         void

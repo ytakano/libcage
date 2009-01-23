@@ -118,6 +118,9 @@ namespace libcage {
 
                 // throws std::out_of_range
                 cageaddr        get_addr(id_ptr id);
+                cageaddr        get_first();
+                cageaddr        get_next(id_ptr id);
+
                 void            get_id(cageaddr &addr, std::vector<id_ptr> &id);
 
                 void            remove_id(id_ptr id);

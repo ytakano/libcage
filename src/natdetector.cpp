@@ -33,7 +33,8 @@
 #include "cagetypes.hpp"
 
 namespace libcage {
-        const time_t    natdetector::echo_timeout = 3;
+        const time_t    natdetector::echo_timeout   = 3;
+        const time_t    natdetector::timer_interval = 30;
 
         void
         natdetector::timer_echo_wait1::operator() ()
@@ -92,9 +93,14 @@ namespace libcage {
         }
 
         natdetector::natdetector(udphandler &udp, timer &t,
-                                 const uint160_t &id) :
-                m_state(undefined), m_timer(t), m_udp(udp), m_id(id),
-                m_global_port(0)
+                                 const uint160_t &id, peers &p) :
+                m_state(undefined),
+                m_timer(t),
+                m_udp(udp),
+                m_id(id),
+                m_peers(p),
+                m_global_port(0),
+                m_timer_nat(*this)
         {
 
         }
@@ -105,15 +111,38 @@ namespace libcage {
         }
 
         void
+        natdetector::detect_nat(sockaddr *saddr, int slen)
+        {
+                if (m_state != undefined) {
+                        return;
+                }
+
+                msg_nat_echo echo;
+
+                get_echo(echo);
+
+                // send
+                m_udp.sendto(&echo, sizeof(echo), saddr, slen);
+        }
+
+        void
         natdetector::detect_nat(std::string host, int port)
         {
                 if (m_state != undefined) {
                         return;
                 }
 
-                // send echo
                 msg_nat_echo echo;
 
+                get_echo(echo);
+
+                // send
+                m_udp.sendto(&echo, sizeof(echo), host, port);
+        }
+
+        void
+        natdetector::get_echo(msg_nat_echo &echo)
+        {
                 memset(&echo, 0, sizeof(echo));
 
                 echo.hdr.magic = htons(MAGIC_NUMBER);
@@ -146,11 +175,6 @@ namespace libcage {
                 p->m_nat   = this;
 
                 m_timer.set_timer(func.get(), &tval);
-
-
-                // send
-                m_udp.sendto(&echo, sizeof(echo), host, port);
-
 
                 m_timers[nonce] = func;
                 m_state = echo_wait1;
@@ -363,8 +387,8 @@ namespace libcage {
         }
 
         void
-        natdetector::detect_nat_type(std::string host1, int port1,
-                                     std::string host2, int port2)
+        natdetector::detect_nat_type(sockaddr *saddr1, sockaddr *saddr2,
+                                     int slen)
         {
                 if (m_state != nat)
                         return;
@@ -407,8 +431,8 @@ namespace libcage {
 
 
                 // send
-                m_udp.sendto(&echo, sizeof(echo), host1, port1);
-                m_udp.sendto(&echo, sizeof(echo), host2, port2);
+                m_udp.sendto(&echo, sizeof(echo), saddr1, slen);
+                m_udp.sendto(&echo, sizeof(echo), saddr2, slen);
 
 
                 m_timers[nonce] = func;
@@ -439,5 +463,87 @@ namespace libcage {
                 }
 
                 return node_state(undefined);
+        }
+
+        void
+        natdetector::timer_nat::operator() ()
+        {
+                if (m_nat.m_state == global ||
+                    m_nat.m_state == cone_nat ||
+                    m_nat.m_state == symmetric_nat)
+                        return;
+
+                // reschedule
+                timeval tval;
+
+                tval.tv_sec  = natdetector::timer_interval;
+                tval.tv_usec = 0;
+
+                m_nat.m_timer.set_timer(this, &tval);
+
+                if (m_nat.m_state == echo_wait1 ||
+                    m_nat.m_state == echo_wait2 ||
+                    m_nat.m_state == echo_redirect_wait)
+                        return;
+
+
+                try {
+                        cageaddr addr1, addr2;
+                        in_ptr   in1, in2;
+
+                        addr1 = m_nat.m_peers.get_first();
+                        in1 = boost::get<in_ptr>(addr1.saddr);
+
+                        if (m_nat.m_state == undefined) {
+                                m_nat.detect_nat((sockaddr*)in1.get(),
+                                                 sizeof(sockaddr_in));
+                                return;
+                        }
+
+                        for (;;) {
+                                addr2 = m_nat.m_peers.get_next(addr1.id);
+                                in2 = boost::get<in_ptr>(addr2.saddr);
+
+                                if (in1->sin_addr.s_addr !=
+                                    in2->sin_addr.s_addr)
+                                        break;
+                        }
+
+                        m_nat.detect_nat_type((sockaddr*)in1.get(),
+                                              (sockaddr*)in2.get(),
+                                              sizeof(sockaddr_in));
+                } catch (std::out_of_range) {
+                        return;
+                }
+        }
+
+        natdetector::timer_nat::~timer_nat()
+        {
+                m_nat.m_timer.unset_timer(this);
+        }
+
+        void
+        natdetector::detect(std::string host, int port)
+        {
+                if (m_udp.get_domain() == domain_inet6) {
+                        m_state = global;
+                        return;
+                }
+
+                if (m_state == global || m_state == cone_nat ||
+                    m_state == symmetric_nat)
+                        return;
+
+                m_timer.unset_timer(&m_timer_nat);
+
+
+                timeval tval;
+
+                detect_nat(host, port);
+
+                tval.tv_sec  = timer_interval;
+                tval.tv_usec = 0;
+
+                m_timer.set_timer(&m_timer_nat, &tval);
         }
 }

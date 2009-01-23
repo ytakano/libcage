@@ -51,11 +51,16 @@ namespace libcage {
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
 
-                bool            open(int domain, uint16_t port);
+                bool            open(int domain, uint16_t port, bool is_dtun);
                 void            put(void *key, uint16_t keylen,
                                     void *value, uint16_t valuelen,
                                     uint16_t ttl);
-                void            get(void *key, uint16_t keylen, callback_get); 
+                void            get(void *key, uint16_t keylen,
+                                    callback_get func);
+                void            join(std::string host, int port);
+
+                void            set_global() { m_nat.set_state_global(); }
+
 
         private:
                 class udp_receiver : public udphandler::callback {
@@ -74,9 +79,9 @@ namespace libcage {
                 udphandler      m_udp;
                 timer           m_timer;
                 uint160_t       m_id;
-                natdetector     m_nat;
                 udp_receiver    m_receiver;
                 peers           m_peers;
+                natdetector     m_nat;
                 dtun            m_dtun;
                 dht             m_dht;
 

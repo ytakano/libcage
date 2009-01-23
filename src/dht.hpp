@@ -91,6 +91,8 @@ namespace libcage {
                                           callback_find_node func);
                 void            find_node(std::string host, int port,
                                           callback_find_node func);
+                void            find_node(sockaddr *saddr,
+                                          callback_find_node func);
                 void            find_value(const uint160_t &dst,
                                            void *key, uint16_t keylen,
                                            callback_find_value func);
@@ -99,7 +101,7 @@ namespace libcage {
                                       void *value, uint16_t valuelen,
                                       uint16_t ttl);
 
-                void            use_dtun(bool flag);
+                void            set_enabled_dtun(bool flag);
 
         private:
                 class _id {
@@ -265,6 +267,30 @@ namespace libcage {
                         dht    &m_dht;
                 };
 
+                // for join
+                class dht_join : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        dht    &m_dht;
+                        time_t  m_interval;
+
+                        dht_join(dht &d) : m_dht(d), m_interval(1)
+                        {
+                                timeval tval;
+
+                                tval.tv_sec  = m_interval;
+                                tval.tv_usec = 0;
+
+                                m_dht.m_timer.set_timer(this, &tval);
+                        }
+
+                        virtual ~dht_join()
+                        {
+                                m_dht.m_timer.unset_timer(this);
+                        }
+                };
+
 
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
 
@@ -291,6 +317,7 @@ namespace libcage {
                 bool                     m_is_dtun;
                 time_t                   m_last_restore;
                 timer_dht                m_timer_dht;
+                dht_join                 m_join;
 
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
                 boost::unordered_map<id_key, stored_data>       m_stored;

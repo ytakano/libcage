@@ -73,7 +73,8 @@ namespace libcage {
                 m_dtun(dt),
                 m_is_dtun(true),
                 m_last_restore(0),
-                m_timer_dht(*this)
+                m_timer_dht(*this),
+                m_join(*this)
         {
 
         }
@@ -569,6 +570,12 @@ namespace libcage {
                 if (! m_udp.get_sockaddr(&saddr, host, port))
                         return;
 
+                find_node((sockaddr*)&saddr, func);
+        }
+
+        void
+        dht::find_node(sockaddr *saddr, callback_find_node func)
+        {
                 // initialize query
                 query_ptr q(new query);
                 id_ptr    dst(new uint160_t);
@@ -624,11 +631,11 @@ namespace libcage {
                 addr.domain = m_udp.get_domain();
                 if (addr.domain == domain_inet) {
                         in_ptr in(new sockaddr_in);
-                        memcpy(in.get(), &saddr, sizeof(sockaddr_in));
+                        memcpy(in.get(), saddr, sizeof(sockaddr_in));
                         addr.saddr = in;
                 } else if (addr.domain == domain_inet6) {
                         in6_ptr in6(new sockaddr_in6);
-                        memcpy(in6.get(), &saddr, sizeof(sockaddr_in6));
+                        memcpy(in6.get(), saddr, sizeof(sockaddr_in6));
                         addr.saddr = in6;
                 }
 
@@ -636,7 +643,7 @@ namespace libcage {
         }
 
         void
-        dht::use_dtun(bool flag)
+        dht::set_enabled_dtun(bool flag)
         {
                 m_is_dtun = flag;
         }
@@ -1276,5 +1283,50 @@ namespace libcage {
                         func.p_dht = this;
                         find_node(m_id, func);
                 }
+        }
+
+        static void
+        no_action(std::vector<cageaddr> &nodes)
+        {
+
+        }
+
+        void
+        dht::dht_join::operator() ()
+        {
+                if (m_dht.is_zero()) {
+                        node_state state = m_dht.m_nat.get_state();
+                        if (state == node_global ||
+                            state == node_cone) {
+                                try {
+                                        cageaddr addr;
+
+                                        addr = m_dht.m_peers.get_first();
+
+                                        if (addr.domain == domain_inet) {
+                                                in_ptr in;
+                                                in = boost::get<in_ptr>(addr.saddr);
+                                                m_dht.find_node((sockaddr*)in.get(), &no_action);
+                                        } else if (addr.domain ==
+                                                   domain_inet6) {
+                                                in6_ptr in6;
+                                                in6 = boost::get<in6_ptr>(addr.saddr);
+                                                m_dht.find_node((sockaddr*)in6.get(), &no_action);
+                                        }
+                                } catch (std::out_of_range) {
+                                }
+                        }
+
+                        m_interval = 1;
+                } else {
+                        m_interval = 60;
+                }
+
+                timeval tval;
+
+                tval.tv_sec  = m_interval;
+                tval.tv_usec = 0;
+
+                m_dht.m_timer.set_timer(this, &tval);
         }
 }

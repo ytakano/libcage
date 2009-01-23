@@ -94,7 +94,8 @@ namespace libcage {
                 m_timer_register(*this),
                 m_registering(false),
                 m_last_registered(0),
-                m_timer_refresh(*this)
+                m_timer_refresh(*this),
+                m_is_enabled(true)
         {
                 RAND_pseudo_bytes((unsigned char*)&m_register_session,
                                   sizeof(m_register_session));
@@ -115,6 +116,9 @@ namespace libcage {
         void
         dtun::recv_ping(void *msg, sockaddr *from, int fromlen)
         {
+                if (m_nat.get_state() != node_global)
+                        return;
+
                 recv_ping_tmpl<msg_dtun_ping,
                         msg_dtun_ping_reply>(msg, from, fromlen,
                                              type_dtun_ping_reply,
@@ -128,12 +132,25 @@ namespace libcage {
                                                           m_id, m_peers, this);
         }
 
+
         void
         dtun::find_node(std::string host, int port, callback_find_node func)
         {
+                if (! m_is_enabled)
+                        return;
+
                 sockaddr_storage saddr;
 
                 if (! m_udp.get_sockaddr(&saddr, host, port))
+                        return;
+
+                find_node((sockaddr*)&saddr, func);
+        }
+
+        void
+        dtun::find_node(sockaddr *saddr, callback_find_node func)
+        {
+                if (! m_is_enabled)
                         return;
 
                 // initialize query
@@ -188,11 +205,11 @@ namespace libcage {
                 addr.domain = m_udp.get_domain();
                 if (addr.domain == domain_inet) {
                         in_ptr in(new sockaddr_in);
-                        memcpy(in.get(), &saddr, sizeof(sockaddr_in));
+                        memcpy(in.get(), saddr, sizeof(sockaddr_in));
                         addr.saddr = in;
                 } else if (addr.domain == domain_inet6) {
                         in6_ptr in6(new sockaddr_in6);
-                        memcpy(in6.get(), &saddr, sizeof(sockaddr_in6));
+                        memcpy(in6.get(), saddr, sizeof(sockaddr_in6));
                         addr.saddr = in6;
                 }
 
@@ -249,12 +266,18 @@ namespace libcage {
         void
         dtun::find_node(const uint160_t &dst, callback_find_node func)
         {
+                if (! m_is_enabled)
+                        return;
+
                 find_nv(dst, func, false);
         }
 
         void
         dtun::find_value(const uint160_t &dst, callback_find_value func)
         {
+                if (! m_is_enabled)
+                        return;
+
                 // TODO: check local cache
                 find_nv(dst, func, true);
         }
@@ -387,6 +410,9 @@ namespace libcage {
                 uint160_t                 dst, id;
                 int                       size;
                 char                      buf[1024 * 2];
+
+                if (m_nat.get_state() != node_global)
+                        return;
 
                 find_node = (msg_dtun_find_node*)msg;
 
@@ -636,6 +662,9 @@ namespace libcage {
         void
         dtun::register_node()
         {
+                if (! m_is_enabled)
+                        return;
+
                 if (m_registering)
                         return;
 
@@ -745,6 +774,9 @@ namespace libcage {
                 uint16_t             domain;
                 char                 buf[1024 * 2];
                 id_ptr               id(new uint160_t);
+
+                if (m_nat.get_state() != node_global)
+                        return;
 
                 find_value = (msg_dtun_find_value*)msg;
 
@@ -893,6 +925,8 @@ namespace libcage {
                 int       size;
                 _id       c_id;
 
+                if (m_nat.get_state() != node_global)
+                        return;
                 
                 reply = (msg_dtun_find_value_reply*)msg;
 
@@ -1144,6 +1178,9 @@ namespace libcage {
                 uint160_t         dst;
                 id_ptr            id(new uint160_t);
 
+                if (m_nat.get_state() != node_global)
+                        return;
+
                 req = (msg_dtun_request*)msg;
 
                 dst.from_binary(req->hdr.dst, sizeof(req->hdr.dst));
@@ -1390,6 +1427,12 @@ namespace libcage {
                 }
         }
 
+        static void
+        no_action(std::vector<cageaddr> &nodes)
+        {
+
+        }
+
         void
         dtun::timer_refresh::operator() ()
         {
@@ -1398,6 +1441,26 @@ namespace libcage {
                 if (n > 0) {
                         m_dtun.register_node();
                         n = 0;
+
+                        if (m_dtun.is_zero() && m_dtun.m_is_enabled) {
+                                try {
+                                        cageaddr addr;
+
+                                        addr = m_dtun.m_peers.get_first();
+
+                                        if (addr.domain == domain_inet) {
+                                                in_ptr in;
+                                                in = boost::get<in_ptr>(addr.saddr);
+                                                m_dtun.find_node((sockaddr*)in.get(), &no_action);
+                                        } else if (addr.domain ==
+                                                   domain_inet6) {
+                                                in6_ptr in6;
+                                                in6 = boost::get<in6_ptr>(addr.saddr);
+                                                m_dtun.find_node((sockaddr*)in6.get(), &no_action);
+                                        }
+                                } catch (std::out_of_range) {
+                                }
+                        }
                 } else {
                         n++;
                 }
@@ -1409,5 +1472,11 @@ namespace libcage {
                 tval.tv_usec = 0;
 
                 m_dtun.m_timer.set_timer(this, &tval);
+        }
+
+        void
+        dtun::set_enabled(bool enabled)
+        {
+                m_is_enabled = enabled;
         }
 }

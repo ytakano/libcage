@@ -36,6 +36,7 @@
 #include "bn.hpp"
 #include "cagetypes.hpp"
 #include "timer.hpp"
+#include "peers.hpp"
 #include "udphandler.hpp"
 
 #include <boost/unordered_map.hpp>
@@ -44,7 +45,34 @@
 
 namespace libcage {
         class natdetector {
+        private:
+                static const time_t     timer_interval;
+
         public:
+                natdetector(udphandler &udp, timer &t, const uint160_t &id,
+                            peers &p);
+                virtual ~natdetector();
+
+                void            detect(std::string host, int port);
+
+                void            detect_nat(std::string host, int port);
+                void            detect_nat(sockaddr *saddr, int slen);
+                void            detect_nat_type(sockaddr *saddr1,
+                                                sockaddr *saddr2,
+                                                int slen);
+                void            recv_echo(void *msg, sockaddr *from,
+                                          int fromlen);
+                void            recv_echo_reply(void *msg, sockaddr *from,
+                                                int fromlen);
+                void            recv_echo_redirect(void *msg, sockaddr *from,
+                                                   int fromlen);
+                void            recv_echo_redirect_reply(void *msg);
+
+
+                node_state      get_state() const;
+                void            set_state_global() { m_state = global; }
+
+        private:
                 enum state {
                         undefined,
                         echo_wait1,
@@ -56,24 +84,16 @@ namespace libcage {
                         symmetric_nat
                 };
 
-                natdetector(udphandler &udp, timer &t, const uint160_t &id);
-                virtual ~natdetector();
+                class timer_nat : public timer::callback {
+                public:
+                        virtual void operator() ();
 
-                void            detect_nat(std::string host, int port);
-                void            detect_nat_type(std::string host1, int port1,
-                                                std::string host2, int port2);
-                void            recv_echo(void *msg, sockaddr *from,
-                                          int fromlen);
-                void            recv_echo_reply(void *msg, sockaddr *from,
-                                                int fromlen);
-                void            recv_echo_redirect(void *msg, sockaddr *from,
-                                                   int fromlen);
-                void            recv_echo_redirect_reply(void *msg);
+                        timer_nat(natdetector &nat) : m_nat(nat) { }
+                        virtual ~timer_nat();
 
+                        natdetector    &m_nat;
+                };
 
-                node_state      get_state() const;
-
-        private:
                 class timer_echo_wait1 : public timer::callback {
                 public:
                         virtual void operator() ();
@@ -116,8 +136,10 @@ namespace libcage {
                 udphandler             &m_udp;
                 udphandler             *m_udp_tmp;
                 const uint160_t        &m_id;
+                peers                  &m_peers;
                 uint16_t                m_global_port;
                 uint8_t                 m_global_addr[16];
+                timer_nat               m_timer_nat;
 
                 boost::unordered_map<uint32_t, callback_ptr>    m_timers;
                 boost::unordered_map<uint32_t, udp_ptr>         m_udps;
@@ -127,15 +149,12 @@ namespace libcage {
                                                       int fromlen);
                 void            recv_echo_reply_wait2(void *msg);
 
+                void            get_echo(msg_nat_echo &echo);
+
 #ifdef DEBUG_NAT
         public:
                 void            set_state_nat() { m_state = nat; }
 #endif // DEBUG_NAT
-
-#ifdef DEBUG
-        public:
-                void            set_state_global() { m_state = global; }
-#endif // DEBUG
         };
 }
 

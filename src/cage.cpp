@@ -174,9 +174,9 @@ namespace libcage {
                 }
         }
 
-        cage::cage() : m_nat(m_udp, m_timer, m_id),
-                       m_receiver(*this),
+        cage::cage() : m_receiver(*this),
                        m_peers(m_timer),
+                       m_nat(m_udp, m_timer, m_id, m_peers),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun)
         {
@@ -194,12 +194,21 @@ namespace libcage {
         }
 
         bool
-        cage::open(int domain, uint16_t port)
+        cage::open(int domain, uint16_t port, bool is_dtun = true)
         {
                 if (!m_udp.open(domain, port))
                         return false;
 
+                if (domain == PF_INET6) {
+                        m_dtun.set_enabled(false);
+                        m_dht.set_enabled_dtun(false);
+                }
+
                 m_udp.set_callback(&m_receiver);
+
+                m_dtun.set_enabled(is_dtun);
+                m_dht.set_enabled_dtun(is_dtun);
+                m_nat.set_state_global();
 
                 return true;
         }
@@ -221,8 +230,6 @@ namespace libcage {
 
                 id.from_binary(buf, sizeof(buf));
 
-                printf("put id = %s\n", id.to_string().c_str());
-
                 m_dht.store(id, key, keylen, value, valuelen, ttl);
         }
 
@@ -241,10 +248,22 @@ namespace libcage {
                 EVP_MD_CTX_cleanup(&ctx);
 
                 id.from_binary(buf, sizeof(buf));
-                printf("get id = %s\n", id.to_string().c_str());
-
 
                 m_dht.find_value(id, key, keylen, func);
+        }
+
+        void
+        no_action(std::vector<cageaddr> &nodes)
+        {
+
+        }
+
+        void
+        cage::join(std::string host, int port)
+        {
+                m_nat.detect(host, port);
+                m_dtun.find_node(host, port, &no_action);
+                m_dht.find_node(host, port, &no_action);
         }
 
 #ifdef DEBUG_NAT
@@ -264,6 +283,7 @@ namespace libcage {
         void
         cage::test_nattypedetect()
         {
+                sockaddr_in saddr1, saddr2;
                 cage *c1, *c2, *c3;
                 c1 = new cage();
                 c2 = new cage();
@@ -275,10 +295,20 @@ namespace libcage {
 
                 c1->m_nat.set_state_nat();
 
-                c1->m_nat.detect_nat_type("localhost",
-                                          ntohs(c2->m_udp.get_port()),
-                                          "localhost",
-                                          ntohs(c3->m_udp.get_port()));
+                memset(&saddr1, 0, sizeof(saddr1));
+                memset(&saddr2, 0, sizeof(saddr2));
+
+                saddr1.sin_family = PF_INET;
+                saddr1.sin_port   = c2->m_udp.get_port();
+                saddr1.sin_addr.s_addr = htonl(127 << 24 + 1);
+
+                saddr2.sin_family = PF_INET;
+                saddr2.sin_port   = c3->m_udp.get_port();
+                saddr2.sin_addr.s_addr = htonl(127 << 24 + 1);
+
+                c1->m_nat.detect_nat_type((sockaddr*)&saddr1,
+                                          (sockaddr*)&saddr2,
+                                          sizeof(saddr1));
 
         }
 #endif // DEBUG_NAT

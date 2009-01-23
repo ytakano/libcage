@@ -97,6 +97,8 @@ namespace libcage {
 
                 void            find_node(const uint160_t &dst,
                                           callback_find_node func);
+                void            find_node(sockaddr *saddr,
+                                          callback_find_node func);
                 void            find_node(std::string host, int port,
                                           callback_find_node func);
 
@@ -109,6 +111,8 @@ namespace libcage {
                                         callback_request func);
 
                 void            refresh();
+
+                void            set_enabled(bool enabled);
 
         private:
                 class _id {
@@ -257,6 +261,7 @@ namespace libcage {
                 boost::unordered_map<_id, registered>   m_registered_nodes;
                 boost::unordered_map<uint32_t, req_ptr>         m_request;
                 timer_refresh           m_timer_refresh;
+                bool                    m_is_enabled;
         };
 }
 
