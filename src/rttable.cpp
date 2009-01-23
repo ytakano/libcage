@@ -357,9 +357,6 @@ namespace libcage {
                 std::map<int, std::list<cageaddr> >::iterator i;
                 std::list<cageaddr>::iterator                 j;
 
-                str = m_id.to_string();
-                printf("MyID = %s\n", str.c_str());
-
                 for (i = m_table.begin(); i != m_table.end(); ++i) {
                         std::list<cageaddr> &row = i->second;
                         printf("  i = %d\n", i->first);

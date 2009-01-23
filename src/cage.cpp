@@ -193,8 +193,29 @@ namespace libcage {
 
         }
 
+        void
+        cage::print_state()
+        {
+                std::string str;
+
+                str = m_id.to_string();
+                printf("MyID = %s\n\n", str.c_str());
+
+                printf("DTUN Table:\n");
+
+                if (m_is_dtun)
+                        m_dtun.print_table();
+                else
+                        printf("  disabled\n");
+
+                printf("\n");
+
+                printf("DHT Table:\n");
+                m_dht.print_table();
+        }
+
         bool
-        cage::open(int domain, uint16_t port, bool is_dtun = true)
+        cage::open(int domain, uint16_t port, bool is_dtun)
         {
                 if (!m_udp.open(domain, port))
                         return false;
@@ -263,7 +284,7 @@ namespace libcage {
         void
         cage::join_func::operator() (std::vector<cageaddr> &nodes)
         {
-                if (nodes.size() > 1)
+                if (nodes.size() > 0)
                         func(true);
                 else
                         func(false);

@@ -53,7 +53,8 @@ namespace libcage {
                 typedef boost::function<void (bool)>
                 callback_join;
 
-                bool            open(int domain, uint16_t port, bool is_dtun);
+                bool            open(int domain, uint16_t port,
+                                     bool is_dtun = true);
                 void            put(void *key, uint16_t keylen,
                                     void *value, uint16_t valuelen,
                                     uint16_t ttl);
@@ -63,6 +64,8 @@ namespace libcage {
                                      callback_join func);
 
                 void            set_global() { m_nat.set_state_global(); }
+
+                void            print_state();
 
 
         private:

@@ -31,6 +31,13 @@ clean:
 	rm -f *~
 
 
+mkdir(include -p)
+
+if $(equal $(test -L include/libcage), true)
+else
+	rm(include/libcage -f)
+	symlink(src, include/libcage)
+
 if $(not $(defined PREFIX))
 	PREFIX = /usr/local
 	export
@@ -40,16 +47,16 @@ install:
 	mkdir($(PREFIX)/lib -p)
 
 	if $(equal $(SYSNAME), Darwin)
-		cp -f src/*.a src/*.dylib $(PREFIX)/lib
+		cp src/*.a src/*.dylib $(PREFIX)/lib
 	else
-		cp -f src/*.a src/*.so $(PREFIX)/lib
+		cp src/*.a src/*.so $(PREFIX)/lib
 
 	cp -f src/*.hpp $(PREFIX)/include/libcage
 
 uninstall:
 	rm -rf $(PREFIX)/include/libcage
 	rm -f $(PREFIX)/lib/libcage.a
-	rm -f $(PREFIX)/lib/libcage.a
+	rm -f $(PREFIX)/lib/libcage.so
 	rm -f $(PREFIX)/lib/libcage.dylib
 
 
@@ -59,7 +66,7 @@ uninstall:
 # If so, define the subdirectory targets and uncomment this section.
 #
 
-.SUBDIRS: src
+.SUBDIRS: src sample
 
 
 ########################################################################
