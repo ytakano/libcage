@@ -1,0 +1,109 @@
+/*
+ * Copyright (c) 2009, Yuuki Takano (ytakanoster@gmail.com).
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the writers nor the names of its contributors may be
+ *    used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#ifndef DGRAM_HPP
+#define DGRAM_HPP
+
+#include "common.hpp"
+
+#include "bn.hpp"
+#include "cagetypes.hpp"
+#include "dht.hpp"
+#include "dtun.hpp"
+#include "peers.hpp"
+#include "udphandler.hpp"
+
+#include <queue>
+
+#include <boost/shared_array.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/unordered_set.hpp>
+
+namespace libcage {
+        class dgram {
+        public:
+                dgram(const uint160_t &id, peers &p, udphandler &udp,
+                      dtun &dt, dht &dh);
+
+                void            send_dgram(id_ptr id, const void *msg, int len);
+
+        private:
+                class _id {
+                public:
+                        id_ptr  id;
+
+                        bool operator== (const _id &rhs) const
+                        {
+                                return *id == *rhs.id;
+                        }
+                };
+
+                friend size_t hash_value(const _id &i);
+
+                class request_func {
+                public:
+                        void operator() (bool result, cageaddr &addr);
+
+                        dgram  *p_dgram;
+                        id_ptr  dst;
+                };
+
+                class find_node_func {
+                public:
+                        void operator() (std::vector<cageaddr> &nodes);
+
+                        dgram  *p_dgram;
+                        id_ptr  dst;
+                };
+
+                class send_data {
+                public:
+                        boost::shared_array<char>       data;
+                        int len;
+                };
+
+                typedef std::queue<send_data>   type_queue;
+
+                void            send_queue(id_ptr id);
+                void            push2queue(id_ptr id, const void *msg, int len);
+                void            send_msg(send_data &data, cageaddr &dst);
+
+                boost::unordered_map<_id, type_queue>   m_queue;
+                boost::unordered_set<_id>               m_requesting;
+                const uint160_t        &m_id;
+                peers                  &m_peers;
+                udphandler             &m_udp;
+                dtun                   &m_dtun;
+                dht                    &m_dht;
+        };
+}
+
+#endif // DGRAM_HPP
