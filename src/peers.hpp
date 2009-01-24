@@ -42,6 +42,7 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/multiset_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp> 
+#include <boost/function.hpp>
 #include <boost/unordered_set.hpp> 
 
 namespace libcage {
@@ -50,6 +51,9 @@ namespace libcage {
                 static const time_t     timeout_ttl;
                 static const time_t     map_ttl;
                 static const time_t     timer_interval;
+
+
+                typedef boost::function<void (cageaddr &addr)> callback;
 
                 class timer_func : public timer::callback {
                 public:
@@ -135,12 +139,16 @@ namespace libcage {
 
                 void            refresh();
 
+                void            set_callback(callback func);
+
         private:
                 _bimap          m_map;
                 boost::unordered_set<_id>       m_timeout;
 
                 timer           m_timer;
                 timer_func      m_timer_func;
+                bool            m_is_callback;
+                callback        m_callback;
 
 #ifdef DEBUG
         public:

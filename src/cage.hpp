@@ -87,6 +87,7 @@ namespace libcage {
                         void operator() (std::vector<cageaddr> &nodes);
 
                         callback_join   func;
+                        cage   *p_cage;
                 };
 
                 udphandler      m_udp;

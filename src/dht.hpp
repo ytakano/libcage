@@ -114,6 +114,18 @@ namespace libcage {
                         }
                 };
 
+                class sync_node {
+                public:
+                        sync_node(dht &d) : m_dht(d)
+                        {
+                                m_dht.m_peers.set_callback(*this);
+                        }
+
+                        void operator() (cageaddr &addr);
+
+                        dht    &m_dht;
+                };
+
                 friend size_t hash_value(const _id &i);
 
                 // for store
@@ -318,6 +330,7 @@ namespace libcage {
                 time_t                   m_last_restore;
                 timer_dht                m_timer_dht;
                 dht_join                 m_join;
+                sync_node                m_sync;
 
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
                 boost::unordered_map<id_key, stored_data>       m_stored;

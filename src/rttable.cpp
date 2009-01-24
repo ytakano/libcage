@@ -350,6 +350,12 @@ namespace libcage {
                 return n;
         }
 
+        bool
+        rttable::has_id(uint160_t &id)
+        {
+                return m_nodes.find(id) != m_nodes.end();
+        }
+
         void
         rttable::print_table()
         {
@@ -458,6 +464,19 @@ namespace libcage {
 
                         n++;
                 }
+        }
+
+        int
+        rttable::get_size()
+        {
+                std::map<int, std::list<cageaddr> >::iterator it;
+                int num = 0;
+
+                for (it = m_table.begin(); it != m_table.end(); ++it) {
+                        num += it->second.size();
+                }
+
+                return num;
         }
 
 #ifdef DEBUG

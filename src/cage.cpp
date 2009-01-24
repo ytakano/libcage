@@ -284,10 +284,12 @@ namespace libcage {
         void
         cage::join_func::operator() (std::vector<cageaddr> &nodes)
         {
-                if (nodes.size() > 0)
+                if (nodes.size() > 0) {
+                        p_cage->m_dtun.register_node();
                         func(true);
-                else
+                } else {
                         func(false);
+                }
         }
 
         void
@@ -295,7 +297,8 @@ namespace libcage {
         {
                 join_func f;
 
-                f.func = func;
+                f.func   = func;
+                f.p_cage = this;
 
                 m_nat.detect(host, port);
 

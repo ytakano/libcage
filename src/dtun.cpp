@@ -760,7 +760,6 @@ namespace libcage {
                         it->second.t = r.t;
                 }
 
-
                 m_peers.add_node(r.addr, r.session);
         }
 

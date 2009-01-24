@@ -39,8 +39,8 @@ namespace libcage {
         const int       dht::num_find_node    = 6;
         const int       dht::max_query        = 3;
         const int       dht::query_timeout    = 3;
-        const int       dht::restore_interval = 360;
-        const int       dht::timer_interval   = 180;
+        const int       dht::restore_interval = 120;
+        const int       dht::timer_interval   = 60;
 
 
         size_t
@@ -74,7 +74,8 @@ namespace libcage {
                 m_is_dtun(true),
                 m_last_restore(0),
                 m_timer_dht(*this),
-                m_join(*this)
+                m_join(*this),
+                m_sync(*this)
         {
 
         }
@@ -299,8 +300,10 @@ namespace libcage {
         void
         dht::find_node_func::operator() (bool result, cageaddr &addr)
         {
-                if (! result)
+                if (! result) {
+                        printf("failed request\n");
                         return;
+                }
 
                 msg_dht_find_node msg;
 
@@ -550,7 +553,7 @@ namespace libcage {
                 tmp = q->nodes;
                 q->nodes.clear();
 
-                merge_nodes(id, q->nodes, tmp, nodes, num_find_node);
+                merge_nodes(*q->dst, q->nodes, tmp, nodes, num_find_node);
 
                 // send
                 send_find(q);
@@ -1266,23 +1269,10 @@ namespace libcage {
         }
 
         void
-        dht::restore()
+        dht::sync_node::operator() (cageaddr &addr)
         {
-                node_state state = m_nat.get_state();
-                if (state == node_symmetric || state == node_undefined ||
-                    state == node_nat)
-                        return;
-
-
-                time_t diff;
-                diff = time(NULL) - m_last_restore;
-
-                if (diff >= restore_interval) {
-                        restore_func func;
-
-                        func.p_dht = this;
-                        find_node(m_id, func);
-                }
+                if (! m_dht.has_id(*addr.id))
+                        m_dht.add(addr);
         }
 
         static void
@@ -1292,9 +1282,30 @@ namespace libcage {
         }
 
         void
+        dht::restore()
+        {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
+                time_t diff;
+                diff = time(NULL) - m_last_restore;
+
+                if (diff >= restore_interval) {
+                        m_last_restore = time(NULL);
+
+                        restore_func func;
+
+                        func.p_dht = this;
+                        find_node(m_id, func);
+                }
+        }
+
+        void
         dht::dht_join::operator() ()
         {
-                if (m_dht.is_zero()) {
+                if (m_dht.get_size() < num_find_node) {
                         node_state state = m_dht.m_nat.get_state();
                         if (state == node_global ||
                             state == node_cone) {
@@ -1317,9 +1328,12 @@ namespace libcage {
                                 }
                         }
 
-                        m_interval = 3;
+                        if (m_dht.is_zero())
+                                m_interval = 3;
+                        else
+                                m_interval = 30;
                 } else {
-                        m_interval = 60;
+                        m_interval = 137;
                 }
 
                 timeval tval;

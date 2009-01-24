@@ -114,9 +114,19 @@ namespace libcage {
                 return false;
         }
 
-        peers::peers(timer &t) : m_timer(t), m_timer_func(*this)
+        peers::peers(timer &t) :
+                m_timer(t),
+                m_timer_func(*this),
+                m_is_callback(false)
         {
 
+        }
+
+        void
+        peers::set_callback(callback func)
+        {
+                m_is_callback = true;
+                m_callback = func;
         }
 
         cageaddr
@@ -202,6 +212,8 @@ namespace libcage {
                                 a.saddr  = addr.saddr;
                                 m_map.insert(value_t(i, a));
                                 m_timeout.erase(i);
+
+                                m_callback(addr);
                         } else {
                                 _addr a1, a2;
                                 a1 = m_map.left.at(i);
@@ -212,6 +224,8 @@ namespace libcage {
                                         // update time
                                         it->first.t = i.t;
                                         m_timeout.erase(i);
+
+                                        m_callback(addr);
                                 }
                         }
                 } else {
@@ -220,6 +234,8 @@ namespace libcage {
                         a.saddr  = addr.saddr;
                         m_map.insert(value_t(i, a));
                         m_timeout.erase(i);
+
+                        m_callback(addr);
                 }
         }
 
@@ -240,6 +256,8 @@ namespace libcage {
                 i.session = 0;
 
                 m_map.insert(value_t(i, a));
+
+                m_callback(addr);
         }
 
         void
@@ -278,6 +296,9 @@ namespace libcage {
 
                 i.t  = time(NULL);
                 i.id = id;
+
+                if (m_timeout.find(i) == m_timeout.end())
+                        return;
 
                 m_timeout.insert(i);
                 m_map.left.erase(i);

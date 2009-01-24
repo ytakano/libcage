@@ -63,6 +63,8 @@ namespace libcage {
 
                 void            print_table();
                 bool            is_zero();
+                int             get_size();
+                bool            has_id(uint160_t &id);
 
         protected:
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
