@@ -35,6 +35,7 @@
 #include "common.hpp"
 
 #include "bn.hpp"
+#include "dgram.hpp"
 #include "dtun.hpp"
 #include "dht.hpp"
 #include "natdetector.hpp"
@@ -62,6 +63,10 @@ namespace libcage {
                                     callback_get func);
                 void            join(std::string host, int port,
                                      callback_join func);
+
+                void            send_dgram(const void *buf, int len,
+                                           uint8_t *dst);
+                void            set_dgram_callback(dgram::callback func);
 
                 void            set_global() { m_nat.set_state_global(); }
 
@@ -99,6 +104,7 @@ namespace libcage {
                 dtun            m_dtun;
                 dht             m_dht;
                 bool            m_is_dtun;
+                dgram           m_dgram;
 
 #ifdef DEBUG_NAT
         public:

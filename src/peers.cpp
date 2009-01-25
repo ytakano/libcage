@@ -34,9 +34,9 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const time_t    peers::timeout_ttl    = 120;
-        const time_t    peers::map_ttl        = 360;
-        const time_t    peers::timer_interval = 120;
+        const time_t    peers::timeout_ttl    = 30;
+        const time_t    peers::map_ttl        = 300;
+        const time_t    peers::timer_interval = 30;
 
         size_t
         hash_value(const peers::_id &i)

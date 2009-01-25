@@ -331,6 +331,7 @@ namespace libcage {
                               boost::unordered_set<int> &ret)
         {
                 std::map<int, std::list<cageaddr> >::iterator it;
+                uint160_t id0 = ~(m_id ^ id);
                 uint160_t id1 = 1;
                 int       n   = 0;
 
@@ -339,7 +340,7 @@ namespace libcage {
                                 break;
 
                         uint160_t bits = id1 << it->first;
-                        bits &= id;
+                        bits &= id0;
 
                         if (! bits.is_zero()) {
                                 n += it->second.size();

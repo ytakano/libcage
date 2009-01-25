@@ -50,10 +50,18 @@
 namespace libcage {
         class dgram {
         public:
+                typedef boost::function<void (void *buf, size_t len,
+                                              uint8_t *addr)> callback;
+
+
                 dgram(const uint160_t &id, peers &p, udphandler &udp,
                       dtun &dt, dht &dh);
 
-                void            send_dgram(id_ptr id, const void *msg, int len);
+                void            recv_dgram(void *msg, int len, sockaddr *from);
+
+                void            send_dgram(const void *msg, int len, id_ptr id);
+                void            set_callback(callback func);
+
 
         private:
                 class _id {
@@ -103,6 +111,8 @@ namespace libcage {
                 udphandler             &m_udp;
                 dtun                   &m_dtun;
                 dht                    &m_dht;
+                callback                m_callback;
+                bool                    m_is_callback;
         };
 }
 

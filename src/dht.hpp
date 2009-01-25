@@ -255,7 +255,9 @@ namespace libcage {
                                 // reschedule
                                 timeval tval;
 
-                                tval.tv_sec  = dht::timer_interval;
+                                tval.tv_sec  = dht::timer_interval * drand48();
+                                tval.tv_sec += dht::timer_interval;
+
                                 tval.tv_usec = 0;
 
                                 m_dht.m_timer.set_timer(this, &tval);
@@ -265,7 +267,9 @@ namespace libcage {
                         {
                                 timeval tval;
 
-                                tval.tv_sec  = dht::timer_interval;
+                                tval.tv_sec  = dht::timer_interval * drand48();
+                                tval.tv_sec += dht::timer_interval;
+
                                 tval.tv_usec = 0;
 
                                 m_dht.m_timer.set_timer(this, &tval);

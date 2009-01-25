@@ -68,7 +68,7 @@ namespace libcage {
         }
 
         void
-        dgram::send_dgram(id_ptr id, const void *msg, int len)
+        dgram::send_dgram(const void *msg, int len, id_ptr id)
         {
                 _id i;
 
@@ -116,7 +116,8 @@ namespace libcage {
                 m_peers(p),
                 m_udp(udp),
                 m_dtun(dt),
-                m_dht(dh)
+                m_dht(dh),
+                m_is_callback(false)
         {
 
         }
@@ -175,7 +176,7 @@ namespace libcage {
                 char       buf[1024 * 4];
                 size_t     size;
 
-                size = data.len + sizeof(buf) + sizeof(msg_hdr);
+                size = data.len + sizeof(msg_hdr);
 
                 if (size > sizeof(buf))
                         return;
@@ -204,5 +205,42 @@ namespace libcage {
                         m_udp.sendto(&dgram, size, (sockaddr*)in6.get(),
                                      sizeof(sockaddr_in6));
                 }
+        }
+
+        void
+        dgram::set_callback(dgram::callback func)
+        {
+                m_is_callback = true;
+                m_callback = func;
+        }
+
+        void
+        dgram::recv_dgram(void *msg, int len, sockaddr *from)
+        {
+                msg_dgram *dgram;
+                cageaddr   addr;
+                uint160_t  dst;
+                int        size;
+
+                dgram = (msg_dgram*)msg;
+
+                size = ntohs(dgram->hdr.len);
+                size -= sizeof(msg_hdr);
+
+                if (size != len)
+                        return;
+
+                dst.from_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
+
+                // TODO: check proxy
+                if (dst != m_id)
+                        return;
+
+                // TODO: send advertise
+
+
+                if (m_is_callback)
+                        m_callback(dgram->data, size, (uint8_t*)dgram->hdr.src);
+
         }
 }

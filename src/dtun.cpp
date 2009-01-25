@@ -41,10 +41,10 @@ namespace libcage {
         const int       dtun::num_find_node    = 6;
         const int       dtun::max_query        = 3;
         const int       dtun::query_timeout    = 2;
-        const int       dtun::register_timeout = 10;
         const int       dtun::request_retry    = 2;
         const int       dtun::request_timeout  = 2;
         const int       dtun::registered_ttl   = 300;
+        const int       dtun::timer_interval   = 30;
 
         size_t
         hash_value(const dtun::_id &i)
@@ -91,7 +91,6 @@ namespace libcage {
                 m_peers(p),
                 m_nat(nat),
                 m_udp(udp),
-                m_timer_register(*this),
                 m_registering(false),
                 m_last_registered(0),
                 m_timer_refresh(*this),
@@ -224,7 +223,7 @@ namespace libcage {
 
                 lookup(dst, num_find_node, q->nodes);
 
-                if (q->nodes.size() == 0) {
+                if (q->nodes.size() == 1) {
                         if (is_find_value) {
                                 callback_find_value f;
                                 f = boost::get<callback_find_value>(func);
@@ -614,16 +613,8 @@ namespace libcage {
         }
 
         void
-        dtun::timer_register::operator() ()
-        {
-                m_dtun.m_timer.unset_timer(this);
-                m_dtun.m_registering = false;
-        }
-
-        void
         dtun::register_callback::operator() (std::vector<cageaddr> &nodes)
         {
-                p_dtun->m_timer.unset_timer(&p_dtun->m_timer_register);
                 p_dtun->m_registering = false;
 
                 BOOST_FOREACH(cageaddr &addr, nodes) {
@@ -668,23 +659,14 @@ namespace libcage {
                 if (m_registering)
                         return;
 
-                // start timer
-                timeval tval;
-
-                tval.tv_sec  = register_timeout;
-                tval.tv_usec = 0;
-
-                m_timer.set_timer(&m_timer_register, &tval);
-
-
                 // find node
                 register_callback func;
 
                 func.p_dtun = this;
 
-                find_node(m_id, func);
-
                 m_registering = true;
+
+                find_node(m_id, func);
         }
 
         bool
@@ -1437,37 +1419,35 @@ namespace libcage {
         {
                 m_dtun.refresh();
 
-                if (n > 0) {
-                        m_dtun.register_node();
-                        n = 0;
+                m_dtun.register_node();
 
-                        if (m_dtun.is_zero() && m_dtun.m_is_enabled) {
-                                try {
-                                        cageaddr addr;
+                if (m_dtun.is_zero() && m_dtun.m_is_enabled) {
+                        try {
+                                cageaddr addr;
 
-                                        addr = m_dtun.m_peers.get_first();
+                                addr = m_dtun.m_peers.get_first();
 
-                                        if (addr.domain == domain_inet) {
-                                                in_ptr in;
-                                                in = boost::get<in_ptr>(addr.saddr);
-                                                m_dtun.find_node((sockaddr*)in.get(), &no_action);
-                                        } else if (addr.domain ==
-                                                   domain_inet6) {
-                                                in6_ptr in6;
-                                                in6 = boost::get<in6_ptr>(addr.saddr);
-                                                m_dtun.find_node((sockaddr*)in6.get(), &no_action);
-                                        }
-                                } catch (std::out_of_range) {
+                                if (addr.domain == domain_inet) {
+                                        in_ptr in;
+                                        in = boost::get<in_ptr>(addr.saddr);
+                                        m_dtun.find_node((sockaddr*)in.get(),
+                                                         &no_action);
+                                } else if (addr.domain ==
+                                           domain_inet6) {
+                                        in6_ptr in6;
+                                        in6 = boost::get<in6_ptr>(addr.saddr);
+                                        m_dtun.find_node((sockaddr*)in6.get(), &no_action);
                                 }
+                        } catch (std::out_of_range) {
                         }
-                } else {
-                        n++;
                 }
+
 
                 // reschedule
                 timeval       tval;
 
-                tval.tv_sec  = (registered_ttl - 1) / 2;
+                tval.tv_sec  = dtun::timer_interval * drand48() +
+                        dtun::timer_interval;
                 tval.tv_usec = 0;
 
                 m_dtun.m_timer.set_timer(this, &tval);

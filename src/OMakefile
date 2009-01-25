@@ -8,6 +8,7 @@ if $(equal $(SYSNAME), Darwin)
 	export
 
 SRC[] =
+	dgram
 	dht
 	cagetypes
 	dtun

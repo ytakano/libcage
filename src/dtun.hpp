@@ -55,10 +55,11 @@ namespace libcage {
                 static const int        num_find_node;
                 static const int        max_query;
                 static const int        query_timeout;
-                static const int        register_timeout;
                 static const int        request_retry;
                 static const int        request_timeout;
                 static const int        registered_ttl;
+                static const int        timer_interval;
+
 
 
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -113,6 +114,7 @@ namespace libcage {
                 void            refresh();
 
                 void            set_enabled(bool enabled);
+                bool            is_enabled() { return m_is_enabled; }
 
         private:
                 class _id {
@@ -134,7 +136,8 @@ namespace libcage {
                         timer_refresh(dtun &d) : m_dtun(d), n(0)
                         {
                                 timeval       tval;
-                                tval.tv_sec  = (registered_ttl - 1) / 2;
+                                tval.tv_sec  = dtun::timer_interval * drand48();
+                                tval.tv_sec += dtun::timer_interval;
                                 tval.tv_usec = 0;
 
                                 m_dtun.m_timer.set_timer(this, &tval);
@@ -161,15 +164,6 @@ namespace libcage {
                 };
 
                 typedef boost::shared_ptr<timer_query>  timer_ptr;
-
-                class timer_register : public timer::callback {
-                public:
-                        virtual void operator() ();
-
-                        timer_register(dtun &d) : m_dtun(d) {}
-
-                        dtun   &m_dtun;
-                };
 
                 class query {
                 public:
@@ -254,7 +248,6 @@ namespace libcage {
                 const natdetector      &m_nat;
                 udphandler             &m_udp;
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
-                timer_register          m_timer_register;
                 bool                    m_registering;
                 time_t                  m_last_registered;
                 uint32_t                m_register_session;

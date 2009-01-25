@@ -45,5 +45,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define CAGE_ADDR_LEN 20
+
 
 #endif // COMMON_HPP

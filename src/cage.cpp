@@ -171,6 +171,11 @@ namespace libcage {
                                                                    from);
                         }
                         break;
+                case type_dgram:
+                        if (len >= (int)sizeof(msg_hdr)) {
+                                m_cage.m_dgram.recv_dgram(buf, len, from);
+                        }
+                        break;
                 }
         }
 
@@ -178,7 +183,8 @@ namespace libcage {
                        m_peers(m_timer),
                        m_nat(m_udp, m_timer, m_id, m_peers),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
-                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun)
+                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
+                       m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht)
         {
                 unsigned char buf[20];
 
@@ -191,6 +197,16 @@ namespace libcage {
         cage::~cage()
         {
 
+        }
+
+        void
+        cage::send_dgram(const void *buf, int len, uint8_t *dst)
+        {
+                boost::shared_ptr<uint160_t> id(new uint160_t);
+
+                id->from_binary(dst, CAGE_ADDR_LEN);
+
+                m_dgram.send_dgram(buf, len, id);
         }
 
         void
@@ -234,6 +250,12 @@ namespace libcage {
                 m_udp.set_callback(&m_receiver);
 
                 return true;
+        }
+
+        void
+        cage::set_dgram_callback(dgram::callback func)
+        {
+                m_dgram.set_callback(func);
         }
 
         void

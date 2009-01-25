@@ -96,6 +96,9 @@ namespace libcage {
                 bn<T, N>        operator &=(const bn<T, N> &rhs);
                 bn<T, N>        operator &=(T rhs);
 
+                // for not
+                bn<T, N>        operator ~();
+
                 // for multiplication with double
                 bn<T, N>        operator *(double rhs) const;
                 bn<T, N>        operator *=(double rhs);
@@ -572,6 +575,19 @@ namespace libcage {
 
                 return *this;
         }
+
+        template <typename T, int N>
+        bn<T, N>
+        bn<T, N>::operator ~()
+        {
+                bn<T, N>        n;
+
+                for (int i = 0; i < N; i++)
+                        n.m_num[i] = ~m_num[i];
+
+                return n;
+        }
+
 
         template <typename T, int N>
         bn<T, N>

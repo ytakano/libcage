@@ -300,10 +300,8 @@ namespace libcage {
         void
         dht::find_node_func::operator() (bool result, cageaddr &addr)
         {
-                if (! result) {
-                        printf("failed request\n");
+                if (! result)
                         return;
-                }
 
                 msg_dht_find_node msg;
 
