@@ -52,7 +52,7 @@ namespace libcage {
 
         struct cageaddr {
                 id_ptr          id;
-                sa_family_t     domain;
+                uint16_t        domain;
                 boost::variant<in_ptr, in6_ptr> saddr;
         };
 
@@ -285,6 +285,18 @@ namespace libcage {
         struct msg_dgram {
                 msg_hdr         hdr;
                 uint32_t        data[1];
+        };
+
+        struct msg_proxy_register {
+                msg_hdr         hdr;
+                uint8_t         id[CAGE_ADDR_LEN];
+                uint32_t        session;
+                uint32_t        nonce;
+        };
+
+        struct msg_proxy_register_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
         };
 
         enum node_state {
