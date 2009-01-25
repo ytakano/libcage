@@ -89,6 +89,7 @@ namespace libcage {
         static const uint8_t type_dht_find_value_reply    = 20;
         static const uint8_t type_dht_store               = 22;
         static const uint8_t type_dgram                   = 23;
+        static const uint8_t type_proxy_register          = 23;
         
 
         struct msg_hdr {
@@ -289,7 +290,6 @@ namespace libcage {
 
         struct msg_proxy_register {
                 msg_hdr         hdr;
-                uint8_t         id[CAGE_ADDR_LEN];
                 uint32_t        session;
                 uint32_t        nonce;
         };

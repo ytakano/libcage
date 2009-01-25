@@ -37,13 +37,20 @@
 #include "bn.hpp"
 #include "dtun.hpp"
 #include "peers.hpp"
+#include "timer.hpp"
+
+#include <vector>
 
 #include <boost/unordered_map.hpp>
 
 namespace libcage {
         class proxy {
+        private:
+                static const time_t     register_timeout;
+
         public:
-                proxy(const uint160_t &id, udphandler &udp, dtun &d, peers &p);
+                proxy(const uint160_t &id, udphandler &udp, timer &t,
+                      dtun &d, peers &p);
 
                 void            register_node();
                 
@@ -64,14 +71,36 @@ namespace libcage {
                 public:
                         uint32_t        session;
                         cageaddr        addr;
+                        time_t          recv_time;
+                        time_t          last_registered;
+                };
+
+                class register_func {
+                public:
+                        void operator() (std::vector<cageaddr> &nodes);
+
+                        proxy  *p_proxy;
+                };
+
+                class timer_register : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        timer_register(proxy &p) : m_proxy(p) { }
+
+                        proxy  &m_proxy;
                 };
 
                 const uint160_t        &m_id;
                 udphandler     &m_udp;
+                timer          &m_timer;
                 dtun           &m_dtun;
                 peers          &m_peers;
                 cageaddr        m_server;
-                bool            m_is_registered;
+                uint32_t        m_register_session;
+                bool            m_is_registering;
+                uint32_t        m_nonce;
+                timer_register  m_timer_register;
                 boost::unordered_map<_id, _addr>        m_registered;
         };
 }

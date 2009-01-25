@@ -31,25 +31,107 @@
 
 #include "proxy.hpp"
 
+#include <openssl/rand.h>
+
+#include <boost/foreach.hpp>
+
 namespace libcage {
+        const time_t    proxy::register_timeout = 2;
+
+
         size_t
         hash_value(const proxy::_id &i)
         {
                 return i.id->hash_value();
         }
 
-        proxy::proxy(const uint160_t &id, udphandler &udp, dtun &d, peers &p) :
+        proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
+                     dtun &d, peers &p) :
                 m_id(id),
-                m_udphandler(udp),
+                m_udp(udp),
+                m_timer(t),
                 m_dtun(d),
                 m_peers(p),
-                m_is_registered(false)
+                m_is_registering(false),
+                m_timer_register(*this)
         {
+                RAND_pseudo_bytes((unsigned char*)&m_register_session,
+                                  sizeof(m_register_session));
+        }
+
+        void
+        proxy::timer_register::operator() ()
+        {
+                m_proxy.m_is_registering  = false;
+        }
+
+        void
+        proxy::register_func::operator() (std::vector<cageaddr> &nodes)
+        {
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (p_proxy->m_id == *addr.id)
+                                continue;
+
+                        msg_proxy_register reg;
+
+                        memset(&reg, 0, sizeof(reg));
+
+                        reg.hdr.magic = htons(MAGIC_NUMBER);
+                        reg.hdr.ver   = CAGE_VERSION;
+                        reg.hdr.type  = type_proxy_register;
+                        reg.hdr.len   = htons(sizeof(reg));
+
+                        addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
+                        p_proxy->m_id.to_binary(reg.hdr.src,
+                                                sizeof(reg.hdr.src));
+
+                        p_proxy->m_nonce = mrand48();
+
+                        reg.session = htonl(p_proxy->m_register_session);
+                        reg.nonce   = htonl(p_proxy->m_nonce);
+
+
+                        // start timer
+                        timeval tval;
+
+                        tval.tv_sec  = proxy::register_timeout;
+                        tval.tv_usec = 0;
+
+                        p_proxy->m_timer.set_timer(&p_proxy->m_timer_register,
+                                                   &tval);
+
+                        // send
+                        if (addr.domain == domain_inet) {
+                                in_ptr in;
+                                in = boost::get<in_ptr>(addr.saddr);
+                                p_proxy->m_udp.sendto(&reg, sizeof(reg),
+                                                      (sockaddr*)in.get(),
+                                                      sizeof(sockaddr_in));
+                        } else if (addr.domain == domain_inet6) {
+                                in6_ptr in6;
+                                in6 = boost::get<in6_ptr>(addr.saddr);
+                                p_proxy->m_udp.sendto(&reg, sizeof(reg),
+                                                      (sockaddr*)in6.get(),
+                                                      sizeof(sockaddr_in6));
+                        }
+
+                        break;
+                }
 
         }
 
+        void
         proxy::register_node()
         {
+                if (m_is_registering)
+                        return;
 
+                m_is_registering = true;
+
+                register_func func;
+
+                func.p_proxy = this;
+
+                m_dtun.find_node(m_id, func);
         }
 }

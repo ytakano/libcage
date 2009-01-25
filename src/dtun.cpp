@@ -630,8 +630,7 @@ namespace libcage {
                         reg.hdr.type  = type_dtun_register;
                         reg.hdr.len   = htons(sizeof(reg));
 
-                        p_dtun->m_id.to_binary(reg.hdr.src,
-                                               sizeof(reg.hdr.src));
+                        src->to_binary(reg.hdr.src, sizeof(reg.hdr.src));
                         addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
 
                         reg.session = htonl(p_dtun->m_register_session);
@@ -651,22 +650,33 @@ namespace libcage {
         }
 
         void
-        dtun::register_node()
+        dtun::register_node(id_ptr src)
         {
                 if (! m_is_enabled)
-                        return;
-
-                if (m_registering)
                         return;
 
                 // find node
                 register_callback func;
 
                 func.p_dtun = this;
+                func.src    = src;
 
                 m_registering = true;
 
-                find_node(m_id, func);
+                find_node(*src, func);
+        }
+
+        void
+        dtun::register_node()
+        {
+                if (m_registering)
+                        return;
+
+                id_ptr src(new uint160_t);
+
+                *src = m_id;
+
+                register_node(src);
         }
 
         bool
