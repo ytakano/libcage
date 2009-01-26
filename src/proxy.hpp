@@ -52,6 +52,9 @@ namespace libcage {
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
                       dtun &d, peers &p);
 
+                void            recv_register(void *msg, sockaddr *from);
+                void            recv_register_reply(void *msg, sockaddr *from);
+
                 void            register_node();
                 
         private:
@@ -59,7 +62,7 @@ namespace libcage {
                 public:
                         id_ptr  id;
 
-                        bool operator== (const _id &rhs)
+                        bool operator== (const _id &rhs) const
                         {
                                 return *id == *rhs.id;
                         }
@@ -87,6 +90,11 @@ namespace libcage {
                         virtual void operator() ();
 
                         timer_register(proxy &p) : m_proxy(p) { }
+
+                        virtual ~timer_register()
+                        {
+                                m_proxy.m_timer.unset_timer(this);
+                        }
 
                         proxy  &m_proxy;
                 };

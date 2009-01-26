@@ -633,7 +633,7 @@ namespace libcage {
                         src->to_binary(reg.hdr.src, sizeof(reg.hdr.src));
                         addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
 
-                        reg.session = htonl(p_dtun->m_register_session);
+                        reg.session = htonl(session);
 
                         if (addr.domain == domain_inet) {
                                 in_ptr in = boost::get<in_ptr>(addr.saddr);
@@ -650,7 +650,7 @@ namespace libcage {
         }
 
         void
-        dtun::register_node(id_ptr src)
+        dtun::register_node(id_ptr src, uint32_t session)
         {
                 if (! m_is_enabled)
                         return;
@@ -658,8 +658,9 @@ namespace libcage {
                 // find node
                 register_callback func;
 
-                func.p_dtun = this;
-                func.src    = src;
+                func.p_dtun  = this;
+                func.src     = src;
+                func.session = session;
 
                 m_registering = true;
 
@@ -676,7 +677,7 @@ namespace libcage {
 
                 *src = m_id;
 
-                register_node(src);
+                register_node(src, m_register_session);
         }
 
         bool

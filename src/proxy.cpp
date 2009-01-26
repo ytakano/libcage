@@ -76,15 +76,6 @@ namespace libcage {
 
                         memset(&reg, 0, sizeof(reg));
 
-                        reg.hdr.magic = htons(MAGIC_NUMBER);
-                        reg.hdr.ver   = CAGE_VERSION;
-                        reg.hdr.type  = type_proxy_register;
-                        reg.hdr.len   = htons(sizeof(reg));
-
-                        addr.id->to_binary(reg.hdr.dst, sizeof(reg.hdr.dst));
-                        p_proxy->m_id.to_binary(reg.hdr.src,
-                                                sizeof(reg.hdr.src));
-
                         p_proxy->m_nonce = mrand48();
 
                         reg.session = htonl(p_proxy->m_register_session);
@@ -100,24 +91,92 @@ namespace libcage {
                         p_proxy->m_timer.set_timer(&p_proxy->m_timer_register,
                                                    &tval);
 
-                        // send
-                        if (addr.domain == domain_inet) {
-                                in_ptr in;
-                                in = boost::get<in_ptr>(addr.saddr);
-                                p_proxy->m_udp.sendto(&reg, sizeof(reg),
-                                                      (sockaddr*)in.get(),
-                                                      sizeof(sockaddr_in));
-                        } else if (addr.domain == domain_inet6) {
-                                in6_ptr in6;
-                                in6 = boost::get<in6_ptr>(addr.saddr);
-                                p_proxy->m_udp.sendto(&reg, sizeof(reg),
-                                                      (sockaddr*)in6.get(),
-                                                      sizeof(sockaddr_in6));
-                        }
+                        send_msg(p_proxy->m_udp, &reg.hdr, sizeof(reg),
+                                 type_proxy_register, addr, p_proxy->m_id);
 
                         break;
                 }
+        }
 
+        void
+        proxy::recv_register_reply(void *msg, sockaddr *from)
+        {
+                msg_proxy_register_reply *reply;
+                cageaddr  addr;
+                uint160_t dst;
+                uint32_t  nonce;
+
+                if (! m_is_registering)
+                        return;
+
+                reply = (msg_proxy_register_reply*)msg;
+
+                dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
+
+                if (dst != m_id)
+                        return;
+
+                nonce = ntohl(reply->nonce);
+
+                if (m_nonce != nonce)
+                        return;
+
+                addr = new_cageaddr(&reply->hdr, from);
+                m_server = addr;
+
+                m_is_registering = false;
+                m_timer.unset_timer(&m_timer_register);
+        }
+
+        void
+        proxy::recv_register(void *msg, sockaddr *from)
+        {
+                msg_proxy_register *reg;
+                cageaddr  addr;
+                uint160_t dst;
+
+                reg = (msg_proxy_register*)msg;
+
+                dst.from_binary(reg->hdr.dst, sizeof(reg->hdr.dst));
+
+                if (dst != m_id)
+                        return;
+
+                addr = new_cageaddr(&reg->hdr, from);
+
+
+                boost::unordered_map<_id, _addr>::iterator it;
+                _id i;
+
+                i.id = addr.id;
+                it = m_registered.find(i);
+
+                if (it == m_registered.end()) {
+                        _addr a;
+
+                        a.session   = ntohl(reg->session);
+                        a.addr      = addr;
+                        a.recv_time = time(NULL);
+                        a.last_registered = time(NULL);
+
+                        m_dtun.register_node(addr.id, a.session);
+                } else {
+                        uint32_t session = ntohl(reg->session);
+
+                        if (it->second.session == session) {
+                                it->second.addr      = addr;
+                                it->second.recv_time = time(NULL);
+                        } else {
+                                return;
+                        }
+                }
+
+                msg_proxy_register_reply  reply;
+
+                reply.nonce = reg->nonce;
+
+                send_msg(m_udp, &reply.hdr, sizeof(reply),
+                         type_proxy_register_reply, addr, m_id);
         }
 
         void

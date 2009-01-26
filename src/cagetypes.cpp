@@ -32,6 +32,7 @@
 #include "cagetypes.hpp"
 
 #include "peers.hpp"
+#include "udphandler.hpp"
 
 #include <boost/foreach.hpp>
 
@@ -181,6 +182,31 @@ namespace libcage {
                         nodes.push_back(caddr);
                         
                         min6++;
+                }
+        }
+
+        void
+        send_msg(udphandler &udp, msg_hdr *hdr, uint16_t len, uint8_t type,
+                 cageaddr &dst, const uint160_t &src)
+        {
+                hdr->magic = htons(MAGIC_NUMBER);
+                hdr->ver   = CAGE_VERSION;
+                hdr->type  = type;
+                hdr->len   = htons(len);
+
+                dst.id->to_binary(hdr->dst, sizeof(hdr->dst));
+                src.to_binary(hdr->src, sizeof(hdr->src));
+
+                if (dst.domain == domain_inet) {
+                        in_ptr in;
+                        in = boost::get<in_ptr>(dst.saddr);
+                        udp.sendto(hdr, len, (sockaddr*)in.get(),
+                                   sizeof(sockaddr_in));
+                } else if (dst.domain == domain_inet6) {
+                        in6_ptr in6;
+                        in6 = boost::get<in6_ptr>(dst.saddr);
+                        udp.sendto(hdr, len, (sockaddr*)in6.get(),
+                                   sizeof(sockaddr_in6));
                 }
         }
 }

@@ -107,7 +107,7 @@ namespace libcage {
                                            callback_find_value func);
 
                 void            register_node();
-                void            register_node(id_ptr src);
+                void            register_node(id_ptr src, uint32_t session);
 
                 void            request(const uint160_t &dst,
                                         callback_request func);
@@ -186,6 +186,7 @@ namespace libcage {
                 public:
                         void operator() (std::vector<cageaddr> &nodes);
 
+                        uint32_t        session;
                         dtun   *p_dtun;
                         id_ptr  src;
                 };

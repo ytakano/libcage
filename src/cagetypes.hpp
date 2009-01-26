@@ -45,6 +45,7 @@
 
 namespace libcage {
         class peers;
+        class udphandler;
 
         typedef boost::shared_ptr<sockaddr_in>  in_ptr;
         typedef boost::shared_ptr<sockaddr_in6> in6_ptr;
@@ -67,29 +68,34 @@ namespace libcage {
         static const uint16_t state_nat    = 2;
 
         static const uint8_t type_undefined               = 0;
-        static const uint8_t type_nat_echo                = 1;
-        static const uint8_t type_nat_echo_reply          = 2;
-        static const uint8_t type_nat_echo_redirect       = 3;
-        static const uint8_t type_nat_echo_redirect_reply = 4;
-        static const uint8_t type_dtun_ping               = 5;
-        static const uint8_t type_dtun_ping_reply         = 6;
-        static const uint8_t type_dtun_find_node          = 7;
-        static const uint8_t type_dtun_find_node_reply    = 8;
-        static const uint8_t type_dtun_find_value         = 9;
-        static const uint8_t type_dtun_find_value_reply   = 10;
-        static const uint8_t type_dtun_register           = 11;
-        static const uint8_t type_dtun_request            = 12;
-        static const uint8_t type_dtun_request_by         = 13;
-        static const uint8_t type_dtun_request_reply      = 14;
-        static const uint8_t type_dht_ping                = 15;
-        static const uint8_t type_dht_ping_reply          = 16;
-        static const uint8_t type_dht_find_node           = 17;
-        static const uint8_t type_dht_find_node_reply     = 18;
-        static const uint8_t type_dht_find_value          = 19;
-        static const uint8_t type_dht_find_value_reply    = 20;
-        static const uint8_t type_dht_store               = 22;
-        static const uint8_t type_dgram                   = 23;
-        static const uint8_t type_proxy_register          = 23;
+        static const uint8_t type_dgram                   = 0x01;
+        static const uint8_t type_nat                     = 0x10;
+        static const uint8_t type_nat_echo                = 0x11;
+        static const uint8_t type_nat_echo_reply          = 0x12;
+        static const uint8_t type_nat_echo_redirect       = 0x13;
+        static const uint8_t type_nat_echo_redirect_reply = 0x14;
+        static const uint8_t type_dtun                    = 0x20;
+        static const uint8_t type_dtun_ping               = 0x21;
+        static const uint8_t type_dtun_ping_reply         = 0x22;
+        static const uint8_t type_dtun_find_node          = 0x23;
+        static const uint8_t type_dtun_find_node_reply    = 0x24;
+        static const uint8_t type_dtun_find_value         = 0x25;
+        static const uint8_t type_dtun_find_value_reply   = 0x26;
+        static const uint8_t type_dtun_register           = 0x27;
+        static const uint8_t type_dtun_request            = 0x28;
+        static const uint8_t type_dtun_request_by         = 0x29;
+        static const uint8_t type_dtun_request_reply      = 0x2A;
+        static const uint8_t type_dht                     = 0x40;
+        static const uint8_t type_dht_ping                = 0x41;
+        static const uint8_t type_dht_ping_reply          = 0x42;
+        static const uint8_t type_dht_find_node           = 0x43;
+        static const uint8_t type_dht_find_node_reply     = 0x44;
+        static const uint8_t type_dht_find_value          = 0x45;
+        static const uint8_t type_dht_find_value_reply    = 0x46;
+        static const uint8_t type_dht_store               = 0x47;
+        static const uint8_t type_proxy                   = 0x80;
+        static const uint8_t type_proxy_register          = 0x81;
+        static const uint8_t type_proxy_register_reply    = 0x82;
         
 
         struct msg_hdr {
@@ -318,6 +324,9 @@ namespace libcage {
         void            read_nodes_inet6(msg_inet6 *min6, int num,
                                          std::vector<cageaddr> &nodes,
                                          sockaddr *from, peers &p);
+        void            send_msg(udphandler &udp, msg_hdr *hdr, uint16_t len,
+                                 uint8_t type, cageaddr &dst,
+                                 const uint160_t &src);
 }
 
 #endif // CAGETYPES_HPP
