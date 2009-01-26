@@ -68,6 +68,7 @@ namespace libcage {
                 void            send_dgram(const void *buf, int len,
                                            uint8_t *dst);
                 void            set_dgram_callback(dgram::callback func);
+                void            unset_dgram_callback();
 
                 void            set_global() { m_nat.set_state_global(); }
 

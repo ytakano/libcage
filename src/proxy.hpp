@@ -35,6 +35,7 @@
 #include "common.hpp"
 
 #include "bn.hpp"
+#include "dgram.hpp"
 #include "dht.hpp"
 #include "dtun.hpp"
 #include "peers.hpp"
@@ -53,9 +54,11 @@ namespace libcage {
         public:
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
-
+                typedef boost::function<void (void *buf, size_t len, uint8_t *addr)> callback_dgram;
+                
+                
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
-                      peers &p, dtun &dt, dht &dh);
+                      peers &p, dtun &dt, dht &dh, dgram &dg);
                 virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
@@ -63,8 +66,11 @@ namespace libcage {
                 void            recv_store(void *msg, int len, sockaddr *from);
                 void            recv_get(void *msg, int len);
                 void            recv_get_reply(void *msg, int len);
+                void            recv_dgram(void *msg, int len);
+                void            recv_forwarded(void *msg, int len);
 
                 void            register_node();
+
                 void            store(const uint160_t &id,
                                       void *key, uint16_t keylen,
                                       void *value, uint16_t valuelen,
@@ -72,6 +78,13 @@ namespace libcage {
                 void            get(const uint160_t &id,
                                     void *key, uint16_t keylen,
                                     callback_get func);
+
+                void            send_dgram(const void *msg, int len, id_ptr id);
+
+                void            forward_msg(msg_dgram *data, int size,
+                                            sockaddr *from);
+
+                void            set_callback(callback_dgram func);
                 
         private:
                 class _id {
@@ -150,12 +163,13 @@ namespace libcage {
                 peers          &m_peers;
                 dtun           &m_dtun;
                 dht            &m_dht;
+                dgram          &m_dgram;
                 cageaddr        m_server;
-                uint32_t        m_register_session;
                 bool            m_is_registered;
                 bool            m_is_registering;
                 uint32_t        m_nonce;
                 timer_register  m_timer_register;
+                callback_dgram  m_dgram_func;
                 boost::unordered_map<_id, _addr>        m_registered;
                 boost::unordered_map<uint32_t, gd_ptr>  m_getdata;
         };

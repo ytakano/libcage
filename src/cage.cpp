@@ -202,8 +202,9 @@ namespace libcage {
                        m_nat(m_udp, m_timer, m_id, m_peers),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
-                       m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht),
-                       m_proxy(m_id, m_udp, m_timer, m_peers, m_dtun, m_dht)
+                       m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy),
+                       m_proxy(m_id, m_udp, m_timer, m_peers, m_dtun, m_dht,
+                               m_dgram)
         {
                 unsigned char buf[20];
 
@@ -225,7 +226,11 @@ namespace libcage {
 
                 id->from_binary(dst, CAGE_ADDR_LEN);
 
-                m_dgram.send_dgram(buf, len, id);
+                if (m_nat.get_state() == node_symmetric) {
+                        m_proxy.send_dgram(buf, len, id);
+                } else {
+                        m_dgram.send_dgram(buf, len, id);
+                }
         }
 
         void
@@ -235,6 +240,26 @@ namespace libcage {
 
                 str = m_id.to_string();
                 printf("MyID = %s\n\n", str.c_str());
+
+                printf("Node State:\n");
+
+                switch (m_nat.get_state()) {
+                case node_undefined:
+                        printf("  undefined\n");
+                        break;
+                case node_global:
+                        printf("  Global\n");
+                        break;
+                case node_nat:
+                        printf("  NAT\n");
+                        break;
+                case node_cone:
+                        printf("  Cone NAT\n");
+                        break;
+                case node_symmetric:
+                        printf("  Symmetric NAT\n");
+                        break;
+                }
 
                 printf("DTUN Table:\n");
 
@@ -275,6 +300,20 @@ namespace libcage {
         cage::set_dgram_callback(dgram::callback func)
         {
                 m_dgram.set_callback(func);
+                m_proxy.set_callback(func);
+        }
+
+        static void
+        no_action_dgram(void *buf, size_t len, uint8_t *addr)
+        {
+
+        }
+
+        void
+        cage::unset_dgram_callback()
+        {
+                m_dgram.set_callback(&no_action_dgram);
+                m_proxy.set_callback(&no_action_dgram);
         }
 
         void
@@ -294,7 +333,11 @@ namespace libcage {
 
                 id.from_binary(buf, sizeof(buf));
 
-                m_dht.store(id, key, keylen, value, valuelen, ttl);
+                if (m_nat.get_state() == node_symmetric) {
+                        m_proxy.store(id, key, keylen, value, valuelen, ttl);
+                } else {
+                        m_dht.store(id, key, keylen, value, valuelen, ttl);
+                }
         }
 
         void
@@ -313,10 +356,14 @@ namespace libcage {
 
                 id.from_binary(buf, sizeof(buf));
 
-                m_dht.find_value(id, key, keylen, func);
+                if (m_nat.get_state() == node_symmetric) {
+                        m_proxy.get(id, key, keylen, func);
+                } else {
+                        m_dht.find_value(id, key, keylen, func);
+                }
         }
 
-        void
+        static void
         no_action(std::vector<cageaddr> &nodes)
         {
 

@@ -99,6 +99,8 @@ namespace libcage {
         static const uint8_t type_proxy_store             = 0x83;
         static const uint8_t type_proxy_get               = 0x84;
         static const uint8_t type_proxy_get_reply         = 0x85;
+        static const uint8_t type_proxy_dgram             = 0x86;
+        static const uint8_t type_proxy_dgram_forwarded   = 0x87;
         
 
         struct msg_hdr {
@@ -333,6 +335,19 @@ namespace libcage {
                 uint8_t         id[CAGE_ADDR_LEN];
                 uint8_t         flag;
                 uint8_t         padding[3];
+                uint32_t        data[1];
+        };
+
+        struct msg_proxy_dgram {
+                msg_hdr         hdr;
+                uint32_t        data[1];
+        };
+
+        struct msg_proxy_dgram_forwarded {
+                msg_hdr         hdr;
+                uint16_t        domain;
+                uint16_t        port;
+                uint32_t        addr[4];
                 uint32_t        data[1];
         };
 

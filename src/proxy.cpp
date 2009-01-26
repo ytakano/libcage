@@ -46,20 +46,27 @@ namespace libcage {
                 return i.id->hash_value();
         }
 
+        static void
+        no_action(void *buf, size_t len, uint8_t *addr)
+        {
+
+        }
+
         proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
-                     peers &p, dtun &dt, dht &dh) :
+                     peers &p, dtun &dt, dht &dh, dgram &dg) :
                 m_id(id),
                 m_udp(udp),
                 m_timer(t),
                 m_peers(p),
                 m_dtun(dt),
                 m_dht(dh),
+                m_dgram(dg),
                 m_is_registered(false),
                 m_is_registering(false),
-                m_timer_register(*this)
+                m_timer_register(*this),
+                m_dgram_func(&no_action)
         {
-                RAND_pseudo_bytes((unsigned char*)&m_register_session,
-                                  sizeof(m_register_session));
+
         }
 
         proxy::~proxy()
@@ -90,7 +97,7 @@ namespace libcage {
 
                         p_proxy->m_nonce = mrand48();
 
-                        reg.session = htonl(p_proxy->m_register_session);
+                        reg.session = htonl(p_proxy->m_dtun.get_session());
                         reg.nonce   = htonl(p_proxy->m_nonce);
 
 
@@ -108,6 +115,35 @@ namespace libcage {
 
                         break;
                 }
+        }
+
+        void
+        proxy::recv_dgram(void *msg, int len)
+        {
+                msg_proxy_dgram *data;
+                id_ptr src(new uint160_t);
+                id_ptr dst(new uint160_t);
+                int    size;
+
+                data = (msg_proxy_dgram*)msg;
+
+                size = sizeof(*data) - sizeof(data->data);
+
+                if (size <= 0)
+                        return;
+
+                src->from_binary(data->hdr.src, sizeof(data->hdr.src));
+
+                _id i;
+
+                i.id = src;
+
+                if (m_registered.find(i) == m_registered.end())
+                        return;
+
+                dst->from_binary(data->hdr.dst, sizeof(data->hdr.dst));
+
+                m_dgram.send_dgram(data->data, size, dst, *src);
         }
 
         void
@@ -479,5 +515,113 @@ namespace libcage {
                 func.p_proxy = this;
 
                 m_dtun.find_node(m_id, func);
+        }
+
+        void
+        proxy::send_dgram(const void *msg, int len, id_ptr id)
+        {
+                cageaddr addr;
+                try {
+                        addr = m_peers.get_addr(id);
+                } catch (std::out_of_range) {
+                        if (! m_is_registered)
+                                return;
+
+                        addr = m_server;
+                }
+
+                msg_proxy_dgram *dgram;
+                char buf[1024];
+                int  size;
+
+                size = sizeof(*dgram) - sizeof(dgram->data) + len;
+
+                if (size > (int)sizeof(buf))
+                        return;
+
+                dgram = (msg_proxy_dgram*)buf;
+
+                memcpy(dgram->data, msg, len);
+
+                send_msg(m_udp, &dgram->hdr, size, type_proxy_dgram,
+                         addr, m_id);
+        }
+
+        void
+        proxy::forward_msg(msg_dgram *data, int size, sockaddr *from)
+        {
+                boost::unordered_map<_id, _addr>::iterator it;
+                msg_proxy_dgram_forwarded *forwarded;
+                uint160_t src;
+                char      buf[1024 * 4];
+                id_ptr    dst(new uint160_t);
+                int       len;
+                _id       i;
+
+                dst->from_binary(data->hdr.dst, sizeof(data->hdr.dst));
+
+                i.id = dst;
+
+                it = m_registered.find(i);
+
+                if (it == m_registered.end())
+                        return;
+
+                len = size + sizeof(*forwarded) - sizeof(forwarded->data);
+
+                if (len > (int)sizeof(buf))
+                        return;
+
+                forwarded = (msg_proxy_dgram_forwarded*)buf;
+                memset(forwarded, 0, len);
+
+                if (from->sa_family == PF_INET) {
+                        sockaddr_in *in = (sockaddr_in*)from;
+
+                        forwarded->domain  = htons(domain_inet);
+                        forwarded->port    = in->sin_port;
+                        forwarded->addr[0] = in->sin_addr.s_addr;
+                } else if (from->sa_family == PF_INET6) {
+                        sockaddr_in6 *in6 = (sockaddr_in6*)from;
+
+                        forwarded->domain  = htons(domain_inet6);
+                        forwarded->port    = in6->sin6_port;
+
+                        memcpy(forwarded->addr, in6->sin6_addr.s6_addr,
+                               sizeof(in6_addr));
+                } else {
+                        return;
+                }
+
+                memcpy(forwarded->data, data->data, size);
+
+                src.from_binary(data->hdr.src, sizeof(data->hdr.src));
+
+                send_msg(m_udp, &forwarded->hdr, len,
+                         type_proxy_dgram_forwarded, it->second.addr, src);
+        }
+
+        void
+        proxy::recv_forwarded(void *msg, int len)
+        {
+                msg_proxy_dgram_forwarded *forwarded;
+                int size;
+
+                forwarded = (msg_proxy_dgram_forwarded*)msg;
+
+                size = len - (sizeof(*forwarded) - sizeof(forwarded->data));
+
+                if (size <= 0)
+                        return;
+
+                m_dgram_func(forwarded->data, size, forwarded->hdr.src);
+
+                // TODO: send advertise
+        }
+
+        void
+        proxy::set_callback(callback_dgram func)
+        {
+                m_dgram_func = func;
         }
 }

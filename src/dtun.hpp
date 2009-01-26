@@ -117,6 +117,8 @@ namespace libcage {
                 void            set_enabled(bool enabled);
                 bool            is_enabled() { return m_is_enabled; }
 
+                uint32_t        get_session() { return m_register_session; }
+
         private:
                 class _id {
                 public:

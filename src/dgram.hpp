@@ -48,6 +48,8 @@
 #include <boost/unordered_set.hpp>
 
 namespace libcage {
+        class proxy;
+
         class dgram {
         public:
                 typedef boost::function<void (void *buf, size_t len,
@@ -55,11 +57,13 @@ namespace libcage {
 
 
                 dgram(const uint160_t &id, peers &p, udphandler &udp,
-                      dtun &dt, dht &dh);
+                      dtun &dt, dht &dh, proxy &pr);
 
                 void            recv_dgram(void *msg, int len, sockaddr *from);
 
                 void            send_dgram(const void *msg, int len, id_ptr id);
+                void            send_dgram(const void *msg, int len, id_ptr id,
+                                           const uint160_t &src);
                 void            set_callback(callback func);
 
 
@@ -95,13 +99,15 @@ namespace libcage {
                 class send_data {
                 public:
                         boost::shared_array<char>       data;
-                        int len;
+                        uint160_t       src;
+                        int             len;
                 };
 
                 typedef std::queue<send_data>   type_queue;
 
                 void            send_queue(id_ptr id);
-                void            push2queue(id_ptr id, const void *msg, int len);
+                void            push2queue(id_ptr id, const void *msg, int len,
+                                           const uint160_t &src);
                 void            send_msg(send_data &data, cageaddr &dst);
 
                 boost::unordered_map<_id, type_queue>   m_queue;
@@ -111,6 +117,7 @@ namespace libcage {
                 udphandler             &m_udp;
                 dtun                   &m_dtun;
                 dht                    &m_dht;
+                proxy                  &m_proxy;
                 callback                m_callback;
                 bool                    m_is_callback;
         };

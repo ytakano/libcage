@@ -31,6 +31,7 @@
 
 #include "dgram.hpp"
 
+#include "proxy.hpp"
 
 namespace libcage {
         size_t
@@ -70,6 +71,13 @@ namespace libcage {
         void
         dgram::send_dgram(const void *msg, int len, id_ptr id)
         {
+                send_dgram(msg, len, id, m_id);
+        }
+
+        void
+        dgram::send_dgram(const void *msg, int len, id_ptr id,
+                          const uint160_t &src)
+        {
                 _id i;
 
                 if (len < 0)
@@ -78,15 +86,15 @@ namespace libcage {
                 i.id = id;
 
                 if (m_requesting.find(i) != m_requesting.end()) {
-                        push2queue(id, msg, len);
+                        push2queue(id, msg, len, src);
                 } else {
                         try {
                                 m_peers.get_addr(id);
 
-                                push2queue(id, msg, len);
+                                push2queue(id, msg, len, src);
                                 send_queue(id);
                         } catch (std::out_of_range) {
-                                push2queue(id, msg, len);
+                                push2queue(id, msg, len, src);
 
                                 // request
                                 if (m_dtun.is_enabled()) {
@@ -111,12 +119,13 @@ namespace libcage {
         }
 
         dgram::dgram(const uint160_t &id, peers &p, udphandler &udp,
-                     dtun &dt, dht &dh) :
+                     dtun &dt, dht &dh, proxy &pr) :
                 m_id(id),
                 m_peers(p),
                 m_udp(udp),
                 m_dtun(dt),
                 m_dht(dh),
+                m_proxy(pr),
                 m_is_callback(false)
         {
 
@@ -153,7 +162,8 @@ namespace libcage {
         }
 
         void
-        dgram::push2queue(id_ptr id, const void *msg, int len)
+        dgram::push2queue(id_ptr id, const void *msg, int len,
+                          const uint160_t &src)
         {
                 boost::shared_array<char> array(new char[len]);
                 send_data data;
@@ -165,6 +175,7 @@ namespace libcage {
 
                 data.data = array;
                 data.len  = len;
+                data.src  = src;
 
                 m_queue[i].push(data);
         }
@@ -189,7 +200,7 @@ namespace libcage {
                 dgram->hdr.type  = type_dgram;
                 dgram->hdr.len   = htons(size);
                 
-                m_id.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+                data.src.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
                 dst.id->to_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
 
                 memcpy(dgram->data, data.data.get(), data.len);
@@ -232,9 +243,11 @@ namespace libcage {
 
                 dst.from_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
 
-                // TODO: check proxy
-                if (dst != m_id)
+                if (dst != m_id) {
+                        // check proxy
+                        m_proxy.forward_msg(dgram, size, from);
                         return;
+                }
 
                 // TODO: send advertise
 
