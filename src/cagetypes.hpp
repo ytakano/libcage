@@ -69,6 +69,8 @@ namespace libcage {
 
         static const uint8_t type_undefined               = 0;
         static const uint8_t type_dgram                   = 0x01;
+        static const uint8_t type_advertise               = 0x02;
+        static const uint8_t type_advertise_reply         = 0x03;
         static const uint8_t type_nat                     = 0x10;
         static const uint8_t type_nat_echo                = 0x11;
         static const uint8_t type_nat_echo_reply          = 0x12;

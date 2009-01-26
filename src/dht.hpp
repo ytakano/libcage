@@ -60,7 +60,7 @@ namespace libcage {
                 static const int        restore_interval;
                 static const int        timer_interval;
 
-
+        public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
                 typedef boost::function<void (bool, void *buf, int len)>
@@ -68,7 +68,6 @@ namespace libcage {
                 typedef boost::variant<callback_find_node,
                                        callback_find_value> callback_func;
 
-        public:
                 dht(const uint160_t &id, timer &t, peers &p,
                     const natdetector &nat, udphandler &udp, dtun &dt);
                 virtual ~dht();

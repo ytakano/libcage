@@ -194,6 +194,18 @@ namespace libcage {
                                 m_cage.m_proxy.recv_get_reply(buf, len);
                         }
                         break;
+                case type_proxy_dgram:
+                        if (len >= (int)(sizeof(msg_proxy_dgram) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_proxy.recv_dgram(buf, len);
+                        }
+                        break;
+                case type_proxy_dgram_forwarded:
+                        if (len >= (int)(sizeof(msg_proxy_get) -
+                                         sizeof(uint32_t))) {
+                                m_cage.m_proxy.recv_forwarded(buf, len);
+                        }
+                        break;
                 }
         }
 
@@ -341,7 +353,7 @@ namespace libcage {
         }
 
         void
-        cage::get(void *key, uint16_t keylen, callback_get func)
+        cage::get(void *key, uint16_t keylen, dht::callback_find_value func)
         {
                 EVP_MD_CTX      ctx;
                 uint160_t       id;

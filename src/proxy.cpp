@@ -406,7 +406,7 @@ namespace libcage {
 
         void
         proxy::get(const uint160_t &id, void *key, uint16_t keylen,
-                   callback_get func)
+                   dht::callback_find_value func)
         {
                 boost::shared_array<char> p_key;
                 msg_proxy_get *msg;
@@ -620,7 +620,7 @@ namespace libcage {
         }
 
         void
-        proxy::set_callback(callback_dgram func)
+        proxy::set_callback(dgram::callback func)
         {
                 m_dgram_func = func;
         }

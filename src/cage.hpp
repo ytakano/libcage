@@ -50,8 +50,6 @@ namespace libcage {
                 cage();
                 virtual ~cage();
 
-                typedef boost::function<void (bool, void *buf, int len)>
-                callback_get;
                 typedef boost::function<void (bool)>
                 callback_join;
 
@@ -61,7 +59,7 @@ namespace libcage {
                                     void *value, uint16_t valuelen,
                                     uint16_t ttl);
                 void            get(void *key, uint16_t keylen,
-                                    callback_get func);
+                                    dht::callback_find_value func);
                 void            join(std::string host, int port,
                                      callback_join func);
 

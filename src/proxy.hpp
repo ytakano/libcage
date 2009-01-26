@@ -54,8 +54,6 @@ namespace libcage {
         public:
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
-                typedef boost::function<void (void *buf, size_t len, uint8_t *addr)> callback_dgram;
-                
                 
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
                       peers &p, dtun &dt, dht &dh, dgram &dg);
@@ -77,14 +75,14 @@ namespace libcage {
                                       uint16_t ttl);
                 void            get(const uint160_t &id,
                                     void *key, uint16_t keylen,
-                                    callback_get func);
+                                    dht::callback_find_value func);
 
                 void            send_dgram(const void *msg, int len, id_ptr id);
 
                 void            forward_msg(msg_dgram *data, int size,
                                             sockaddr *from);
 
-                void            set_callback(callback_dgram func);
+                void            set_callback(dgram::callback func);
                 
         private:
                 class _id {
@@ -134,7 +132,7 @@ namespace libcage {
 
                         proxy          *p_proxy;
                         uint32_t        nonce;
-                        callback_get    func;
+                        dht::callback_find_value    func;
                 };
 
                 class getdata {
@@ -142,7 +140,7 @@ namespace libcage {
                         timer_get       timeout;
                         boost::shared_array<char>       key;
                         int             keylen;
-                        callback_get    func;
+                        dht::callback_find_value    func;
                 };
 
                 typedef boost::shared_ptr<getdata> gd_ptr;
@@ -169,7 +167,7 @@ namespace libcage {
                 bool            m_is_registering;
                 uint32_t        m_nonce;
                 timer_register  m_timer_register;
-                callback_dgram  m_dgram_func;
+                dgram::callback m_dgram_func;
                 boost::unordered_map<_id, _addr>        m_registered;
                 boost::unordered_map<uint32_t, gd_ptr>  m_getdata;
         };
