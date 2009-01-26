@@ -96,6 +96,9 @@ namespace libcage {
         static const uint8_t type_proxy                   = 0x80;
         static const uint8_t type_proxy_register          = 0x81;
         static const uint8_t type_proxy_register_reply    = 0x82;
+        static const uint8_t type_proxy_store             = 0x83;
+        static const uint8_t type_proxy_get               = 0x84;
+        static const uint8_t type_proxy_get_reply         = 0x85;
         
 
         struct msg_hdr {
@@ -303,6 +306,34 @@ namespace libcage {
         struct msg_proxy_register_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
+        };
+
+        struct msg_proxy_store {
+                msg_hdr         hdr;
+                uint8_t         id[CAGE_ADDR_LEN];
+                uint16_t        keylen;
+                uint16_t        valuelen;
+                uint16_t        ttl;
+                uint16_t        reserved;
+                uint32_t        data[1];
+        };
+
+        struct msg_proxy_get {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint8_t         id[CAGE_ADDR_LEN];
+                uint16_t        keylen;
+                uint16_t        reserved;
+                uint32_t        key[1];
+        };
+
+        struct msg_proxy_get_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         flag;
+                uint8_t         padding[3];
+                uint32_t        data[1];
         };
 
         enum node_state {

@@ -40,6 +40,7 @@
 #include "dht.hpp"
 #include "natdetector.hpp"
 #include "peers.hpp"
+#include "proxy.hpp"
 #include "timer.hpp"
 #include "udphandler.hpp"
 
@@ -105,6 +106,7 @@ namespace libcage {
                 dht             m_dht;
                 bool            m_is_dtun;
                 dgram           m_dgram;
+                proxy           m_proxy;
 
 #ifdef DEBUG_NAT
         public:

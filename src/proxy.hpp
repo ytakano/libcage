@@ -35,6 +35,7 @@
 #include "common.hpp"
 
 #include "bn.hpp"
+#include "dht.hpp"
 #include "dtun.hpp"
 #include "peers.hpp"
 #include "timer.hpp"
@@ -47,15 +48,30 @@ namespace libcage {
         class proxy {
         private:
                 static const time_t     register_timeout;
+                static const time_t     get_timeout;
 
         public:
+                typedef boost::function<void (bool, void *buf, int len)>
+                callback_get;
+
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
-                      dtun &d, peers &p);
+                      peers &p, dtun &dt, dht &dh);
+                virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
                 void            recv_register_reply(void *msg, sockaddr *from);
+                void            recv_store(void *msg, int len, sockaddr *from);
+                void            recv_get(void *msg, int len);
+                void            recv_get_reply(void *msg, int len);
 
                 void            register_node();
+                void            store(const uint160_t &id,
+                                      void *key, uint16_t keylen,
+                                      void *value, uint16_t valuelen,
+                                      uint16_t ttl);
+                void            get(const uint160_t &id,
+                                    void *key, uint16_t keylen,
+                                    callback_get func);
                 
         private:
                 class _id {
@@ -99,17 +115,49 @@ namespace libcage {
                         proxy  &m_proxy;
                 };
 
+                class timer_get : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        proxy          *p_proxy;
+                        uint32_t        nonce;
+                        callback_get    func;
+                };
+
+                class getdata {
+                public:
+                        timer_get       timeout;
+                        boost::shared_array<char>       key;
+                        int             keylen;
+                        callback_get    func;
+                };
+
+                typedef boost::shared_ptr<getdata> gd_ptr;
+
+                class get_reply_func {
+                public:
+                        void operator() (bool result, void *buf, int len);
+
+                        id_ptr          id;
+                        id_ptr          src;
+                        uint32_t        nonce;
+                        proxy          *p_proxy;
+                };
+
                 const uint160_t        &m_id;
                 udphandler     &m_udp;
                 timer          &m_timer;
-                dtun           &m_dtun;
                 peers          &m_peers;
+                dtun           &m_dtun;
+                dht            &m_dht;
                 cageaddr        m_server;
                 uint32_t        m_register_session;
+                bool            m_is_registered;
                 bool            m_is_registering;
                 uint32_t        m_nonce;
                 timer_register  m_timer_register;
                 boost::unordered_map<_id, _addr>        m_registered;
+                boost::unordered_map<uint32_t, gd_ptr>  m_getdata;
         };
 }
 
