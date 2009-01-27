@@ -8,6 +8,7 @@ if $(equal $(SYSNAME), Darwin)
 	export
 
 SRC[] =
+	advertise
 	proxy
 	dgram
 	dht

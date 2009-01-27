@@ -31,6 +31,8 @@
 
 #include "proxy.hpp"
 
+#include "advertise.hpp"
+
 #include <openssl/rand.h>
 
 #include <boost/foreach.hpp>
@@ -53,7 +55,7 @@ namespace libcage {
         }
 
         proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
-                     peers &p, dtun &dt, dht &dh, dgram &dg) :
+                     peers &p, dtun &dt, dht &dh, dgram &dg, advertise &adv) :
                 m_id(id),
                 m_udp(udp),
                 m_timer(t),
@@ -61,6 +63,7 @@ namespace libcage {
                 m_dtun(dt),
                 m_dht(dh),
                 m_dgram(dg),
+                m_advertise(adv),
                 m_is_registered(false),
                 m_is_registering(false),
                 m_timer_register(*this),
@@ -616,7 +619,15 @@ namespace libcage {
 
                 m_dgram_func(forwarded->data, size, forwarded->hdr.src);
 
-                // TODO: send advertise
+                // send advertise
+                uint160_t src;
+                uint16_t  domain;
+                
+                src.from_binary(forwarded->hdr.src, sizeof(forwarded->hdr.src));
+                domain = ntohs(forwarded->domain);
+
+                m_advertise.advertise_to(src, domain, forwarded->port,
+                                         forwarded->addr);
         }
 
         void

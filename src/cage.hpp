@@ -34,6 +34,7 @@
 
 #include "common.hpp"
 
+#include "advertise.hpp"
 #include "bn.hpp"
 #include "dgram.hpp"
 #include "dtun.hpp"
@@ -106,6 +107,7 @@ namespace libcage {
                 bool            m_is_dtun;
                 dgram           m_dgram;
                 proxy           m_proxy;
+                advertise       m_advertise;
 
 #ifdef DEBUG_NAT
         public:

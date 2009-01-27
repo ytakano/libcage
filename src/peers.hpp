@@ -135,7 +135,7 @@ namespace libcage {
                 void            remove_addr(cageaddr &addr);
 
                 void            add_node(cageaddr &addr);
-                void            add_node(cageaddr &addr, uint32_t session);
+                bool            add_node(cageaddr &addr, uint32_t session);
                 void            add_node_force(cageaddr &addr);
 
                 void            add_timeout(id_ptr id);

@@ -31,6 +31,7 @@
 
 #include "dgram.hpp"
 
+#include "advertise.hpp"
 #include "proxy.hpp"
 
 namespace libcage {
@@ -119,13 +120,14 @@ namespace libcage {
         }
 
         dgram::dgram(const uint160_t &id, peers &p, udphandler &udp,
-                     dtun &dt, dht &dh, proxy &pr) :
+                     dtun &dt, dht &dh, proxy &pr, advertise &adv) :
                 m_id(id),
                 m_peers(p),
                 m_udp(udp),
                 m_dtun(dt),
                 m_dht(dh),
                 m_proxy(pr),
+                m_advertise(adv),
                 m_is_callback(false)
         {
 
@@ -229,8 +231,8 @@ namespace libcage {
         dgram::recv_dgram(void *msg, int len, sockaddr *from)
         {
                 msg_dgram *dgram;
-                cageaddr   addr;
                 uint160_t  dst;
+                uint160_t  src;
                 int        size;
 
                 dgram = (msg_dgram*)msg;
@@ -249,7 +251,22 @@ namespace libcage {
                         return;
                 }
 
-                // TODO: send advertise
+                src.from_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+
+                // send advertise
+                if (from->sa_family == PF_INET) {
+                        sockaddr_in *in = (sockaddr_in*)from;
+
+                        m_advertise.advertise_to(src, domain_inet,
+                                                 in->sin_port,
+                                                 &in->sin_addr.s_addr);
+                } else if (from->sa_family == PF_INET6) {
+                        sockaddr_in6 *in6 = (sockaddr_in6*)from;
+
+                        m_advertise.advertise_to(src, domain_inet6,
+                                                 in6->sin6_port,
+                                                 in6->sin6_addr.s6_addr);
+                }
 
 
                 if (m_is_callback)

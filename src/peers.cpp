@@ -190,13 +190,13 @@ namespace libcage {
                 add_node(addr, 0);
         }
 
-        void
+        bool
         peers::add_node(cageaddr &addr, uint32_t session)
         {
                 _id   i;
 
                 if (addr.domain != domain_inet && addr.domain == domain_inet6)
-                        return;
+                        return false;
 
                 i.id      = addr.id;
                 i.t       = time(NULL);
@@ -214,6 +214,8 @@ namespace libcage {
                                 m_timeout.erase(i);
 
                                 m_callback(addr);
+
+                                return true;
                         } else {
                                 _addr a1, a2;
                                 a1 = m_map.left.at(i);
@@ -226,6 +228,8 @@ namespace libcage {
                                         m_timeout.erase(i);
 
                                         m_callback(addr);
+
+                                        return true;
                                 }
                         }
                 } else {
@@ -236,7 +240,11 @@ namespace libcage {
                         m_timeout.erase(i);
 
                         m_callback(addr);
+
+                        return true;
                 }
+
+                return false;
         }
 
         void

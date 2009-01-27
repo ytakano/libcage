@@ -49,6 +49,7 @@
 
 namespace libcage {
         class proxy;
+        class advertise;
 
         class dgram {
         public:
@@ -57,7 +58,7 @@ namespace libcage {
 
 
                 dgram(const uint160_t &id, peers &p, udphandler &udp,
-                      dtun &dt, dht &dh, proxy &pr);
+                      dtun &dt, dht &dh, proxy &pr, advertise &adv);
 
                 void            recv_dgram(void *msg, int len, sockaddr *from);
 
@@ -118,6 +119,7 @@ namespace libcage {
                 dtun                   &m_dtun;
                 dht                    &m_dht;
                 proxy                  &m_proxy;
+                advertise              &m_advertise;
                 callback                m_callback;
                 bool                    m_is_callback;
         };

@@ -46,6 +46,8 @@
 #include <boost/unordered_map.hpp>
 
 namespace libcage {
+        class advertise;
+
         class proxy {
         private:
                 static const time_t     register_timeout;
@@ -56,7 +58,7 @@ namespace libcage {
                 callback_get;
                 
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
-                      peers &p, dtun &dt, dht &dh, dgram &dg);
+                      peers &p, dtun &dt, dht &dh, dgram &dg, advertise &adv);
                 virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
@@ -162,6 +164,7 @@ namespace libcage {
                 dtun           &m_dtun;
                 dht            &m_dht;
                 dgram          &m_dgram;
+                advertise      &m_advertise;
                 cageaddr        m_server;
                 bool            m_is_registered;
                 bool            m_is_registering;

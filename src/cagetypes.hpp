@@ -353,6 +353,18 @@ namespace libcage {
                 uint32_t        data[1];
         };
 
+        struct msg_advertise {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        session;
+        };
+
+        struct msg_advertise_reply {
+                msg_hdr         hdr;
+                uint32_t        nonce;
+                uint32_t        session;
+        };
+
         enum node_state {
                 node_undefined,
                 node_nat,
