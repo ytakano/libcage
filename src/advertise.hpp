@@ -49,16 +49,20 @@ namespace libcage {
         private:
                 static const time_t     advertise_ttl;
                 static const time_t     advertise_timeout;
+                static const time_t     refresh_interval;
 
         public:
                 advertise(const uint160_t &id, timer &tm, udphandler &udp,
                           peers &p, dtun &d);
+                virtual ~advertise();
 
                 void            recv_advertise(void *msg, sockaddr *from);
                 void            recv_advertise_rely(void *msg, sockaddr *from);
 
                 void            advertise_to(uint160_t &id, uint16_t domain,
                                              uint16_t port, void *addr);
+
+                void            refresh();
 
         private:
                 class timer_advertise : public timer::callback {
@@ -71,11 +75,52 @@ namespace libcage {
 
                 typedef boost::shared_ptr<timer_advertise> timer_ptr;
 
+                class timer_refresh : public timer::callback {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_advertise.refresh();
+
+                                timeval tval;
+                                time_t  t;
+
+                                t  = advertise::refresh_interval * drand48();
+                                t += advertise::refresh_interval;
+
+                                tval.tv_sec  = t;
+                                tval.tv_usec = 0;
+
+                                m_advertise.m_timer.set_timer(this, &tval);
+                        }
+
+                        timer_refresh(advertise &adv) : m_advertise(adv)
+                        {
+                                timeval tval;
+                                time_t  t;
+
+                                t  = advertise::refresh_interval * drand48();
+                                t += advertise::refresh_interval;
+
+                                tval.tv_sec  = t;
+                                tval.tv_usec = 0;
+
+                                m_advertise.m_timer.set_timer(this, &tval);
+                        }
+
+                        ~timer_refresh()
+                        {
+                                m_advertise.m_timer.unset_timer(this);
+                        }
+
+                        advertise      &m_advertise;
+                };
+
                 const uint160_t        &m_id;
                 timer          &m_timer;
                 udphandler     &m_udp;
                 peers          &m_peers;
                 dtun           &m_dtun;
+                timer_refresh   m_timer_refresh;
                 boost::unordered_map<uint32_t, timer_ptr>       m_advertising;
                 boost::unordered_map<uint160_t, time_t>         m_advertised;
         };

@@ -38,6 +38,7 @@
 #include "dgram.hpp"
 #include "dht.hpp"
 #include "dtun.hpp"
+#include "natdetector.hpp"
 #include "peers.hpp"
 #include "timer.hpp"
 
@@ -51,14 +52,17 @@ namespace libcage {
         class proxy {
         private:
                 static const time_t     register_timeout;
+                static const time_t     register_ttl;
                 static const time_t     get_timeout;
+                static const time_t     timer_interval;
 
         public:
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
                 
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
-                      peers &p, dtun &dt, dht &dh, dgram &dg, advertise &adv);
+                      natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
+                      advertise &adv);
                 virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
@@ -85,6 +89,8 @@ namespace libcage {
                                             sockaddr *from);
 
                 void            set_callback(dgram::callback func);
+
+                void            refresh();
                 
         private:
                 class _id {
@@ -104,7 +110,6 @@ namespace libcage {
                         uint32_t        session;
                         cageaddr        addr;
                         time_t          recv_time;
-                        time_t          last_registered;
                 };
 
                 class register_func {
@@ -157,9 +162,54 @@ namespace libcage {
                         proxy          *p_proxy;
                 };
 
+                class timer_proxy : public timer::callback {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_proxy.refresh();
+
+                                if (m_proxy.m_nat.get_state() ==
+                                    node_symmetric)
+                                        m_proxy.register_node();
+
+                                timeval tval;
+                                time_t  t;
+
+                                t  = proxy::timer_interval * drand48();
+                                t += proxy::timer_interval;
+
+                                tval.tv_sec  = proxy::timer_interval;
+                                tval.tv_usec = 0;
+
+                                m_proxy.m_timer.set_timer(this, &tval);
+                        }
+
+                        timer_proxy(proxy &pr) : m_proxy(pr)
+                        {
+                                timeval tval;
+                                time_t  t;
+
+                                t  = proxy::timer_interval * drand48();
+                                t += proxy::timer_interval;
+
+                                tval.tv_sec  = t;
+                                tval.tv_usec = 0;
+
+                                m_proxy.m_timer.set_timer(this, &tval);
+                        }
+
+                        virtual ~timer_proxy()
+                        {
+                                m_proxy.m_timer.unset_timer(this);
+                        }
+
+                        proxy  &m_proxy;
+                };
+
                 const uint160_t        &m_id;
                 udphandler     &m_udp;
                 timer          &m_timer;
+                natdetector    &m_nat;
                 peers          &m_peers;
                 dtun           &m_dtun;
                 dht            &m_dht;
@@ -170,6 +220,7 @@ namespace libcage {
                 bool            m_is_registering;
                 uint32_t        m_nonce;
                 timer_register  m_timer_register;
+                timer_proxy     m_timer_proxy;
                 dgram::callback m_dgram_func;
                 boost::unordered_map<_id, _addr>        m_registered;
                 boost::unordered_map<uint32_t, gd_ptr>  m_getdata;

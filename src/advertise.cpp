@@ -34,6 +34,7 @@
 namespace libcage {
         const time_t    advertise::advertise_ttl     = 300;
         const time_t    advertise::advertise_timeout = 2;
+        const time_t    advertise::refresh_interval  = 100;
 
 
         advertise::advertise(const uint160_t &id, timer &tm, udphandler &udp,
@@ -42,9 +43,20 @@ namespace libcage {
                 m_timer(tm),
                 m_udp(udp),
                 m_peers(p),
-                m_dtun(d)
+                m_dtun(d),
+                m_timer_refresh(*this)
         {
 
+        }
+
+        advertise::~advertise()
+        {
+                boost::unordered_map<uint32_t, timer_ptr>::iterator it;
+
+                for (it = m_advertising.begin(); it != m_advertising.end();
+                     ++it) {
+                        m_timer.unset_timer(it->second.get());
+                }
         }
 
         void
@@ -193,5 +205,23 @@ namespace libcage {
                 addr = new_cageaddr(&reply->hdr, from);
 
                 m_peers.add_node(addr, session);
+        }
+
+        void
+        advertise::refresh()
+        {
+                boost::unordered_map<uint160_t, time_t>::iterator it;
+                time_t now;
+
+                now = time(NULL);
+
+                for (it = m_advertised.begin(); it != m_advertised.end();) {
+                        time_t diff = now - it->second;
+                        if (diff > advertise_ttl) {
+                                m_advertised.erase(it++);
+                        } else {
+                                ++it;
+                        }
+                }
         }
 }

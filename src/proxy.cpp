@@ -39,8 +39,9 @@
 
 namespace libcage {
         const time_t    proxy::register_timeout = 2;
+        const time_t    proxy::register_ttl     = 300;
         const time_t    proxy::get_timeout      = 10;
-
+        const time_t    proxy::timer_interval   = 30;
 
         size_t
         hash_value(const proxy::_id &i)
@@ -55,10 +56,12 @@ namespace libcage {
         }
 
         proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
-                     peers &p, dtun &dt, dht &dh, dgram &dg, advertise &adv) :
+                     natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
+                     advertise &adv) :
                 m_id(id),
                 m_udp(udp),
                 m_timer(t),
+                m_nat(nat),
                 m_peers(p),
                 m_dtun(dt),
                 m_dht(dh),
@@ -67,6 +70,7 @@ namespace libcage {
                 m_is_registered(false),
                 m_is_registering(false),
                 m_timer_register(*this),
+                m_timer_proxy(*this),
                 m_dgram_func(&no_action)
         {
 
@@ -209,7 +213,6 @@ namespace libcage {
                         a.session   = ntohl(reg->session);
                         a.addr      = addr;
                         a.recv_time = time(NULL);
-                        a.last_registered = time(NULL);
 
                         m_dtun.register_node(addr.id, a.session);
                 } else {
@@ -634,5 +637,24 @@ namespace libcage {
         proxy::set_callback(dgram::callback func)
         {
                 m_dgram_func = func;
+        }
+
+        void
+        proxy::refresh()
+        {
+                boost::unordered_map<_id, _addr>::iterator it;
+                time_t now;
+
+                now = time(NULL);
+
+                for (it = m_registered.begin(); it != m_registered.end();) {
+                        time_t diff = now = it->second.recv_time;
+
+                        if (diff > register_ttl) {
+                                m_registered.erase(it++);
+                        } else {
+                                ++it;
+                        }
+                }
         }
 }

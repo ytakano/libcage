@@ -216,8 +216,8 @@ namespace libcage {
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,
                                m_advertise),
-                       m_proxy(m_id, m_udp, m_timer, m_peers, m_dtun, m_dht,
-                               m_dgram, m_advertise),
+                       m_proxy(m_id, m_udp, m_timer, m_nat, m_peers, m_dtun,
+                               m_dht, m_dgram, m_advertise),
                        m_advertise(m_id, m_timer, m_udp, m_peers, m_dtun)
         {
                 unsigned char buf[20];
