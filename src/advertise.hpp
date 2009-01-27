@@ -57,7 +57,7 @@ namespace libcage {
                 virtual ~advertise();
 
                 void            recv_advertise(void *msg, sockaddr *from);
-                void            recv_advertise_rely(void *msg, sockaddr *from);
+                void            recv_advertise_reply(void *msg, sockaddr *from);
 
                 void            advertise_to(uint160_t &id, uint16_t domain,
                                              uint16_t port, void *addr);

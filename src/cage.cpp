@@ -206,6 +206,17 @@ namespace libcage {
                                 m_cage.m_proxy.recv_forwarded(buf, len);
                         }
                         break;
+                case type_advertise:
+                        if (len == (int)sizeof(msg_advertise)) {
+                                m_cage.m_advertise.recv_advertise(buf, from);
+                        }
+                        break;
+                case type_advertise_reply:
+                        if (len == (int)sizeof(msg_advertise_reply)) {
+                                m_cage.m_advertise.recv_advertise_reply(buf,
+                                                                        from);
+                        }
+                        break;
                 }
         }
 

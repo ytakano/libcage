@@ -175,7 +175,7 @@ namespace libcage {
         }
 
         void
-        advertise::recv_advertise_rely(void *msg, sockaddr *from)
+        advertise::recv_advertise_reply(void *msg, sockaddr *from)
         {
                 msg_advertise_reply *reply;
                 cageaddr  addr;
