@@ -357,7 +357,8 @@ namespace libcage {
                 if (it == m_map.left.end())
                         throw std::out_of_range("no element");
 
-                if (++it == m_map.left.end())
+                ++it;
+                if (it == m_map.left.end())
                         throw std::out_of_range("no more element");
 
                 addr.id     = it->first.id;

@@ -224,8 +224,11 @@ namespace libcage {
         {
                 node_state state = m_nat.get_state();
                 if (state == node_symmetric || state == node_undefined ||
-                    state == node_nat)
+                    state == node_nat) {
+                        std::vector<cageaddr> nodes;
+                        func(nodes);
                         return;
+                }
 
                 find_nv(dst, func, false);
         }
@@ -653,6 +656,7 @@ namespace libcage {
         dht::store(const uint160_t &id, void *key, uint16_t keylen,
                    void *value, uint16_t valuelen, uint16_t ttl)
         {
+                // store to dht network
                 store_func func;
                 id_ptr     p_id(new uint160_t);
 
@@ -670,6 +674,25 @@ namespace libcage {
                 memcpy(func.value.get(), value, valuelen);
 
                 find_node(id, func);
+
+
+                // store to local
+                stored_data data;
+                id_key ik;
+
+                data.key         = func.key;
+                data.value       = func.value;
+                data.keylen      = keylen;
+                data.valuelen    = valuelen;
+                data.ttl         = ttl;
+                data.stored_time = time(NULL);
+                data.id          = func.id;
+
+                ik.key    = func.key;
+                ik.keylen = keylen;
+                ik.id     = func.id;
+
+                m_stored[ik] = data;
         }
 
         void
@@ -796,8 +819,10 @@ namespace libcage {
         {
                 node_state state = m_nat.get_state();
                 if (state == node_symmetric || state == node_undefined ||
-                    state == node_nat)
+                    state == node_nat) {
+                        func(false, NULL, 0);
                         return;
+                }
 
 
                 find_nv(dst, func, true, key, keylen);
@@ -1209,20 +1234,26 @@ namespace libcage {
                         
                         p_dht->lookup(*it->second.id, num_find_node, nodes);
 
-                        if (nodes.size() == 0)
+                        if (nodes.size() == 0) {
+                                ++it;
                                 continue;
+                        }
 
                         size = sizeof(*msg) - sizeof(msg->data) +
                                 it->second.keylen + it->second.valuelen;
 
-                        if (size > (int)sizeof(buf))
+                        if (size > (int)sizeof(buf)) {
+                                ++it;
                                 continue;
+                        }
 
                         msg = (msg_dht_store*)buf;
 
                         diff = now - it->second.stored_time;
-                        if (diff >= it->second.ttl)
+                        if (diff >= it->second.ttl) {
+                                ++it;
                                 continue;
+                        }
 
                         ttl = it->second.ttl - diff;
 

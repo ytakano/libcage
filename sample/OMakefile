@@ -3,13 +3,14 @@ LDFLAGS += -levent -lcrypto
 LIBS += ../src/libcage
 
 
-.PHONY: clean sample1 sample2
+.PHONY: clean sample1 sample2 sample3
 
 sample1: $(CXXProgram sample1, sample1)
 sample2: $(CXXProgram sample2, sample2)
+sample2: $(CXXProgram sample3, sample3)
 
 clean:
 	rm -f *~ *.o
-	rm -f sample1
+	rm -f sample1 sample2 sample3
 
-.DEFAULT: sample1 sample2
+.DEFAULT: sample1 sample2 sample3

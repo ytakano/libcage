@@ -383,7 +383,7 @@ namespace libcage {
                 m_global_port = reply->port;
                 memcpy(m_global_addr, reply->addr, sizeof(m_global_addr));
 
-                m_state = nat;
+                m_state = global;
         }
 
         void
@@ -500,8 +500,9 @@ namespace libcage {
                                 return;
                         }
 
+                        addr2 = addr1;
                         for (;;) {
-                                addr2 = m_nat.m_peers.get_next(addr1.id);
+                                addr2 = m_nat.m_peers.get_next(addr2.id);
                                 in2 = boost::get<in_ptr>(addr2.saddr);
 
                                 if (in1->sin_addr.s_addr !=
