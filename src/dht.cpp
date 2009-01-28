@@ -303,8 +303,9 @@ namespace libcage {
         void
         dht::find_node_func::operator() (bool result, cageaddr &addr)
         {
-                if (! result)
+                if (! result) {
                         return;
+                }
 
                 msg_dht_find_node msg;
 
@@ -831,8 +832,9 @@ namespace libcage {
         void
         dht::find_value_func::operator() (bool result, cageaddr &addr)
         {
-                if (! result)
+                if (! result) {
                         return;
+                }
 
                 msg_dht_find_value *msg;
                 int  size;

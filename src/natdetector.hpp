@@ -154,6 +154,7 @@ namespace libcage {
 #ifdef DEBUG_NAT
         public:
                 void            set_state_nat() { m_state = nat; }
+                void            set_state_cone_nat() { m_state = cone_nat; }
 #endif // DEBUG_NAT
         };
 }

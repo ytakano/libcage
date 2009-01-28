@@ -71,6 +71,11 @@ namespace libcage {
 
                 void            set_global() { m_nat.set_state_global(); }
 
+#ifdef DEBUG_NAT
+                void            set_nat() { m_nat.set_state_nat(); }
+                void            set_cone_nat() { m_nat.set_state_cone_nat(); }
+#endif // DEBUG_NAT
+
                 void            print_state();
 
 

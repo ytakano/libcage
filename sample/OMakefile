@@ -1,4 +1,4 @@
-CXXFLAGS += -Wall -O0 -DDEBUG -g -I../include
+CXXFLAGS += -Wall -O0 -DDEBUG -g -I../include -DDEBUG_NAT
 LDFLAGS += -levent -lcrypto
 LIBS += ../src/libcage
 

@@ -410,8 +410,9 @@ namespace libcage {
                 int                       size;
                 char                      buf[1024 * 2];
 
-                if (m_nat.get_state() != node_global)
+                if (m_nat.get_state() != node_global) {
                         return;
+                }
 
                 find_node = (msg_dtun_find_node*)msg;
 
@@ -509,22 +510,26 @@ namespace libcage {
                 reply = (msg_dtun_find_node_reply*)msg;
 
                 nonce = ntohl(reply->nonce);
-                if (m_query.find(nonce) == m_query.end())
+                if (m_query.find(nonce) == m_query.end()) {
                         return;
+                }
 
                 dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
-                if (dst != m_id)
+                if (dst != m_id) {
                         return;
+                }
 
 
                 id.from_binary(reply->id, sizeof(reply->id));
                 q = m_query[nonce];
 
-                if (q->dst != id)
+                if (q->dst != id) {
                         return;
+                }
 
-                if (q->is_find_value)
+                if (q->is_find_value) {
                         return;
+                }
 
 
                 // stop timer
@@ -537,8 +542,9 @@ namespace libcage {
 
                         zero->fill_zero();
                         c_id.id = zero;
-                        if (q->timers.find(c_id) == q->timers.end())
+                        if (q->timers.find(c_id) == q->timers.end()) {
                                 return;
+                        }
                         
                         t = q->timers[c_id];
                         m_timer.unset_timer(t.get());
@@ -558,8 +564,9 @@ namespace libcage {
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 sizeof(*min) * reply->num;
 
-                        if (size != len)
+                        if (size != len) {
                                 return;
+                        }
 
                         min = (msg_inet*)reply->addrs;
 
@@ -767,21 +774,24 @@ namespace libcage {
                 char                 buf[1024 * 2];
                 id_ptr               id(new uint160_t);
 
-                if (m_nat.get_state() != node_global)
+                if (m_nat.get_state() != node_global) {
                         return;
+                }
 
                 find_value = (msg_dtun_find_value*)msg;
 
                 fromid.from_binary(find_value->hdr.dst,
                                    sizeof(find_value->hdr.dst));
 
-                if (fromid != m_id)
+                if (fromid != m_id) {
                         return;
+                }
 
                 domain = ntohs(find_value->domain);
-
-                if (domain != m_udp.get_domain())
+ 
+                if (domain != m_udp.get_domain()) {
                         return;
+                }
 
                 memset(buf, 0, sizeof(buf));
 
@@ -917,28 +927,28 @@ namespace libcage {
                 int       size;
                 _id       c_id;
 
-                if (m_nat.get_state() != node_global)
-                        return;
-                
                 reply = (msg_dtun_find_value_reply*)msg;
 
                 nonce = ntohl(reply->nonce);
-                if (m_query.find(nonce) == m_query.end())
+                if (m_query.find(nonce) == m_query.end()) {
                         return;
+                }
 
                 dst.from_binary(reply->hdr.dst, sizeof(reply->hdr.dst));
-                if (dst != m_id)
+                if (dst != m_id) {
                         return;
-
+                }
 
                 id.from_binary(reply->id, sizeof(reply->id));
                 q = m_query[nonce];
 
-                if (q->dst != id)
+                if (q->dst != id) {
                         return;
+                }
 
-                if (! q->is_find_value)
+                if (! q->is_find_value) {
                         return;
+                }
 
                 // stop timer
                 src->from_binary(reply->hdr.src, sizeof(reply->hdr.src));
@@ -959,8 +969,9 @@ namespace libcage {
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 sizeof(*min) * reply->num;
 
-                        if (size != len)
+                        if (size != len) {
                                 return;
+                        }
 
                         min = (msg_inet*)reply->addrs;
 
@@ -971,8 +982,9 @@ namespace libcage {
                         size = sizeof(*reply) - sizeof(reply->addrs) +
                                 sizeof(*min6) * reply->num;
 
-                        if (size != len)
+                        if (size != len) {
                                 return;
+                        }
 
                         min6 = (msg_inet6*)reply->addrs;
 
