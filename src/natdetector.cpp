@@ -31,6 +31,7 @@
 
 #include "natdetector.hpp"
 #include "cagetypes.hpp"
+#include "proxy.hpp"
 
 namespace libcage {
         const time_t    natdetector::echo_timeout   = 3;
@@ -93,12 +94,13 @@ namespace libcage {
         }
 
         natdetector::natdetector(udphandler &udp, timer &t,
-                                 const uint160_t &id, peers &p) :
+                                 const uint160_t &id, peers &p, proxy &pr) :
                 m_state(undefined),
                 m_timer(t),
                 m_udp(udp),
                 m_id(id),
                 m_peers(p),
+                m_proxy(pr),
                 m_global_port(0),
                 m_timer_nat(*this)
         {
@@ -306,6 +308,8 @@ namespace libcage {
 
                         m_reply.erase(nonce);
                         m_timers.erase(nonce);
+
+                        m_proxy.register_node();
                 }
         }
 

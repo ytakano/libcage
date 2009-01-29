@@ -176,6 +176,16 @@ namespace libcage {
                                 m_cage.m_dgram.recv_dgram(buf, len, from);
                         }
                         break;
+                case type_proxy_register:
+                        if (len == (int)sizeof(msg_proxy_register)) {
+                                m_cage.m_proxy.recv_register(buf, from);
+                        }
+                        break;
+                case type_proxy_register_reply:
+                        if (len == (int)sizeof(msg_proxy_register_reply)) {
+                                m_cage.m_proxy.recv_register_reply(buf, from);
+                        }
+                        break;
                 case type_proxy_store:
                         if (len >= (int)(sizeof(msg_proxy_store) -
                                          sizeof(uint32_t))) {
@@ -222,7 +232,7 @@ namespace libcage {
 
         cage::cage() : m_receiver(*this),
                        m_peers(m_timer),
-                       m_nat(m_udp, m_timer, m_id, m_peers),
+                       m_nat(m_udp, m_timer, m_id, m_peers, m_proxy),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,

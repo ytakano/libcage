@@ -44,13 +44,15 @@
 #include <string>
 
 namespace libcage {
+        class proxy;
+
         class natdetector {
         private:
                 static const time_t     timer_interval;
 
         public:
                 natdetector(udphandler &udp, timer &t, const uint160_t &id,
-                            peers &p);
+                            peers &p, proxy &pr);
                 virtual ~natdetector();
 
                 void            detect(std::string host, int port);
@@ -137,6 +139,7 @@ namespace libcage {
                 udphandler             *m_udp_tmp;
                 const uint160_t        &m_id;
                 peers                  &m_peers;
+                proxy                  &m_proxy;
                 uint16_t                m_global_port;
                 uint8_t                 m_global_addr[16];
                 timer_nat               m_timer_nat;
@@ -155,6 +158,7 @@ namespace libcage {
         public:
                 void            set_state_nat() { m_state = nat; }
                 void            set_state_cone_nat() { m_state = cone_nat; }
+                void            set_state_symmetric_nat() { m_state = symmetric_nat; }
 #endif // DEBUG_NAT
         };
 }

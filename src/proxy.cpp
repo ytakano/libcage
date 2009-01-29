@@ -214,6 +214,8 @@ namespace libcage {
                         a.addr      = addr;
                         a.recv_time = time(NULL);
 
+                        m_registered[i] = a;
+
                         m_dtun.register_node(addr.id, a.session);
                 } else {
                         uint32_t session = ntohl(reg->session);
@@ -378,7 +380,7 @@ namespace libcage {
 
                 src->from_binary(getmsg->hdr.src, sizeof(getmsg->hdr.src));
                 i.id = src;
-                if (m_registered.find(i) != m_registered.end())
+                if (m_registered.find(i) == m_registered.end())
                         return;
 
                 keylen = ntohs(getmsg->keylen);
@@ -420,6 +422,11 @@ namespace libcage {
                 uint32_t nonce;
                 int      size;
                 char     buf[1024 * 4];
+
+                if (! m_is_registered) {
+                        func(false, NULL, 0);
+                        return;
+                }
 
                 msg = (msg_proxy_get*)buf;
 
@@ -498,9 +505,9 @@ namespace libcage {
                         return;
 
                 if (reply->flag > 0) {
-                        it->second->func(false, NULL, 0);
-                } else {
                         it->second->func(true, reply->data, valuelen);
+                } else {
+                        it->second->func(false, NULL, 0);
                 }
 
                 m_timer.unset_timer(&it->second->timeout);
