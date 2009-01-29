@@ -50,6 +50,8 @@
 #include <boost/variant.hpp>
 
 namespace libcage {
+        class proxy;
+
         class dtun : public rttable {
         private:
                 static const int        num_find_node;
@@ -73,7 +75,7 @@ namespace libcage {
 
         public:
                 dtun(const uint160_t &id, timer &t, peers &p,
-                     const natdetector &nat, udphandler &hdp);
+                     const natdetector &nat, udphandler &hdp, proxy &pr);
                 virtual ~dtun();
 
                 void            recv_ping(void *msg, sockaddr *from,
@@ -252,6 +254,7 @@ namespace libcage {
                 peers                  &m_peers;
                 const natdetector      &m_nat;
                 udphandler             &m_udp;
+                proxy                  &m_proxy;
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
                 bool                    m_registering;
                 time_t                  m_last_registered;

@@ -32,6 +32,7 @@
 #include "dtun.hpp"
 
 #include "ping.hpp"
+#include "proxy.hpp"
 
 #include <openssl/rand.h>
 
@@ -84,13 +85,14 @@ namespace libcage {
         }
 
         dtun::dtun(const uint160_t &id, timer &t, peers &p,
-                   const natdetector &nat, udphandler &udp) :
+                   const natdetector &nat, udphandler &udp, proxy &pr) :
                 rttable(id, t, p),
                 m_id(id),
                 m_timer(t),
                 m_peers(p),
                 m_nat(nat),
                 m_udp(udp),
+                m_proxy(pr),
                 m_registering(false),
                 m_last_registered(0),
                 m_timer_refresh(*this),
@@ -1310,22 +1312,26 @@ namespace libcage {
         {
                 msg_dtun_request_reply  reply;
                 msg_dtun_request_by    *req;
-                uint160_t dst;
+                id_ptr    dst(new uint160_t);
                 uint16_t  domain;
                 int       size;
 
                 req = (msg_dtun_request_by*)msg;
 
-                dst.from_binary(req->hdr.dst, sizeof(req->hdr.dst));
-                if (dst != m_id)
-                        return;
+                dst->from_binary(req->hdr.dst, sizeof(req->hdr.dst));
+                if (*dst != m_id) {
+                        if (! m_proxy.is_registered(dst))
+                                return;
+
+                        dst->to_binary(reply.hdr.src, sizeof(reply.hdr.src));
+                } else {
+                        m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
+                }
 
                 reply.hdr.magic = htons(MAGIC_NUMBER);
                 reply.hdr.ver   = CAGE_VERSION;
                 reply.hdr.type  = type_dtun_request_reply;
                 reply.hdr.len   = htons(sizeof(reply));
-
-                m_id.to_binary(reply.hdr.src, sizeof(reply.hdr.src));
 
                 reply.nonce = req->nonce;
 

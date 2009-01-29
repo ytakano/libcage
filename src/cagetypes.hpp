@@ -111,8 +111,8 @@ namespace libcage {
                 uint8_t         type;
                 uint16_t        len;
                 uint16_t        reserved;
-                uint8_t         src[CAGE_ADDR_LEN];
-                uint8_t         dst[CAGE_ADDR_LEN];
+                uint8_t         src[CAGE_ID_LEN];
+                uint8_t         dst[CAGE_ID_LEN];
         };
 
         struct msg_nat_echo {
@@ -156,7 +156,7 @@ namespace libcage {
         struct msg_dtun_find_node {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint16_t        state;
         };
@@ -165,20 +165,20 @@ namespace libcage {
                 uint16_t        port;
                 uint16_t        reserved;
                 uint32_t        addr;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
         };
 
         struct msg_inet6 {
                 uint16_t        port;
                 uint16_t        reserved;
                 uint32_t        addr[4];
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
         };
         
         struct msg_dtun_find_node_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         padding;
@@ -188,7 +188,7 @@ namespace libcage {
         struct msg_dtun_find_value {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint16_t        state;
         };
@@ -196,7 +196,7 @@ namespace libcage {
         struct msg_dtun_find_value_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         flag;
@@ -211,7 +211,7 @@ namespace libcage {
         struct msg_dtun_request {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
         };
 
         struct msg_dtun_request_reply {
@@ -240,7 +240,7 @@ namespace libcage {
         struct msg_dht_find_node {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint16_t        padding;
         };
@@ -248,7 +248,7 @@ namespace libcage {
         struct msg_dht_find_node_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint8_t         num;
                 uint8_t         padding;
@@ -258,7 +258,7 @@ namespace libcage {
         struct msg_dht_find_value {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint16_t        keylen;
                 uint32_t        key[1];
@@ -280,7 +280,7 @@ namespace libcage {
         struct msg_dht_find_value_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint8_t         flag;
                 uint8_t         padding[3];
                 uint32_t        data[1];
@@ -288,7 +288,7 @@ namespace libcage {
 
         struct msg_dht_store {
                 msg_hdr         hdr;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
@@ -314,7 +314,7 @@ namespace libcage {
 
         struct msg_proxy_store {
                 msg_hdr         hdr;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
@@ -325,7 +325,7 @@ namespace libcage {
         struct msg_proxy_get {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint16_t        keylen;
                 uint16_t        reserved;
                 uint32_t        key[1];
@@ -334,7 +334,7 @@ namespace libcage {
         struct msg_proxy_get_reply {
                 msg_hdr         hdr;
                 uint32_t        nonce;
-                uint8_t         id[CAGE_ADDR_LEN];
+                uint8_t         id[CAGE_ID_LEN];
                 uint8_t         flag;
                 uint8_t         padding[3];
                 uint32_t        data[1];

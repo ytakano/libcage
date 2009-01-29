@@ -44,14 +44,18 @@ namespace libcage {
         void
         dgram::request_func::operator() (bool result, cageaddr &addr)
         {
+                _id i;
+
                 if (result) {
                         p_dgram->send_queue(dst);
                 } else {
-                        _id i;
-
                         i.id = dst;
                         p_dgram->m_queue.erase(i);
                 }
+
+                i.id = dst;
+
+                p_dgram->m_requesting.erase(i);
         }
 
         void
@@ -210,12 +214,12 @@ namespace libcage {
                 if (dst.domain == domain_inet) {
                         in_ptr in;
                         in = boost::get<in_ptr>(dst.saddr);
-                        m_udp.sendto(&dgram, size, (sockaddr*)in.get(),
+                        m_udp.sendto(dgram, size, (sockaddr*)in.get(),
                                      sizeof(sockaddr_in));
                 } else if (dst.domain == domain_inet6) {
                         in6_ptr in6;
                         in6 = boost::get<in6_ptr>(dst.saddr);
-                        m_udp.sendto(&dgram, size, (sockaddr*)in6.get(),
+                        m_udp.sendto(dgram, size, (sockaddr*)in6.get(),
                                      sizeof(sockaddr_in6));
                 }
         }
@@ -238,10 +242,11 @@ namespace libcage {
                 dgram = (msg_dgram*)msg;
 
                 size = ntohs(dgram->hdr.len);
-                size -= sizeof(msg_hdr);
 
                 if (size != len)
                         return;
+
+                size -= sizeof(msg_hdr);
 
                 dst.from_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
 
@@ -252,6 +257,7 @@ namespace libcage {
                 }
 
                 src.from_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+
 
                 // send advertise
                 if (from->sa_family == PF_INET) {

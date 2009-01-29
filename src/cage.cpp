@@ -233,7 +233,7 @@ namespace libcage {
         cage::cage() : m_receiver(*this),
                        m_peers(m_timer),
                        m_nat(m_udp, m_timer, m_id, m_peers, m_proxy),
-                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp),
+                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp, m_proxy),
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,
                                m_advertise),
@@ -259,7 +259,7 @@ namespace libcage {
         {
                 boost::shared_ptr<uint160_t> id(new uint160_t);
 
-                id->from_binary(dst, CAGE_ADDR_LEN);
+                id->from_binary(dst, CAGE_ID_LEN);
 
                 if (m_nat.get_state() == node_symmetric) {
                         m_proxy.send_dgram(buf, len, id);
@@ -432,6 +432,12 @@ namespace libcage {
                         m_dtun.find_node(host, port, &no_action);
                         m_dht.find_node(host, port, f);
                 }
+        }
+
+        void
+        cage::get_id(void *addr)
+        {
+                m_id.to_binary(addr, CAGE_ID_LEN);
         }
 
 #ifdef DEBUG_NAT

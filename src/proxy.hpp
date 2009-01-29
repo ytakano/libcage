@@ -88,6 +88,8 @@ namespace libcage {
                 void            forward_msg(msg_dgram *data, int size,
                                             sockaddr *from);
 
+                bool            is_registered(id_ptr id);
+
                 void            set_callback(dgram::callback func);
 
                 void            refresh();

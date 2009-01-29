@@ -69,6 +69,8 @@ namespace libcage {
                 void            set_dgram_callback(dgram::callback func);
                 void            unset_dgram_callback();
 
+                void            get_id(void *addr);
+
                 void            set_global() { m_nat.set_state_global(); }
 
 #ifdef DEBUG_NAT

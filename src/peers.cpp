@@ -143,6 +143,7 @@ namespace libcage {
 
                 addr.domain = a.domain;
                 addr.saddr  = a.saddr;
+                addr.id     = id;
 
                 return addr;
         }
@@ -169,6 +170,8 @@ namespace libcage {
                 _id   i;
 
                 i.id = id;
+                i.t  = 0;
+                i.session = 0;
 
                 m_map.left.erase(i);
         }
@@ -350,6 +353,8 @@ namespace libcage {
                 _id      i;
 
                 i.id = id;
+                i.t  = 0;
+                i.session = 0;
 
                 _bimap::left_iterator it;
                 it = m_map.left.find(i);

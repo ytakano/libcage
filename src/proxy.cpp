@@ -247,8 +247,11 @@ namespace libcage {
                 char buf[1024 * 4];
                 int  size;
 
-                if (! m_is_registered)
+                if (! m_is_registered) {
+                        if (m_nat.get_state() == node_symmetric)
+                                register_node();
                         return;
+                }
 
                 size = sizeof(*store) - sizeof(store->data) + keylen + valuelen;
 
@@ -424,6 +427,9 @@ namespace libcage {
                 char     buf[1024 * 4];
 
                 if (! m_is_registered) {
+                        if (m_nat.get_state() == node_symmetric)
+                                register_node();
+
                         func(false, NULL, 0);
                         return;
                 }
@@ -537,8 +543,12 @@ namespace libcage {
                 try {
                         addr = m_peers.get_addr(id);
                 } catch (std::out_of_range) {
-                        if (! m_is_registered)
+                        if (! m_is_registered) {
+                                if (m_nat.get_state() == node_symmetric)
+                                        register_node();
+
                                 return;
+                        }
 
                         addr = m_server;
                 }
@@ -555,6 +565,8 @@ namespace libcage {
                 dgram = (msg_proxy_dgram*)buf;
 
                 memcpy(dgram->data, msg, len);
+
+                addr.id = id;
 
                 send_msg(m_udp, &dgram->hdr, size, type_proxy_dgram,
                          addr, m_id);
@@ -663,5 +675,18 @@ namespace libcage {
                                 ++it;
                         }
                 }
+        }
+
+        bool
+        proxy::is_registered(id_ptr id)
+        {
+                _id i;
+
+                i.id = id;
+
+                if (m_registered.find(i) == m_registered.end())
+                        return false;
+                else
+                        return true;
         }
 }

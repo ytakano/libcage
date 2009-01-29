@@ -90,6 +90,8 @@ namespace libcage {
                 tm->p_advertise = this;
                 tm->nonce       = nonce;
 
+                m_advertising[nonce] = tm;
+
 
                 // start timer
                 timeval tval;
