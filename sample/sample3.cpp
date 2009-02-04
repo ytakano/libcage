@@ -99,7 +99,7 @@ public:
 };
 
 int
-main(int argc, char *argv)
+main(int argc, char *argv[])
 {
 #ifdef WIN32
         // initialize winsock
