@@ -605,7 +605,7 @@ namespace libcage {
                 int             shift;
                 int             i, j;
 
-                bcopy(&rhs, &bits, sizeof(bits));
+                memcpy(&bits, &rhs, sizeof(bits));
 
                 // bits = *((uint64_t*)&rhs);
 
@@ -614,7 +614,7 @@ namespace libcage {
                 exp_part >>= 52;
                 exp_part -= 1023;
 
-                bzero(flo, sizeof(flo));
+                memset(flo, 0, sizeof(flo));
 
                 flo[N - 1] = 1;
 
@@ -857,7 +857,7 @@ namespace libcage {
         void
         bn<T, N>::fill_zero()
         {
-                bzero(m_num, N * sizeof(T));
+                memset(m_num, 0, N * sizeof(T));
         }
 
         template <typename T, int N>
@@ -899,7 +899,7 @@ namespace libcage {
 
                 num = (T*)buf;
 
-                bzero(m_num, sizeof(m_num));
+                memset(m_num, 0, sizeof(m_num));
 
                 for (i = 0; i < N && len >= (int)sizeof(T);
                      i++, len -= (int)sizeof(T))
