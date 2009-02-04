@@ -929,8 +929,10 @@ namespace libcage {
                 return true;
         }
 
-        static char *hexstr[16] = {"0", "1", "2", "3", "4", "5", "6", "7",
-                                   "8", "9", "a", "b", "c", "d", "e", "f"};
+        static const char *hexstr[16] = {"0", "1", "2", "3",
+                                         "4", "5", "6", "7",
+                                         "8", "9", "a", "b",
+                                         "c", "d", "e", "f"};
 
         template <typename T, int N>
         std::string

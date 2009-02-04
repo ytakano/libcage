@@ -44,6 +44,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define CAGE_ID_LEN 20
 
