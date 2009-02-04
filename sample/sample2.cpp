@@ -63,7 +63,7 @@ timer_callback(int fd, short ev, void *arg)
 }
 
 int
-main(int argc, char *argv)
+main(int argc, char *argv[])
 {
 #ifdef WIN32
         // initialize winsock
