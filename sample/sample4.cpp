@@ -41,8 +41,8 @@ timer_callback(int fd, short ev, void *arg)
 
 
         // send datagram
-        uint8_t  id[CAGE_ID_LEN];
-        char    *str = "Hello, world!";
+        const char *str = "Hello, world!";
+        uint8_t     id[CAGE_ID_LEN];
 
         cage[n2].get_id(id);
 
