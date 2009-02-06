@@ -10,7 +10,7 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node    = 12;
+int max_node = 100;
 const int max_process = 1;
 
 const int port     = 10000;
@@ -168,11 +168,12 @@ timer_get(int fd, short ev, void *arg)
 int
 main(int argc, char *argv[])
 {
-        if (argc < 3)
+        if (argc < 4)
                 return -1;
 
-        host = argv[1];
-        host_port = atoi(argv[2]);
+        max_node = atoi(argv[1]);
+        host = argv[2];
+        host_port = atoi(argv[3]);
 
         int i;
 
