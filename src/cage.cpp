@@ -323,7 +323,7 @@ namespace libcage {
                 } else {
                         m_dtun.set_enabled(is_dtun);
                         m_dht.set_enabled_dtun(is_dtun);
-                        m_is_dtun = true;
+                        m_is_dtun = is_dtun;
                 }
 
                 m_udp.set_callback(&m_receiver);
