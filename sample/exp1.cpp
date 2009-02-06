@@ -24,6 +24,9 @@ double t1;
 
 event ev;
 
+int count = 0;
+const int max_count = 1000;
+
 void timer_callback(int fd, short ev, void *arg);
 void timer_get(int fd, short ev, void *arg);
 
@@ -58,7 +61,7 @@ public:
                 }
 
                 int v = p * max_node + n;
-                cage[n].put(&v, sizeof(v), &v, sizeof(v), 1 << 16 - 1);
+                cage[n].put(&v, sizeof(v), &v, sizeof(v), (1 << 16) - 1);
 
                 n++;
 
@@ -98,6 +101,9 @@ public:
                         double diff = t2 - t1;
                         printf("%lf\n", diff);
                 }
+
+                if (count > max_count)
+                        exit(0);
 
                 timeval tval;
 
@@ -152,6 +158,8 @@ timer_get(int fd, short ev, void *arg)
         get_callback func;
 
         t1 = gettimeofday_sec();
+
+        count++;
 
         cage[n3].get(&n, sizeof(n), func);
 }
