@@ -10,7 +10,7 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node    = 1250;
+const int max_node    = 12;
 const int max_process = 1;
 
 const int port     = 10000;
@@ -99,7 +99,7 @@ public:
 
                 if (result) {
                         double diff = t2 - t1;
-                        printf("%lf\n", diff);
+                        std::cout << diff << std::endl;
                 }
 
                 if (count > max_count)
