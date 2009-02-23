@@ -154,12 +154,10 @@ namespace libcage {
 
                 void            get_echo(msg_nat_echo &echo);
 
-#ifdef DEBUG_NAT
         public:
                 void            set_state_nat() { m_state = nat; }
                 void            set_state_cone_nat() { m_state = cone_nat; }
                 void            set_state_symmetric_nat() { m_state = symmetric_nat; }
-#endif // DEBUG_NAT
         };
 }
 
