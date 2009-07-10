@@ -141,7 +141,7 @@ namespace libcage {
                         timer_refresh(dtun &d) : m_dtun(d), n(0)
                         {
                                 timeval       tval;
-                                tval.tv_sec  = dtun::timer_interval * drand48();
+                                tval.tv_sec  = (long)((double)dtun::timer_interval * drand48());
                                 tval.tv_sec += dtun::timer_interval;
                                 tval.tv_usec = 0;
 

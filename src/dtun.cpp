@@ -1475,8 +1475,8 @@ namespace libcage {
                 // reschedule
                 timeval       tval;
 
-                tval.tv_sec  = dtun::timer_interval * drand48() +
-                        dtun::timer_interval;
+                tval.tv_sec  = (long)((double)dtun::timer_interval * drand48() +
+                                      (double)dtun::timer_interval);
                 tval.tv_usec = 0;
 
                 m_dtun.m_timer.set_timer(this, &tval);

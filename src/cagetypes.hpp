@@ -42,6 +42,8 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/variant.hpp>
 
+#include <netinet/in.h>
+#include <netinet/in6.h>
 
 namespace libcage {
         class peers;

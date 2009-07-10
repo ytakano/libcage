@@ -177,7 +177,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = proxy::timer_interval * drand48();
+                                t  = (time_t)((double)proxy::timer_interval * drand48());
                                 t += proxy::timer_interval;
 
                                 tval.tv_sec  = proxy::timer_interval;
@@ -191,7 +191,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = proxy::timer_interval * drand48();
+                                t  = (time_t)((double)proxy::timer_interval * drand48());
                                 t += proxy::timer_interval;
 
                                 tval.tv_sec  = t;

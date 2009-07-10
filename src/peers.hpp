@@ -64,7 +64,7 @@ namespace libcage {
                                 // reschedule
                                 timeval tval;
 
-                                tval.tv_sec = peers::timer_interval * drand48();
+                                tval.tv_sec = (long)((double)peers::timer_interval * drand48());
                                 tval.tv_sec += peers::timer_interval;
 
                                 tval.tv_usec = 0;
@@ -75,7 +75,7 @@ namespace libcage {
                         {
                                 timeval tval;
 
-                                tval.tv_sec = peers::timer_interval * drand48();
+                                tval.tv_sec = (long)((double)peers::timer_interval * drand48());
                                 tval.tv_sec += peers::timer_interval;
 
                                 tval.tv_usec = 0;

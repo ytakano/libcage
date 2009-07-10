@@ -84,7 +84,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = advertise::refresh_interval * drand48();
+                                t  = (time_t)((double)advertise::refresh_interval * drand48());
                                 t += advertise::refresh_interval;
 
                                 tval.tv_sec  = t;
@@ -98,7 +98,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = advertise::refresh_interval * drand48();
+                                t  = (time_t)((double)advertise::refresh_interval * drand48());
                                 t += advertise::refresh_interval;
 
                                 tval.tv_sec  = t;
