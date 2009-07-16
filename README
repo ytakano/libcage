@@ -1,0 +1,36 @@
+1. What?
+    libcage is NATs free DHT library which uses Kademlia. This enables
+    decentralized key-value store and peer-to-peer communications via NATs.
+    Even if both peers are under the NATs, peers can communicate each other.
+
+2. How to compile
+
+    libcage depends on:
+        libevent (http://www.monkey.org/~provos/libevent/)
+        boost (http://www.boost.org/)
+
+    and uses C++ compiler and OMake (http://omake.metaprl.org/index.html).
+    So, please install above libraries and applications before compile.
+   
+
+    $ cd libcage
+    $ omake
+
+3. Install
+    If you want to install to /usr/local, please type:
+    $ omake install
+
+    If you want to install to any other places, use PREFIX option.
+    For example, to install to /opt/local, please type:
+    $ omake install PREFIX=/opt/local
+
+4. Uninstall
+    If you installed to /user/local, please type:
+    $ omake uninstall
+
+    If you installed to any other places, use PREFIX option.
+    $ omake uninstall PREFIX=/opt/local
+
+    You can uninstall to delete files of libcage.
+    # rm -rf /usr/local/include/libcage
+    # rm /usr/local/lib/libcage*
