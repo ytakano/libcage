@@ -174,6 +174,7 @@ namespace libcage {
                         uint16_t        ttl;
                         time_t          stored_time;
                         id_ptr          id;
+                        bool            original;
                 };
 
                 // for ping

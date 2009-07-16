@@ -688,6 +688,7 @@ namespace libcage {
                 data.ttl         = ttl;
                 data.stored_time = time(NULL);
                 data.id          = func.id;
+                data.original    = true;
 
                 ik.key    = func.key;
                 ik.keylen = keylen;
@@ -807,6 +808,7 @@ namespace libcage {
                         data.ttl         = ttl;
                         data.stored_time = time(NULL);
                         data.id          = id;
+                        data.original    = false;
 
                         data.recvd.insert(i);
 
@@ -1233,6 +1235,11 @@ namespace libcage {
                         char          *p_key, *p_value;
                         bool           me = false;
                         time_t         diff;
+
+                        if (it->second.original) {
+                                ++it;
+                                continue;
+                        }
                         
                         p_dht->lookup(*it->second.id, num_find_node, nodes);
 
@@ -1326,10 +1333,46 @@ namespace libcage {
                 if (diff >= restore_interval) {
                         m_last_restore = time(NULL);
 
-                        restore_func func;
+                        restore_func rfunc;
 
-                        func.p_dht = this;
-                        find_node(m_id, func);
+                        rfunc.p_dht = this;
+                        find_node(m_id, rfunc);
+
+
+                        // store original key-value pair
+                        boost::unordered_map<id_key, stored_data>::iterator it;
+                        for (it = m_stored.begin(); it != m_stored.end();) {
+                                if (! it->second.original) {
+                                        ++it;
+                                        continue;
+                                }
+
+                                int ttl;
+
+                                ttl = (int)it->second.ttl -
+                                        (int)(it->second.stored_time -
+                                              time(NULL));
+
+                                if (ttl <= 0) {
+                                        m_stored.erase(it++);
+                                        continue;
+                                }
+
+
+                                store_func sfunc;
+
+                                sfunc.key      = it->second.key;
+                                sfunc.value    = it->second.value;
+                                sfunc.id       = it->second.id;
+                                sfunc.keylen   = it->second.keylen;
+                                sfunc.valuelen = it->second.valuelen;
+                                sfunc.ttl      = ttl;
+                                sfunc.p_dht    = this;
+
+                                find_node(*it->second.id, sfunc);
+
+                                ++it;
+                        }
                 }
         }
 

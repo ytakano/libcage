@@ -39,7 +39,7 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const int       dtun::num_find_node    = 6;
+        const int       dtun::num_find_node    = 10;
         const int       dtun::max_query        = 3;
         const int       dtun::query_timeout    = 2;
         const int       dtun::request_retry    = 2;
