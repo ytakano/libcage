@@ -36,7 +36,7 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const int       dht::num_find_node    = 6;
+        const int       dht::num_find_node    = 10;
         const int       dht::max_query        = 3;
         const int       dht::query_timeout    = 3;
         const int       dht::restore_interval = 120;
@@ -725,11 +725,27 @@ namespace libcage {
                 memcpy(p_value, value.get(), valuelen);
 
                 // send store
+                bool me = false;
                 BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (*addr.id == p_dht->m_id)
+                        if (*addr.id == p_dht->m_id) {
+                                me = true;
                                 continue;
+                        }
 
                         p_dht->send_msg(&msg->hdr, size, type_dht_store, addr);
+                }
+
+                if (nodes.size() >= (uint32_t)num_find_node) {
+                        id_key ik;
+                        ik.key    = key;
+                        ik.keylen = keylen;
+                        ik.id     = id;
+
+                        if (me) {
+                                p_dht->m_stored[ik].original = false;
+                        } else {
+                                p_dht->m_stored.erase(ik);
+                        }
                 }
         }
 
