@@ -1363,13 +1363,10 @@ namespace libcage {
                                         continue;
                                 }
 
-                                int ttl;
+                                time_t diff;
+                                diff = time(NULL) - it->second.stored_time;
 
-                                ttl = (int)it->second.ttl -
-                                        (int)(it->second.stored_time -
-                                              time(NULL));
-
-                                if (ttl <= 0) {
+                                if (diff > it->second.ttl) {
                                         m_stored.erase(it++);
                                         continue;
                                 }
@@ -1382,7 +1379,7 @@ namespace libcage {
                                 sfunc.id       = it->second.id;
                                 sfunc.keylen   = it->second.keylen;
                                 sfunc.valuelen = it->second.valuelen;
-                                sfunc.ttl      = ttl;
+                                sfunc.ttl      = it->second.ttl - diff;
                                 sfunc.p_dht    = this;
 
                                 find_node(*it->second.id, sfunc);
