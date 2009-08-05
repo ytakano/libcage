@@ -41,7 +41,7 @@ namespace libcage {
         const int       dht::query_timeout    = 3;
         const int       dht::restore_interval = 120;
         const int       dht::timer_interval   = 60;
-
+        const int       dht::original_put_num = 5;
 
         size_t
         hash_value(const dht::_id &i)
@@ -688,7 +688,7 @@ namespace libcage {
                 data.ttl         = ttl;
                 data.stored_time = time(NULL);
                 data.id          = func.id;
-                data.original    = true;
+                data.original    = original_put_num;
 
                 ik.key    = func.key;
                 ik.keylen = keylen;
@@ -741,10 +741,12 @@ namespace libcage {
                         ik.keylen = keylen;
                         ik.id     = id;
 
-                        if (me) {
-                                p_dht->m_stored[ik].original = false;
+                        if (p_dht->m_stored[ik].original > 0) {
+                                p_dht->m_stored[ik].original--;
                         } else {
-                                p_dht->m_stored.erase(ik);
+                                if (!me) {
+                                        p_dht->m_stored.erase(ik);
+                                }
                         }
                 }
         }
@@ -824,7 +826,7 @@ namespace libcage {
                         data.ttl         = ttl;
                         data.stored_time = time(NULL);
                         data.id          = id;
-                        data.original    = false;
+                        data.original    = 0;
 
                         data.recvd.insert(i);
 
@@ -1252,7 +1254,7 @@ namespace libcage {
                         bool           me = false;
                         time_t         diff;
 
-                        if (it->second.original) {
+                        if (it->second.original > 0) {
                                 ++it;
                                 continue;
                         }
@@ -1358,7 +1360,7 @@ namespace libcage {
                         // store original key-value pair
                         boost::unordered_map<id_key, stored_data>::iterator it;
                         for (it = m_stored.begin(); it != m_stored.end();) {
-                                if (! it->second.original) {
+                                if (it->second.original == 0) {
                                         ++it;
                                         continue;
                                 }

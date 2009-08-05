@@ -59,6 +59,7 @@ namespace libcage {
                 static const int        query_timeout;
                 static const int        restore_interval;
                 static const int        timer_interval;
+                static const int        original_put_num;
 
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -174,7 +175,7 @@ namespace libcage {
                         uint16_t        ttl;
                         time_t          stored_time;
                         id_ptr          id;
-                        bool            original;
+                        int             original;
                 };
 
                 // for ping
