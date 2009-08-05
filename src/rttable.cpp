@@ -374,47 +374,35 @@ namespace libcage {
                                 printf("    %02d: ID = %s,\n", n, str.c_str());
 
                                 if (j->domain == domain_inet) {
-                                        in_ptr  in;
-                                        char   *addr; 
+                                        in_ptr   in;
+                                        uint8_t *addr; 
 
                                         in = boost::get<in_ptr>(j->saddr);
 
-                                        addr = (char*)&in->sin_addr.s_addr;
+                                        addr = (uint8_t*)&in->sin_addr.s_addr;
 
-                                        printf("        IP = %d.%d.%d.%d, ",
-                                               (uint32_t)addr[0],
-                                               (uint32_t)addr[1],
-                                               (uint32_t)addr[2],
-                                               (uint32_t)addr[3]);
+                                        printf("        IP = %u.%u.%u.%u, ",
+                                               addr[0], addr[1],
+                                               addr[2], addr[3]);
 
                                         printf("Port = %d\n",
                                                ntohs(in->sin_port));
 
                                 } else if (j->domain == domain_inet6) {
-                                        in6_ptr in6;
-                                        char   *addr;
+                                        in6_ptr  in6;
+                                        uint8_t *addr;
 
                                         in6 = boost::get<in6_ptr>(j->saddr);
 
-                                        addr = (char*)in6->sin6_addr.s6_addr;
+                                        addr = (uint8_t*)in6->sin6_addr.s6_addr;
 
                                         printf("        IP = %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x, ",
-                                               (uint32_t)addr[ 0],
-                                               (uint32_t)addr[ 1],
-                                               (uint32_t)addr[ 2],
-                                               (uint32_t)addr[ 3],
-                                               (uint32_t)addr[ 4],
-                                               (uint32_t)addr[ 5],
-                                               (uint32_t)addr[ 6],
-                                               (uint32_t)addr[ 7],
-                                               (uint32_t)addr[ 8],
-                                               (uint32_t)addr[ 9],
-                                               (uint32_t)addr[10],
-                                               (uint32_t)addr[11],
-                                               (uint32_t)addr[12],
-                                               (uint32_t)addr[13],
-                                               (uint32_t)addr[14],
-                                               (uint32_t)addr[15]);
+                                               addr[ 0], addr[ 1], addr[ 2],
+                                               addr[ 3], addr[ 4], addr[ 5],
+                                               addr[ 6], addr[ 7], addr[ 8],
+                                               addr[ 9], addr[10], addr[11],
+                                               addr[12], addr[13], addr[14],
+                                               addr[15]);
 
                                         printf("Port = %d\n",
                                                ntohs(in6->sin6_port));

@@ -1,4 +1,4 @@
-CXXFLAGS += -Wall -O2 -g -fPIC
+CXXFLAGS += -Wall -O3 -g -fPIC
 # ASFLAGS +=
 LDFLAGS += -levent -lcrypto
 # INCLUDES +=
