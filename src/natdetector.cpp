@@ -64,7 +64,7 @@ namespace libcage {
                                                int fromlen, bool is_timeout)
         {
                 if (is_timeout) {
-                        m_nat->m_state = undefined;
+                        m_nat->m_state = nat;
                         m_udp.close();
 
                         // delete this

@@ -71,6 +71,7 @@ namespace libcage {
 
                 if (event == EV_TIMEOUT) {
                         func(udp, NULL, 0, NULL, 0, true);
+                        return;
                 }
 
 

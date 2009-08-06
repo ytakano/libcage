@@ -70,6 +70,7 @@ namespace libcage {
                 void            unset_dgram_callback();
 
                 void            get_id(void *addr);
+                node_state      get_nat_state() { return m_nat.get_state(); }
 
                 void            set_global() { m_nat.set_state_global(); }
 
