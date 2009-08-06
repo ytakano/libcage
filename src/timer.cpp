@@ -75,8 +75,9 @@ namespace libcage {
         void
         timer::unset_timer(callback *func)
         {
-                if (m_events[func] != NULL) {
+                if (m_events.find(func) != m_events.end()) {
                         evtimer_del(m_events[func].get());
+                        m_events.erase(func);
                 }
         }
 
