@@ -39,6 +39,8 @@
 #include "cagetypes.hpp"
 
 namespace libcage {
+        bool cage::m_is_srand = false;
+
         void
         cage::udp_receiver::operator() (udphandler &udp, void *buf, int len,
                                         sockaddr *from, int fromlen,
@@ -246,7 +248,10 @@ namespace libcage {
                 RAND_pseudo_bytes(buf, sizeof(buf));
                 m_id.from_binary(buf, sizeof(buf));
 
-                srand48(time(NULL));
+                if (! m_is_srand) {
+                        m_is_srand = true;
+                        srand48(time(NULL));
+                }
         }
 
         cage::~cage()

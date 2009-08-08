@@ -37,7 +37,7 @@
 
 namespace libcage {
         const int       dht::num_find_node    = 10;
-        const int       dht::max_query        = 3;
+        const int       dht::max_query        = 6;
         const int       dht::query_timeout    = 3;
         const int       dht::restore_interval = 120;
         const int       dht::timer_interval   = 60;

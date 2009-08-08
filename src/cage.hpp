@@ -103,6 +103,8 @@ namespace libcage {
                         cage   *p_cage;
                 };
 
+                static bool     m_is_srand;
+
                 udphandler      m_udp;
                 timer           m_timer;
                 uint160_t       m_id;
