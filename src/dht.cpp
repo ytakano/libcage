@@ -694,7 +694,11 @@ namespace libcage {
                 ik.keylen = keylen;
                 ik.id     = func.id;
 
-                m_stored[ik] = data;
+                if (ttl == 0) {
+                        m_stored.erase(ik);
+                } else {
+                        m_stored[ik] = data;
+                }
         }
 
         void
@@ -802,9 +806,12 @@ namespace libcage {
                 it = m_stored.find(ik);
 
                 if (it != m_stored.end()) {
-                        if (it->second.valuelen == valuelen &&
-                            memcmp(it->second.value.get(),
-                                   value.get(), valuelen) == 0) {
+//                        if (it->second.valuelen == valuelen &&
+//                            memcmp(it->second.value.get(),
+//                                   value.get(), valuelen) == 0) {
+                        if (ttl == 0) {
+                                m_stored.erase(ik);
+                        } else {
                                 _id i;
 
                                 i.id = addr.id;
@@ -813,6 +820,7 @@ namespace libcage {
                                 it->second.stored_time = time(NULL);
                                 it->second.recvd.insert(i);
                         }
+//                        }
                 } else {
                         stored_data data;
                         _id i;

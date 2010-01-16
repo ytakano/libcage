@@ -30,13 +30,18 @@
 extern char *optarg;
 extern int optind, opterr, optopt;
 
-boost::unordered_map<int, boost::shared_ptr<event> > events;
-boost::unordered_map<std::string, boost::shared_ptr<libcage::cage> > cages;
 
 typedef boost::char_separator<char> char_separator;
 typedef boost::tokenizer<char_separator> tokenizer;
 typedef boost::escaped_list_separator<char> esc_separator;
 typedef boost::tokenizer<esc_separator> esc_tokenizer;
+typedef boost::unordered_map<std::string, boost::shared_ptr<libcage::cage> > name2node_type;
+typedef boost::unordered_map<int, boost::shared_ptr<event> > sock2ev_type;
+
+
+sock2ev_type   sock2ev;
+name2node_type name2node;
+
 
 bool start_listen(int port);
 void callback_accept(int fd, short ev, void *arg);
@@ -45,13 +50,19 @@ void replace(std::string &str, std::string from, std::string to);
 void do_command(int sockfd, std::string command);
 void process_new(int sockfd, esc_tokenizer::iterator &it,
 		 const esc_tokenizer::iterator &end);
+void process_delete(int sockfd, esc_tokenizer::iterator &it,
+                    const esc_tokenizer::iterator &end);
+void process_put(int sockfd, esc_tokenizer::iterator &it,
+                 const esc_tokenizer::iterator &end);
 
 static const char * const SUCCESSED_NEW         = "200";
+static const char * const SUCCESSED_DELETE      = "201";
 
 static const char * const ERR_UNKNOWN_COMMAND   = "400";
 static const char * const ERR_INVALID_STATEMENT = "401";
 static const char * const ERR_CANNOT_OPEN_PORT  = "402";
 static const char * const ERR_ALREADY_EXIST     = "403";
+static const char * const ERR_DEL_NO_SUCH_NODE  = "404";
 
 /*
   new,node_name,port_number |
@@ -60,10 +71,13 @@ static const char * const ERR_ALREADY_EXIST     = "403";
      result,400 | 401,comment |
      result,402 | 403,new,node_name,port_number,comment |
 
-  delete node_name
+  delete,node_name
+  -> result,201,delete,node_name |
+     result,404,delete,node_name,comment
 
-  join node_name 192.168.0.1 10000
-  put node_name "key" "value" ttl
+  put,node_name,key,value,ttl
+
+
   get node_name "key"
  */
 
@@ -154,7 +168,7 @@ callback_accept(int sockfd, short ev, void *arg)
 
                 boost::shared_ptr<event> readev(new event);
 
-                events[fd] = readev;
+                sock2ev[fd] = readev;
 
                 event_set(readev.get(), fd, EV_READ | EV_PERSIST,
                           &callback_read, NULL);
@@ -181,8 +195,8 @@ callback_read(int sockfd, short ev, void *arg)
                                 perror("recv");
                         }
 
-                        event_del(events[sockfd].get());
-                        events.erase(sockfd);
+                        event_del(sock2ev[sockfd].get());
+                        sock2ev.erase(sockfd);
 
                         shutdown(sockfd, SHUT_RDWR);
 
@@ -233,6 +247,10 @@ do_command(int sockfd, std::string command)
                 process_new(sockfd, ++it, tokens.end());
         } else if (*it == "delete") {
                 D(std::cout << "process delete" << std::endl);
+                process_delete(sockfd, ++it, tokens.end());
+        } else if (*it == "put") {
+                D(std::cout << "process put" << std::endl);
+                process_put(sockfd, ++it, tokens.end());
         } else {
                 D(std::cout << "unknown command: " << *it << std::endl);
 
@@ -308,9 +326,9 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
                     << "\n    is_global: " << is_global << std::endl);
 
         // check whether the node_name has been used already or not
-        if (cages.find(node_name) != cages.end()) {
+        if (name2node.find(node_name) != name2node.end()) {
                 // the node name has been already used
-                // format: result,403,new,node_name,port_number,comment |
+                // format: result,403,new,node_name,port_number,comment
                 snprintf(result, sizeof(result),
                          "result,%s,new,%s,%d,the node name '%s' exists already\n",
                          ERR_ALREADY_EXIST, esc_node_name.c_str(), port,
@@ -324,7 +342,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // open port
         if (c->open(PF_INET, port) == false) {
                 // cannot open port
-                // format: result,402,new,node_name,port_number,comment |
+                // format: result,402,new,node_name,port_number,comment
                 snprintf(result, sizeof(result),
                          "result,%s,new,%s,%d,cannot open port(%d)\n",
                          ERR_CANNOT_OPEN_PORT, esc_node_name.c_str(),
@@ -338,9 +356,9 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
                 c->set_global();
         }
 
-        cages[node_name] = c;
+        name2node[node_name] = c;
 
-        // send the result
+        // send result
         // format: result,200,new,node_name,port_number
         snprintf(result, sizeof(result), "result,%s,new,%s,%d\n", 
                  SUCCESSED_NEW, esc_node_name.c_str(), port);
@@ -348,4 +366,57 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         send(sockfd, result, strlen(result), 0);
 
         return;
+}
+
+void
+process_delete(int sockfd, esc_tokenizer::iterator &it,
+               const esc_tokenizer::iterator &end)
+{
+        name2node_type::iterator it_n2n;
+        std::string node_name;
+        std::string esc_node_name;
+        char        result[1024 * 4];
+
+
+        if (it == end) {
+                // there is no node_name
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,node name is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        node_name = *it;
+        esc_node_name = *it;
+        replace(esc_node_name, ",", "\\,");
+
+        it_n2n = name2node.find(node_name);
+        if (it_n2n == name2node.end()) {
+                // invalid node name
+                // format: result,404,delete,node_name,comment
+                snprintf(result, sizeof(result),
+                         "result,%s,delete,%s,no such node named '%s'\n",
+                         ERR_DEL_NO_SUCH_NODE, esc_node_name.c_str(),
+                         esc_node_name.c_str());
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        D(std::cout << "    node_name: " << node_name);
+
+        name2node.erase(it_n2n);
+
+        // send result
+        // format: result,201,delete,node_name
+        snprintf(result, sizeof(result),
+                 "result,%s,delete,%s\n",
+                 SUCCESSED_DELETE, esc_node_name.c_str());
+        send(sockfd, result, strlen(result), 0);
+}
+
+void process_put(int sockfd, esc_tokenizer::iterator &it,
+                 const esc_tokenizer::iterator &end)
+{
+
 }
