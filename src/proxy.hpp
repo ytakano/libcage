@@ -67,7 +67,8 @@ namespace libcage {
 
                 void            recv_register(void *msg, sockaddr *from);
                 void            recv_register_reply(void *msg, sockaddr *from);
-                void            recv_store(void *msg, int len, sockaddr *from);
+                void            recv_store(void *msg, int len,
+                                           sockaddr *from);
                 void            recv_get(void *msg, int len);
                 void            recv_get_reply(void *msg, int len);
                 void            recv_dgram(void *msg, int len);
@@ -76,11 +77,11 @@ namespace libcage {
                 void            register_node();
 
                 void            store(const uint160_t &id,
-                                      void *key, uint16_t keylen,
-                                      void *value, uint16_t valuelen,
+                                      const void *key, uint16_t keylen,
+                                      const void *value, uint16_t valuelen,
                                       uint16_t ttl);
                 void            get(const uint160_t &id,
-                                    void *key, uint16_t keylen,
+                                    const void *key, uint16_t keylen,
                                     dht::callback_find_value func);
 
                 void            send_dgram(const void *msg, int len, id_ptr id);

@@ -56,10 +56,10 @@ namespace libcage {
 
                 bool            open(int domain, uint16_t port,
                                      bool is_dtun = true);
-                void            put(void *key, uint16_t keylen,
-                                    void *value, uint16_t valuelen,
+                void            put(const void *key, uint16_t keylen,
+                                    const void *value, uint16_t valuelen,
                                     uint16_t ttl);
-                void            get(void *key, uint16_t keylen,
+                void            get(const void *key, uint16_t keylen,
                                     dht::callback_find_value func);
                 void            join(std::string host, int port,
                                      callback_join func);
@@ -69,8 +69,8 @@ namespace libcage {
                 void            set_dgram_callback(dgram::callback func);
                 void            unset_dgram_callback();
 
-                void            get_id(void *addr);
-                node_state      get_nat_state() { return m_nat.get_state(); }
+                void            get_id(void *addr) const;
+                node_state      get_nat_state() const { return m_nat.get_state(); }
 
                 void            set_global() { m_nat.set_state_global(); }
 
@@ -78,7 +78,7 @@ namespace libcage {
                 void            set_cone_nat() { m_nat.set_state_cone_nat(); }
                 void            set_symmetric_nat() { m_nat.set_state_symmetric_nat(); }
 
-                void            print_state();
+                void            print_state() const;
 
 
         private:

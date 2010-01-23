@@ -239,8 +239,8 @@ namespace libcage {
         }
 
         void
-        proxy::store(const uint160_t &id, void *key, uint16_t keylen,
-                     void *value, uint16_t valuelen, uint16_t ttl)
+        proxy::store(const uint160_t &id, const void *key, uint16_t keylen,
+                     const void *value, uint16_t valuelen, uint16_t ttl)
         {
                 msg_proxy_store *store;
                 char *p_value;
@@ -416,7 +416,7 @@ namespace libcage {
         }
 
         void
-        proxy::get(const uint160_t &id, void *key, uint16_t keylen,
+        proxy::get(const uint160_t &id, const void *key, uint16_t keylen,
                    dht::callback_find_value func)
         {
                 boost::shared_array<char> p_key;

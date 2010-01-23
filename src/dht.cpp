@@ -159,7 +159,7 @@ namespace libcage {
 
         void
         dht::find_nv(const uint160_t &dst, callback_func func,
-                     bool is_find_value, void *key = NULL, int keylen = 0)
+                     bool is_find_value, const void *key = NULL, int keylen = 0)
         {
                 query_ptr q(new query);
 
@@ -654,8 +654,8 @@ namespace libcage {
         }
 
         void
-        dht::store(const uint160_t &id, void *key, uint16_t keylen,
-                   void *value, uint16_t valuelen, uint16_t ttl)
+        dht::store(const uint160_t &id, const void *key, uint16_t keylen,
+                   const void *value, uint16_t valuelen, uint16_t ttl)
         {
                 // store to dht network
                 store_func func;
@@ -843,7 +843,7 @@ namespace libcage {
         }
 
         void
-        dht::find_value(const uint160_t &dst, void *key, uint16_t keylen,
+        dht::find_value(const uint160_t &dst, const void *key, uint16_t keylen,
                         callback_find_value func)
         {
                 node_state state = m_nat.get_state();

@@ -60,6 +60,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
 static const char * const SUCCESSED_NEW         = "200";
 static const char * const SUCCESSED_DELETE      = "201";
 static const char * const SUCCESSED_JOIN        = "202";
+static const char * const SUCCESSED_PUT         = "203";
 
 static const char * const ERR_UNKNOWN_COMMAND   = "400";
 static const char * const ERR_INVALID_STATEMENT = "401";
@@ -68,6 +69,7 @@ static const char * const ERR_ALREADY_EXIST     = "403";
 static const char * const ERR_DEL_NO_SUCH_NODE  = "404";
 static const char * const ERR_JOIN_NO_SUCH_NODE = "405";
 static const char * const ERR_JOIN_FAILED       = "406";
+static const char * const ERR_PUT_NO_SUCH_NODE  = "407";
 
 /*
   new,node_name,port_number |
@@ -86,7 +88,9 @@ static const char * const ERR_JOIN_FAILED       = "406";
      result,405 | 406,join,node_name,host,port,comment
 
   put,node_name,key,value,ttl
-
+  -> result,203,node_name,put,key,value,ttl
+     result,400 | 401,comment
+     result,407,node_name,key,value,ttl
 
   get node_name "key"
  */
@@ -316,9 +320,11 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         } catch (boost::bad_lexical_cast) {
                 // no integer
                 // format: result,401,comment
+                std::string esc_port = *it;
+                replace(esc_port, ",", "\\,");
                 snprintf(result, sizeof(result),
                          "result,401,'%s' is not a valid number\n",
-                         it->c_str());
+                         esc_port.c_str());
                 send(sockfd, result, strlen(result), 0);
                 return;
         }
@@ -520,9 +526,11 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
         } catch (boost::bad_lexical_cast) {
                 // no integer
                 // format: result,401,comment
+                std::string esc_port = *it;
+                replace(esc_port, ",", "\\,");
                 snprintf(result, sizeof(result),
                          "result,401,'%s' is not a valid number\n",
-                         it->c_str());
+                         esc_port.c_str());
                 send(sockfd, result, strlen(result), 0);
                 return;
         }
@@ -556,6 +564,105 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
                  const esc_tokenizer::iterator &end)
 {
         std::string node_name;
+        std::string esc_node_name;
         std::string key, value;
+        std::string esc_key, esc_value;
         uint16_t    ttl;
+        char        result[1024 * 4];
+
+        if (it == end) {
+                // there is no node_name
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,node name is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        node_name = *it;
+        esc_node_name = node_name;
+        replace(esc_node_name, ",", "\\,");
+
+
+        ++it;
+        if (it == end) {
+                // there is no key
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,key is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        key = *it;
+        esc_key = key;
+        replace(esc_key, ",", "\\,");
+
+
+        ++it;
+        if (it == end) {
+                // there is no value
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,value is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        value = *it;
+        esc_value = value;
+        replace(esc_value, ",", "\\,");
+
+
+        ++it;
+        if (it == end) {
+                // there is no ttl
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,ttl is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+
+        try {
+                ttl = boost::lexical_cast<uint16_t>(*it);
+        } catch (boost::bad_lexical_cast) {
+                // no integer
+                // format: result,401,comment
+                std::string esc_ttl = *it;
+                replace(esc_ttl, ",", "\\,");
+                snprintf(result, sizeof(result),
+                         "result,401,'%s' is not a valid number\n",
+                         esc_ttl.c_str());
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+
+        name2node_type::iterator it_n2n;
+        it_n2n = name2node.find(node_name);
+        if (it_n2n == name2node.end()) {
+                // invalid node name
+                // format: result,407,node_name,key,value,ttl,comment
+                snprintf(result, sizeof(result),
+                         "result,%s,put,%s,%s,%s,%d,no such node named '%s'\n",
+                         ERR_PUT_NO_SUCH_NODE, esc_node_name.c_str(),
+                         esc_key.c_str(), esc_value.c_str(), ttl,
+                         esc_node_name.c_str());
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        it_n2n->second->put(key.c_str(), key.length(),
+                            value.c_str(), value.length(), ttl);
+
+
+        // send result of the success
+        // format: result,203,node_name,key,value,ttl
+        snprintf(result, sizeof(result),
+                 "result,%s,put,%s,%s,%s,%d\n",
+                 SUCCESSED_PUT, esc_node_name.c_str(),
+                 esc_key.c_str(), esc_value.c_str(), ttl);
+        send(sockfd, result, strlen(result), 0);
 }

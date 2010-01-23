@@ -94,11 +94,11 @@ namespace libcage {
                 void            find_node(sockaddr *saddr,
                                           callback_find_node func);
                 void            find_value(const uint160_t &dst,
-                                           void *key, uint16_t keylen,
+                                           const void *key, uint16_t keylen,
                                            callback_find_value func);
                 void            store(const uint160_t &id,
-                                      void *key, uint16_t keylen,
-                                      void *value, uint16_t valuelen,
+                                      const void *key, uint16_t keylen,
+                                      const void *value, uint16_t valuelen,
                                       uint16_t ttl);
 
                 void            set_enabled_dtun(bool flag);
@@ -316,7 +316,7 @@ namespace libcage {
 
                 void            find_nv(const uint160_t &dst,
                                         callback_func func, bool is_find_value,
-                                        void *key, int keylen);
+                                        const void *key, int keylen);
                 void            send_find(query_ptr q);
                 void            send_find_node(cageaddr &dst, query_ptr q);
                 void            send_find_value(cageaddr &dst, query_ptr q);

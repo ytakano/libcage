@@ -358,14 +358,14 @@ namespace libcage {
         }
 
         void
-        rttable::print_table()
+        rttable::print_table() const
         {
                 std::string str;
-                std::map<int, std::list<cageaddr> >::iterator i;
-                std::list<cageaddr>::iterator                 j;
+                std::map<int, std::list<cageaddr> >::const_iterator i;
+                std::list<cageaddr>::const_iterator                 j;
 
                 for (i = m_table.begin(); i != m_table.end(); ++i) {
-                        std::list<cageaddr> &row = i->second;
+                        const std::list<cageaddr> &row = i->second;
                         printf("  i = %d\n", i->first);
 
                         int n = 1;

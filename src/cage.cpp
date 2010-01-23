@@ -274,7 +274,7 @@ namespace libcage {
         }
 
         void
-        cage::print_state()
+        cage::print_state() const
         {
                 std::string str;
 
@@ -357,8 +357,8 @@ namespace libcage {
         }
 
         void
-        cage::put(void *key, uint16_t keylen, void *value, uint16_t valuelen,
-                  uint16_t ttl)
+        cage::put(const void *key, uint16_t keylen,
+                  const void *value, uint16_t valuelen, uint16_t ttl)
         {
                 EVP_MD_CTX      ctx;
                 uint160_t       id;
@@ -381,7 +381,8 @@ namespace libcage {
         }
 
         void
-        cage::get(void *key, uint16_t keylen, dht::callback_find_value func)
+        cage::get(const void *key, uint16_t keylen,
+                  dht::callback_find_value func)
         {
                 EVP_MD_CTX      ctx;
                 uint160_t       id;
@@ -440,7 +441,7 @@ namespace libcage {
         }
 
         void
-        cage::get_id(void *addr)
+        cage::get_id(void *addr) const
         {
                 m_id.to_binary(addr, CAGE_ID_LEN);
         }
