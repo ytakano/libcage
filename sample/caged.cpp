@@ -21,10 +21,12 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/unordered_map.hpp>
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
   #define D(X) X
+#else
+  #define D(X)
 #endif
 
 extern char *optarg;
@@ -56,11 +58,14 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
                   const esc_tokenizer::iterator &end);
 void process_put(int sockfd, esc_tokenizer::iterator &it,
                  const esc_tokenizer::iterator &end);
+void process_get(int sockfd, esc_tokenizer::iterator &it,
+                 const esc_tokenizer::iterator &end);
 
 static const char * const SUCCESSED_NEW         = "200";
 static const char * const SUCCESSED_DELETE      = "201";
 static const char * const SUCCESSED_JOIN        = "202";
 static const char * const SUCCESSED_PUT         = "203";
+static const char * const SUCCESSED_GET         = "204";
 
 static const char * const ERR_UNKNOWN_COMMAND   = "400";
 static const char * const ERR_INVALID_STATEMENT = "401";
@@ -70,6 +75,8 @@ static const char * const ERR_DEL_NO_SUCH_NODE  = "404";
 static const char * const ERR_JOIN_NO_SUCH_NODE = "405";
 static const char * const ERR_JOIN_FAILED       = "406";
 static const char * const ERR_PUT_NO_SUCH_NODE  = "407";
+static const char * const ERR_GET_NO_SUCH_NODE  = "408";
+static const char * const ERR_GET               = "409";
 
 /*
   new,node_name,port_number |
@@ -88,11 +95,15 @@ static const char * const ERR_PUT_NO_SUCH_NODE  = "407";
      result,405 | 406,join,node_name,host,port,comment
 
   put,node_name,key,value,ttl
-  -> result,203,node_name,put,key,value,ttl
+  -> result,203,put,node_name,key,value,ttl
      result,400 | 401,comment
-     result,407,node_name,key,value,ttl
+     result,407,put,node_name,key,value,ttl,comment
 
-  get node_name "key"
+  get,node_name,"key"
+  -> result,204,get,node_name,key,value
+     result,400 | 401,comment
+     result,408,get,key,comment
+     result,409,get,key
  */
 
 int
@@ -266,6 +277,9 @@ do_command(int sockfd, std::string command)
         } else if (*it == "put") {
                 D(std::cout << "process put" << std::endl);
                 process_put(sockfd, ++it, tokens.end());
+        } else if (*it == "get") {
+                D(std::cout << "process get" << std::endl);
+                process_get(sockfd, ++it, tokens.end());
         } else {
                 D(std::cout << "unknown command: " << *it << std::endl);
 
@@ -446,7 +460,6 @@ public:
 
                 it = sock2ev.find(sockfd);
                 if (it == sock2ev.end()) {
-                        std::cout << "no socket" << std::endl;
                         return;
                 }
 
@@ -454,7 +467,7 @@ public:
                         // send result of the success
                         // format: result,202,join,node_name,host,port
                         snprintf(result, sizeof(result),
-                                 "result,%s,join,%s,%s,%d",
+                                 "result,%s,join,%s,%s,%d\n",
                                  SUCCESSED_JOIN, esc_node_name.c_str(),
                                  esc_host.c_str(), port);
                         send(sockfd, result, strlen(result), 0);
@@ -462,7 +475,7 @@ public:
                         // send result of the fail
                         // format: result,406,join,node_name,host,port,comment
                         snprintf(result, sizeof(result),
-                                 "result,%s,join,%s,%s,%d,failed to join to '%s:%d'",
+                                 "result,%s,join,%s,%s,%d,failed to join to '%s:%d'\n",
                                  ERR_JOIN_FAILED, esc_node_name.c_str(),
                                  esc_host.c_str(), port, esc_host.c_str(),
                                  port);
@@ -644,7 +657,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         it_n2n = name2node.find(node_name);
         if (it_n2n == name2node.end()) {
                 // invalid node name
-                // format: result,407,node_name,key,value,ttl,comment
+                // format: result,407,put,node_name,key,value,ttl,comment
                 snprintf(result, sizeof(result),
                          "result,%s,put,%s,%s,%s,%d,no such node named '%s'\n",
                          ERR_PUT_NO_SUCH_NODE, esc_node_name.c_str(),
@@ -657,12 +670,128 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         it_n2n->second->put(key.c_str(), key.length(),
                             value.c_str(), value.length(), ttl);
 
+        D(std::cout << "    node_name: " << node_name
+                    << "\n    key: " << key
+                    << "\n    value: " << value
+                    << "\n    TTL: " << ttl
+                    << std::endl);
+
 
         // send result of the success
-        // format: result,203,node_name,key,value,ttl
+        // format: result,203,put,node_name,key,value,ttl
         snprintf(result, sizeof(result),
                  "result,%s,put,%s,%s,%s,%d\n",
                  SUCCESSED_PUT, esc_node_name.c_str(),
                  esc_key.c_str(), esc_value.c_str(), ttl);
         send(sockfd, result, strlen(result), 0);
+}
+
+class func_get
+{
+public:
+        std::string esc_node_name;
+        std::string esc_key;
+        int         sockfd;
+
+        void operator() (bool is_get, void *buf, int len)
+        {
+                sock2ev_type::iterator it;
+                char                   result[1024 * 4];
+
+                it = sock2ev.find(sockfd);
+                if (it == sock2ev.end()) {
+                        return;
+                }
+
+                if (is_get) {
+                        boost::shared_array<char> tmp(new char[len + 1]);
+                        std::string value;
+
+                        memcpy(tmp.get(), buf, len);
+                        tmp[len] = '\0';
+
+                        value = tmp.get();
+                        replace(value, ",", "\\,");
+
+                        // send value
+                        // format: result,204,get,node_name,key,value
+                        snprintf(result, sizeof(result),
+                                 "result,%s,get,%s,%s,%s\n",
+                                 SUCCESSED_GET, esc_node_name.c_str(),
+                                 esc_key.c_str(), value.c_str());
+
+                        send(sockfd, result, strlen(result), 0);
+                        return;
+                } else {
+                        // send result of fail
+                        // format: result,409,get,node_name,key
+                        snprintf(result, sizeof(result),
+                                 "result,%s,get,%s,%s\n",
+                                 ERR_GET, esc_node_name.c_str(),
+                                 esc_key.c_str());
+                        send(sockfd, result, strlen(result), 0);
+                }
+        }
+};
+
+void process_get(int sockfd, esc_tokenizer::iterator &it,
+                 const esc_tokenizer::iterator &end)
+{
+        std::string node_name;
+        std::string esc_node_name;
+        std::string key;
+        std::string esc_key;
+        char        result[1024 * 4];
+        func_get    func;
+
+        if (it == end) {
+                // there is no node_name
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,node name is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        node_name = *it;
+        esc_node_name = node_name;
+        replace(esc_node_name, ",", "\\,");
+
+
+        ++it;
+        if (it == end) {
+                // there is no key
+                // format: result,401,comment
+                snprintf(result, sizeof(result),
+                         "result,401,key is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        key = *it;
+        esc_key = key;
+        replace(esc_key, ",", "\\,");
+
+
+        name2node_type::iterator it_n2n;
+        it_n2n = name2node.find(node_name);
+        if (it_n2n == name2node.end()) {
+                // invalid node name
+                // format: result,408,node_name,get,key,comment
+                snprintf(result, sizeof(result),
+                         "result,%s,get,%s,%s,no such node named '%s'\n",
+                         ERR_GET_NO_SUCH_NODE, esc_node_name.c_str(),
+                         esc_key.c_str(), esc_node_name.c_str());
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        D(std::cout << "    node_name: " << node_name
+                    << "\n    key: " << key
+                    << std::endl);
+
+        func.esc_node_name = esc_node_name;
+        func.esc_key       = esc_key;
+        func.sockfd        = sockfd;
+        it_n2n->second->get(key.c_str(), key.length(), func);
 }
