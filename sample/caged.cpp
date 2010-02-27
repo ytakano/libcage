@@ -45,7 +45,7 @@ typedef boost::unordered_map<int, boost::shared_ptr<event> > sock2ev_type;
 sock2ev_type   sock2ev;
 name2node_type name2node;
 
-
+void usage(char *cmd);
 bool start_listen(int port);
 void callback_accept(int fd, short ev, void *arg);
 void callback_read(int fd, short ev, void *arg);
@@ -103,7 +103,7 @@ static const char * const ERR_GET               = "409";
      407,put,node_name,key,value,ttl,comment
 
   get,node_name,key
-  -> 204,get,node_name,key,value
+  -> 204,get,node_name,key,value1,value2,value3,...
      400 | 401,comment
      408,get,key,comment
      409,get,key
@@ -117,8 +117,11 @@ main(int argc, char *argv[])
         bool  is_daemon = false;
         pid_t pid;
 
-	while ((opt = getopt(argc, argv, "dp:")) != -1) {
+	while ((opt = getopt(argc, argv, "dhp:")) != -1) {
 		switch (opt) {
+                case 'h':
+                        usage(argv[0]);
+                        return 0;
 		case 'd':
                         is_daemon = true;
                         break;
@@ -150,6 +153,15 @@ main(int argc, char *argv[])
         event_dispatch();
 
         return 0;
+}
+
+void
+usage(char *cmd)
+{
+        printf("%s [-d] [-p port]\n", cmd);
+        printf("    -d: run as daemon\n");
+        printf("    -h: show this help\n");
+        printf("    -p: port number to listen, default value is 12080\n");
 }
 
 bool
@@ -709,10 +721,10 @@ public:
         std::string esc_key;
         int         sockfd;
 
-        void operator() (bool is_get, void *buf, int len)
+        void operator() (bool is_get, libcage::dht::value_set_ptr vset)
         {
                 sock2ev_type::iterator it;
-                char                   result[1024 * 4];
+                char                   result[1024 * 1024];
 
                 it = sock2ev.find(sockfd);
                 if (it == sock2ev.end()) {
@@ -720,21 +732,30 @@ public:
                 }
 
                 if (is_get) {
-                        boost::shared_array<char> tmp(new char[len + 1]);
-                        std::string value;
+                        std::string values;
+                        libcage::dht::value_set::iterator it;
 
-                        memcpy(tmp.get(), buf, len);
-                        tmp[len] = '\0';
+                        for (it = vset->begin(); it != vset->end(); ++it) {
+                                boost::shared_array<char> tmp(new char[it->len + 1]);
+                                std::string value;
 
-                        value = tmp.get();
-                        replace(value, ",", "\\,");
+                                memcpy(tmp.get(), it->value.get(), it->len);
+
+                                tmp[it->len] = '\0';
+
+                                value = tmp.get();
+                                replace(value, ",", "\\,");
+
+                                values += ",";
+                                values += value;
+                        }
 
                         // send value
                         // format: 204,get,node_name,key,value
                         snprintf(result, sizeof(result),
-                                 "%s,get,%s,%s,%s\n",
+                                 "%s,get,%s,%s%s\n",
                                  SUCCESSED_GET, esc_node_name.c_str(),
-                                 esc_key.c_str(), value.c_str());
+                                 esc_key.c_str(), values.c_str());
 
                         send(sockfd, result, strlen(result), 0);
                         return;

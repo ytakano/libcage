@@ -858,6 +858,8 @@ namespace libcage {
 #define SET_DATA() do {                                 \
                         _id i;                          \
                                                         \
+                        i.id = addr.id;                 \
+                                                        \
                         data.key         = key;         \
                         data.keylen      = keylen;      \
                         data.ttl         = ttl;         \
@@ -1247,10 +1249,10 @@ namespace libcage {
                         memcpy(v_ptr.get(), value, valuelen);
                         v.value = v_ptr;
                         v.len   = valuelen;
-                        v.index = index;
 
                         q->values[i].insert(v);
                         q->vset->insert(v);
+                        q->indeces[i].insert(index);
 
 
                         if (! q->is_timer_recvd_started) {
@@ -1271,13 +1273,13 @@ namespace libcage {
 
                         for (it_num = q->num_value.begin();
                              it_num != q->num_value.end(); ++it_num) {
-                                if (it_num->second <
+                                if (it_num->second >
                                     (int)q->values[it_num->first].size()) {
-                                        break;
+                                        return;
                                 }
-
-                                recvd_value(q);
                         }
+
+                        recvd_value(q);
                 } else if (reply->flag == 0) {
                         std::vector<cageaddr> nodes;
                         msg_nodes *addrs;

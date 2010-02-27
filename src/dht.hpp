@@ -41,6 +41,7 @@
 #include "rttable.hpp"
 #include "udphandler.hpp"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,8 @@
 
 
 namespace libcage {
+        class proxy;
+
         class dht : public rttable {
         private:
                 static const int        num_find_node;
@@ -66,9 +69,9 @@ namespace libcage {
                 class value_t {
                 public:
                         boost::shared_array<char> value;
-                        int index;
                         int len;
 
+                public:
                         bool operator== (const value_t &rhs) const {
                                 if (len != rhs.len) {
                                         return false;
@@ -281,6 +284,7 @@ namespace libcage {
 
                         boost::unordered_map<_id, value_set> values;
                         boost::unordered_map<_id, int>       num_value;
+                        boost::unordered_map<_id, std::set<int> >       indeces;
                         value_set_ptr   vset;
 
                         timer_recvd_ptr       timer_recvd;

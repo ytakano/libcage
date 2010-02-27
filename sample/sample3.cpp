@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <iostream>
 
+#include <boost/foreach.hpp>
+
 // include libevent's header
 #include <event.h>
 
@@ -13,11 +15,25 @@ libcage::cage *cage;
 event *ev;
 
 // callback function for get
+
+// dht::value_t       --- class {
+//                         public:
+//                                 boost::shared_array<char> value;
+//                                 int len;
+//                        };
+// dht::value_set     --- boost::unordered_set<dht::value_t>
+// dht::value_set_ptr --- boost::shared_ptr<dht::value_set>
 void
-get_func(bool result, void *buf, int len)
+get_func(bool result, libcage::dht::value_set_ptr vset)
 {
         if (result) {
-                printf("successed to get: n = %d\n", *(int*)buf);
+                printf("successed to get: n =");
+
+                libcage::dht::value_set::iterator it;
+                BOOST_FOREACH(const libcage::dht::value_t &val, *vset) {
+                        printf(" %d", *(int*)val.value.get());
+                }
+                printf("\n");
         } else {
                 printf("failed to get:\n");
         }

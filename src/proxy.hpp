@@ -42,6 +42,7 @@
 #include "peers.hpp"
 #include "timer.hpp"
 
+#include <set>
 #include <vector>
 
 #include <boost/unordered_map.hpp>
@@ -153,6 +154,7 @@ namespace libcage {
                         dht::callback_find_value    func;
 
                         dht::value_set_ptr  vset;
+                        std::set<int>       indeces;
                         int                 total;
 
                         getdata() : vset(new dht::value_set), total(0) { }

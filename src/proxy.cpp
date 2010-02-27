@@ -558,11 +558,11 @@ namespace libcage {
 
                         value.value = boost::shared_array<char>(new char[valuelen]);
                         value.len   = valuelen;
-                        value.index = ntohs(reply->index);
 
                         memcpy(value.value.get(), reply->data, valuelen);
 
                         it->second->vset->insert(value);
+                        it->second->indeces.insert((int)ntohs(reply->index));
 
                         if (it->second->total == 0) {
                                 it->second->total = ntohs(reply->total);
