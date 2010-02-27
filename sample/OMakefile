@@ -16,6 +16,6 @@ caged: $(CXXProgram caged, caged)
 
 clean:
 	rm -f *~ *.o
-	rm -f sample1 sample2 sample3 sample4 exp1 caged
+	rm -f sample1 sample2 sample3 sample4 caged
 
-.DEFAULT: sample1 sample2 sample3 sample4 exp1 caged
+.DEFAULT: sample1 sample2 sample3 sample4 caged
