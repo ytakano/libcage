@@ -3,14 +3,12 @@ LDFLAGS += -levent -lcrypto
 LIBS += ../src/libcage
 
 
-.PHONY: clean sample1 sample2 sample3 sample4 exp1 caged
+.PHONY: clean sample1 sample2 sample3 sample4 caged
 
 sample1: $(CXXProgram sample1, sample1)
 sample2: $(CXXProgram sample2, sample2)
 sample2: $(CXXProgram sample3, sample3)
 sample4: $(CXXProgram sample4, sample4)
-
-exp1: $(CXXProgram exp1, exp1)
 
 caged: $(CXXProgram caged, caged)
 
