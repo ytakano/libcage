@@ -191,8 +191,9 @@ namespace libcage {
                 if (q->nodes.size() == 0) {
                         if (is_find_value) {
                                 callback_find_value f;
+                                value_set_ptr p;
                                 f = boost::get<callback_find_value>(func);
-                                f(false, NULL, 0);
+                                f(false, p);
                         } else {
                                 callback_find_node f;
                                 f = boost::get<callback_find_node>(func);
@@ -301,13 +302,11 @@ namespace libcage {
                 if (q->num_query == 0) {
                         // call callback functions
                         if (q->is_find_value) {
-                                // TODO: fix this
-                                /*
                                 cageaddr addr1, addr2;
                                 callback_find_value func;
+                                value_set_ptr p;
                                 func = boost::get<callback_find_value>(q->func);
-                                func(false, NULL, 0);
-                                */
+                                func(false, p);
                         } else {
                                 callback_find_node func;
                                 func = boost::get<callback_find_node>(q->func);
@@ -902,45 +901,6 @@ namespace libcage {
                         SET_DATA();
                         m_stored[ik].insert(data);
                 }
-/*
-
-  must be removed later
-                if (it != m_stored.end()) {
-//                        if (it->second.valuelen == valuelen &&
-//                            memcmp(it->second.value.get(),
-//                                   value.get(), valuelen) == 0) {
-                        if (ttl == 0) {
-                                m_stored.erase(ik);
-                        } else {
-                                _id i;
-
-                                i.id = addr.id;
-
-                                it->second.ttl         = ttl;
-                                it->second.stored_time = time(NULL);
-                                it->second.recvd.insert(i);
-                        }
-//                        }
-                } else {
-                        stored_data data;
-                        _id i;
-
-                        i.id = addr.id;
-
-                        data.key         = key;
-                        data.value       = value;
-                        data.keylen      = keylen;
-                        data.valuelen    = valuelen;
-                        data.ttl         = ttl;
-                        data.stored_time = time(NULL);
-                        data.id          = id;
-                        data.original    = 0;
-
-                        data.recvd.insert(i);
-
-                        m_stored[ik] = data;
-                }
-*/
         }
 
         void
@@ -950,7 +910,8 @@ namespace libcage {
                 node_state state = m_nat.get_state();
                 if (state == node_symmetric || state == node_undefined ||
                     state == node_nat) {
-                        func(false, NULL, 0);
+                        value_set_ptr p;
+                        func(false, p);
                         return;
                 }
 
@@ -1118,34 +1079,6 @@ namespace libcage {
 
                                 i++;
                         }
-/*
-                        // reply data
-                        msg_data *data;
-
-                        size = sizeof(*reply) - sizeof(reply->data) +
-                                sizeof(*data) - sizeof(data->data) +
-                                it->second.keylen + it->second.valuelen;
-
-                        memset(reply, 0, size);
-
-                        reply->nonce = req->nonce;
-                        reply->flag  = 1;
-
-                        memcpy(reply->id, req->id, sizeof(reply->id));
-
-                        data  = (msg_data*)reply->data;
-
-                        data->keylen   = htons(it->second.keylen);
-                        data->valuelen = htons(it->second.valuelen);
-
-                        memcpy(data->data, it->second.key.get(),
-                               it->second.keylen);
-                        memcpy((char*)data->data + it->second.keylen,
-                               it->second.value.get(), it->second.valuelen);
-
-                        send_msg(&reply->hdr, size, type_dht_find_value_reply,
-                                 addr);
-*/
                 } else {
                         // reply nodes
                         msg_nodes *data;
@@ -1317,6 +1250,7 @@ namespace libcage {
                         v.index = index;
 
                         q->values[i].insert(v);
+                        q->vset->insert(v);
 
 
                         if (! q->is_timer_recvd_started) {
@@ -1344,55 +1278,6 @@ namespace libcage {
 
                                 recvd_value(q);
                         }
-
-
-/*
-                        msg_data *data;
-                        uint16_t  keylen;
-                        uint16_t  valuelen;
-                        char     *key, *value;
-
-                        size = sizeof(*reply) - sizeof(reply->data) +
-                                sizeof(*data) - sizeof(data->data);
-
-                        if (len < size)
-                                return;
-
-                        data = (msg_data*)reply->data;
-
-                        keylen   = ntohs(data->keylen);
-                        valuelen = ntohs(data->valuelen);
-
-                        size += keylen + valuelen;
-
-                        if (size != len)
-                                return;
-
-                        key   = (char*)data->data;
-                        value = key + keylen;
-
-                        if (keylen != q->keylen)
-                                return;
-
-                        if (memcmp(key, q->key.get(), keylen) != 0)
-                                return;
-
-                        // call callback function
-                        callback_find_value func;
-
-                        func = boost::get<callback_find_value>(q->func);
-                        func(true, value, valuelen);
-
-                        // stop all timer
-                        boost::unordered_map<_id, timer_query_ptr>::iterator it_tm;
-                        for (it_tm = q->timers.begin();
-                             it_tm != q->timers.end(); ++it_tm) {
-                                m_timer.unset_timer(it_tm->second.get());
-                        }
-
-                        // remove query
-                        m_query.erase(nonce);
-*/
                 } else if (reply->flag == 0) {
                         std::vector<cageaddr> nodes;
                         msg_nodes *addrs;
@@ -1457,14 +1342,10 @@ namespace libcage {
         void
         dht::recvd_value(query_ptr q)
         {
-                // TODO: fix this
                 // call callback function
-/*
                 callback_find_value func;
-
                 func = boost::get<callback_find_value>(q->func);
-                func(true, value, valuelen);
-*/
+                func(true, q->vset);
 
                 // stop all timer
                 boost::unordered_map<_id, timer_query_ptr>::iterator it_tm;

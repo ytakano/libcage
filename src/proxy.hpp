@@ -151,13 +151,18 @@ namespace libcage {
                         boost::shared_array<char>       key;
                         int             keylen;
                         dht::callback_find_value    func;
+
+                        dht::value_set_ptr  vset;
+                        int                 total;
+
+                        getdata() : vset(new dht::value_set), total(0) { }
                 };
 
                 typedef boost::shared_ptr<getdata> gd_ptr;
 
                 class get_reply_func {
                 public:
-                        void operator() (bool result, void *buf, int len);
+                        void operator() (bool result, dht::value_set_ptr vset);
 
                         id_ptr          id;
                         id_ptr          src;

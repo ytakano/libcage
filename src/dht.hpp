@@ -63,10 +63,33 @@ namespace libcage {
                 static const int        recvd_value_timeout;
 
         public:
+                class value_t {
+                public:
+                        boost::shared_array<char> value;
+                        int index;
+                        int len;
+
+                        bool operator== (const value_t &rhs) const {
+                                if (len != rhs.len) {
+                                        return false;
+                                } else if (memcmp(value.get(), rhs.value.get(),
+                                                  len) != 0) {
+                                        return false;
+                                }
+
+                                return true;
+                        }
+                };
+
+                friend size_t hash_value(const value_t &value);
+
+                typedef boost::unordered_set<value_t> value_set;
+                typedef boost::shared_ptr<value_set>  value_set_ptr;
+
+
                 typedef boost::function<void (std::vector<cageaddr>&)>
                 callback_find_node;
-                typedef boost::function<void (bool, void *buf, int len)>
-                callback_find_value;
+                typedef boost::function<void (bool, value_set_ptr)> callback_find_value;
                 typedef boost::variant<callback_find_node,
                                        callback_find_value> callback_func;
 
@@ -239,27 +262,6 @@ namespace libcage {
 
                 typedef boost::shared_ptr<timer_query>  timer_query_ptr;
 
-                class value_t {
-                public:
-                        boost::shared_array<char> value;
-                        int index;
-                        int len;
-
-                        bool operator== (const value_t &rhs) const {
-                                if (len != rhs.len) {
-                                        return false;
-                                } else if (memcmp(value.get(), rhs.value.get(),
-                                                  len) != 0) {
-                                        return false;
-                                }
-
-                                return true;
-                        }
-                };
-
-                friend size_t hash_value(const value_t &value);
-
-                typedef boost::unordered_set<value_t> value_set;
 
                 class timer_recvd_value;
                 typedef boost::shared_ptr<timer_recvd_value> timer_recvd_ptr;
@@ -279,13 +281,15 @@ namespace libcage {
 
                         boost::unordered_map<_id, value_set> values;
                         boost::unordered_map<_id, int>       num_value;
+                        value_set_ptr   vset;
 
                         timer_recvd_ptr       timer_recvd;
                         bool                  is_timer_recvd_started;
 
                         callback_func   func;
 
-                        query() : is_timer_recvd_started(false) { }
+                        query() : vset(new value_set),
+                                  is_timer_recvd_started(false){ }
                 };
 
                 typedef boost::shared_ptr<query> query_ptr;

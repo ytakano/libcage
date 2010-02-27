@@ -325,7 +325,7 @@ namespace libcage {
         }
 
         void
-        proxy::get_reply_func::operator() (bool result, void *buf, int len)
+        proxy::get_reply_func::operator() (bool result, dht::value_set_ptr vset)
         {
                 msg_proxy_get_reply *reply;
                 int  size;
@@ -336,16 +336,42 @@ namespace libcage {
                 size = sizeof(*reply) - sizeof(reply->data);
 
                 if (result) {
-                        size += len;
+                        boost::unordered_map<_id, _addr>::iterator it;
+                        _id i;
+
+                        i.id = src;
+
+                        it = p_proxy->m_registered.find(i);
+                        if (it == p_proxy->m_registered.end()) {
+                                return;
+                        }
 
                         memset(reply, 0, size);
-
                         reply->nonce = nonce;
                         reply->flag  = 1;
+                        reply->total = htons((uint16_t)vset->size());
 
                         id->to_binary(reply->id, sizeof(reply->id));
 
-                        memcpy(reply->data, buf, len);
+
+                        dht::value_set::iterator it_v;
+                        uint16_t index = 1;
+
+                        for (it_v = vset->begin(); it_v != vset->end();
+                             ++it_v) {
+                                int size2 = size + it_v->len;
+
+                                reply->index = htons(index);
+
+                                memcpy(reply->data, it_v->value.get(),
+                                       it_v->len);
+                                
+                                send_msg(p_proxy->m_udp, &reply->hdr, size2,
+                                         type_proxy_get_reply,
+                                         it->second.addr, p_proxy->m_id);
+
+                                index++;
+                        }
                 } else {
                         memset(reply, 0, size);
 
@@ -353,18 +379,19 @@ namespace libcage {
                         reply->flag  = 0;
 
                         id->to_binary(reply->id, sizeof(reply->id));
-                }
 
-                boost::unordered_map<_id, _addr>::iterator it;
-                _id i;
 
-                i.id = src;
+                        boost::unordered_map<_id, _addr>::iterator it;
+                        _id i;
 
-                it = p_proxy->m_registered.find(i);
-                if (it != p_proxy->m_registered.end()) {
-                        send_msg(p_proxy->m_udp, &reply->hdr, size,
-                                 type_proxy_get_reply,
-                                 it->second.addr, p_proxy->m_id);
+                        i.id = src;
+
+                        it = p_proxy->m_registered.find(i);
+                        if (it != p_proxy->m_registered.end()) {
+                                send_msg(p_proxy->m_udp, &reply->hdr, size,
+                                         type_proxy_get_reply,
+                                         it->second.addr, p_proxy->m_id);
+                        }
                 }
         }
 
@@ -410,7 +437,21 @@ namespace libcage {
         void
         proxy::timer_get::operator() ()
         {
-                func(false, NULL, 0);
+                boost::unordered_map<uint32_t, gd_ptr>::iterator it;
+
+                it = p_proxy->m_getdata.find(nonce);
+
+                if (it == p_proxy->m_getdata.end()) {
+                        dht::value_set_ptr p;
+                        func(false, p);
+                }
+
+                if (it->second->vset->size() > 0) {
+                        it->second->func(true, it->second->vset);
+                } else {
+                        dht::value_set_ptr p;
+                        func(false, p);
+                }
 
                 p_proxy->m_getdata.erase(nonce);
         }
@@ -430,7 +471,8 @@ namespace libcage {
                         if (m_nat.get_state() == node_symmetric)
                                 register_node();
 
-                        func(false, NULL, 0);
+                        dht::value_set_ptr p;
+                        func(false, p);
                         return;
                 }
 
@@ -438,7 +480,8 @@ namespace libcage {
 
                 size = sizeof(*msg) - sizeof(msg->key) + keylen;
                 if (size > (int)sizeof(buf)) {
-                        func(false, NULL, 0);
+                        dht::value_set_ptr p;
+                        func(false, p);
                         return;
                 }
 
@@ -511,14 +554,33 @@ namespace libcage {
                         return;
 
                 if (reply->flag > 0) {
-                        it->second->func(true, reply->data, valuelen);
+                        dht::value_t value;
+
+                        value.value = boost::shared_array<char>(new char[valuelen]);
+                        value.len   = valuelen;
+                        value.index = ntohs(reply->index);
+
+                        memcpy(value.value.get(), reply->data, valuelen);
+
+                        it->second->vset->insert(value);
+
+                        if (it->second->total == 0) {
+                                it->second->total = ntohs(reply->total);
+                        }
+
+                        if (it->second->total >= (int)it->second->vset->size()) {
+                                it->second->func(true, it->second->vset);
+
+                                m_timer.unset_timer(&it->second->timeout);
+                                m_getdata.erase(nonce);
+                        }
                 } else {
-                        it->second->func(false, NULL, 0);
+                        dht::value_set_ptr p;
+                        it->second->func(false, p);
+
+                        m_timer.unset_timer(&it->second->timeout);
+                        m_getdata.erase(nonce);
                 }
-
-                m_timer.unset_timer(&it->second->timeout);
-
-                m_getdata.erase(nonce);
         }
 
         void
