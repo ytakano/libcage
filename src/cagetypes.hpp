@@ -282,7 +282,14 @@ namespace libcage {
                 msg_hdr         hdr;
                 uint32_t        nonce;
                 uint8_t         id[CAGE_ID_LEN];
+
+                uint16_t        index; // the index of the value in data[]
+                uint16_t        total; // the number of values 
+
+                // data[] is value when 1
+                // data[] is nodes when 0
                 uint8_t         flag;
+
                 uint8_t         padding[3];
                 uint32_t        data[1];
         };

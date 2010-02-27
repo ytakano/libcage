@@ -36,12 +36,13 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const int       dht::num_find_node    = 10;
-        const int       dht::max_query        = 6;
-        const int       dht::query_timeout    = 3;
-        const int       dht::restore_interval = 120;
-        const int       dht::timer_interval   = 60;
-        const int       dht::original_put_num = 5;
+        const int       dht::num_find_node       = 10;
+        const int       dht::max_query           = 6;
+        const int       dht::query_timeout       = 3;
+        const int       dht::restore_interval    = 120;
+        const int       dht::timer_interval      = 60;
+        const int       dht::original_put_num    = 5;
+        const int       dht::recvd_value_timeout = 3;
 
         size_t
         hash_value(const dht::_id &i)
@@ -58,6 +59,28 @@ namespace libcage {
 
                 for (int i = 0; i < ik.keylen; i++)
                         boost::hash_combine(h, ik.key[i]);
+
+                return h;
+        }
+
+        size_t
+        hash_value(const dht::stored_data &sdata)
+        {
+                size_t h = 0;
+
+                for (int i = 0; i < sdata.valuelen; i++)
+                        boost::hash_combine(h, sdata.value[i]);
+
+                return h;
+        }
+
+        size_t
+        hash_value(const dht::value_t &value)
+        {
+                size_t h = 0;
+
+                for (int i = 0; i < value.len; i++)
+                        boost::hash_combine(h, value.value[i]);
 
                 return h;
         }
@@ -249,8 +272,8 @@ namespace libcage {
                         }
 
                         // start timer
-                        timeval   tval;
-                        timer_ptr t(new timer_query);
+                        timer_query_ptr t(new timer_query);
+                        timeval         tval;
 
                         t->nonce = q->nonce;
                         t->id    = i;
@@ -278,10 +301,13 @@ namespace libcage {
                 if (q->num_query == 0) {
                         // call callback functions
                         if (q->is_find_value) {
+                                // TODO: fix this
+                                /*
                                 cageaddr addr1, addr2;
                                 callback_find_value func;
                                 func = boost::get<callback_find_value>(q->func);
                                 func(false, NULL, 0);
+                                */
                         } else {
                                 callback_find_node func;
                                 func = boost::get<callback_find_node>(q->func);
@@ -289,11 +315,14 @@ namespace libcage {
                         }
 
                         // stop all timers
-                        boost::unordered_map<_id, timer_ptr>::iterator it;
+                        boost::unordered_map<_id, timer_query_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
                         }
+
+                        if (q->is_timer_recvd_started)
+                                m_timer.unset_timer(q->timer_recvd.get());
 
                         // remove query
                         m_query.erase(q->nonce);
@@ -352,8 +381,8 @@ namespace libcage {
         void
         dht::timer_query::operator() ()
         {
-                query_ptr q = p_dht->m_query[nonce];
-                timer_ptr t = q->timers[id];
+                query_ptr       q = p_dht->m_query[nonce];
+                timer_query_ptr t = q->timers[id];
                 uint160_t zero;
 
                 q->sent.insert(id);
@@ -490,8 +519,8 @@ namespace libcage {
                 // stop timer
                 c_id.id = addr.id;
                 if (q->timers.find(c_id) == q->timers.end()) {
-                        timer_ptr t;
-                        id_ptr    zero(new uint160_t);
+                        timer_query_ptr t;
+                        id_ptr          zero(new uint160_t);
 
                         zero->fill_zero();
                         c_id.id = zero;
@@ -502,7 +531,7 @@ namespace libcage {
                         m_timer.unset_timer(t.get());
                         q->timers.erase(c_id);
                 } else {
-                        timer_ptr t;
+                        timer_query_ptr t;
                         t = q->timers[c_id];
                         m_timer.unset_timer(t.get());
                         q->timers.erase(c_id);
@@ -609,8 +638,8 @@ namespace libcage {
 
 
                 // start timer
+                timer_query_ptr t(new timer_query);
                 timeval   tval;
-                timer_ptr t(new timer_query);
                 id_ptr    zero(new uint160_t);
                 _id       zero_id;
 
@@ -697,7 +726,7 @@ namespace libcage {
                 if (ttl == 0) {
                         m_stored.erase(ik);
                 } else {
-                        m_stored[ik] = data;
+                        m_stored[ik].insert(data);
                 }
         }
 
@@ -740,16 +769,33 @@ namespace libcage {
                 }
 
                 if (nodes.size() >= (uint32_t)num_find_node) {
-                        id_key ik;
+                        stored_data sdata;
+                        id_key  ik;
+
                         ik.key    = key;
                         ik.keylen = keylen;
                         ik.id     = id;
 
-                        if (p_dht->m_stored[ik].original > 0) {
-                                p_dht->m_stored[ik].original--;
+                        sdata.value    = value;
+                        sdata.valuelen = valuelen;
+
+                        
+                        boost::unordered_map<id_key, sdata_set>::iterator it_stored;
+                        sdata_set::iterator it_sdata;
+
+                        it_stored = p_dht->m_stored.find(ik);
+                        if (it_stored == p_dht->m_stored.end())
+                                return;
+
+                        it_sdata = it_stored->second.find(sdata);
+                        if (it_sdata == it_stored->second.end())
+                                return;
+
+                        if (it_sdata->original > 0) {
+                                it_sdata->original--;
                         } else {
                                 if (!me) {
-                                        p_dht->m_stored.erase(ik);
+                                        it_stored->second.erase(it_sdata);
                                 }
                         }
                 }
@@ -802,9 +848,63 @@ namespace libcage {
                 ik.keylen = keylen;
                 ik.id     = id;
 
-                boost::unordered_map<id_key, stored_data>::iterator it;
+                boost::unordered_map<id_key, sdata_set>::iterator it;
                 it = m_stored.find(ik);
 
+                stored_data data;
+
+                data.value       = value;
+                data.valuelen    = valuelen;
+
+#define SET_DATA() do {                                 \
+                        _id i;                          \
+                                                        \
+                        data.key         = key;         \
+                        data.keylen      = keylen;      \
+                        data.ttl         = ttl;         \
+                        data.stored_time = time(NULL);  \
+                        data.id          = id;          \
+                        data.original    = 0;           \
+                                                        \
+                        data.recvd.insert(i);           \
+                } while (0)
+
+                if (it != m_stored.end()) {
+                        sdata_set::iterator it_data;
+
+                        it_data = it->second.find(data);
+
+                        if (it_data != it->second.end()) {
+                                // if the TTL is 0, the value is removed
+                                if (ttl == 0) {
+                                        it->second.erase(it_data);
+                                        if (it->second.size() == 0) {
+                                                m_stored.erase(it);
+                                        }
+                                } else {
+                                        // if the data have already inserted,
+                                        // its TTL and inserted time is updated
+                                        _id i;
+
+                                        i.id = addr.id;
+
+                                        it_data->ttl         = ttl;
+                                        it_data->stored_time = time(NULL);
+                                        it_data->recvd.insert(i);
+                                }
+                        } else {
+                                // insert new data
+                                SET_DATA();
+                                m_stored[ik].insert(data);
+                        }
+                } else {
+                        // insert new data
+                        SET_DATA();
+                        m_stored[ik].insert(data);
+                }
+/*
+
+  must be removed later
                 if (it != m_stored.end()) {
 //                        if (it->second.valuelen == valuelen &&
 //                            memcmp(it->second.value.get(),
@@ -840,6 +940,7 @@ namespace libcage {
 
                         m_stored[ik] = data;
                 }
+*/
         }
 
         void
@@ -975,12 +1076,49 @@ namespace libcage {
                 ik.key    = key;
                 ik.id     = id;
 
-                boost::unordered_map<id_key, stored_data>::iterator it;
+                boost::unordered_map<id_key, sdata_set>::iterator it;
                 it = m_stored.find(ik);
 
                 reply = (msg_dht_find_value_reply*)buf;
 
                 if (it != m_stored.end()) {
+                        sdata_set::iterator it_data;
+
+                        uint16_t i = 1;
+                        for (it_data = it->second.begin();
+                             it_data != it->second.end(); ++it_data) {
+                                msg_data *data;
+
+                                size = sizeof(*reply) - sizeof(reply->data) +
+                                        sizeof(*data) - sizeof(data->data) +
+                                        it_data->keylen + it_data->valuelen;
+
+                                memset(reply, 0, size);
+
+                                reply->nonce = req->nonce;
+                                reply->flag  = 1;
+                                reply->index = htons(i);
+                                reply->total = htons((uint16_t)it->second.size());
+
+                                memcpy(reply->id, req->id, sizeof(reply->id));
+
+                                data = (msg_data*)reply->data;
+
+                                data->keylen   = htons(it_data->keylen);
+                                data->valuelen = htons(it_data->valuelen);
+
+                                memcpy(data->data, it_data->key.get(),
+                                       it_data->keylen);
+                                memcpy((char*)data->data + it_data->keylen,
+                                       it_data->value.get(),
+                                       it_data->valuelen);
+
+                                send_msg(&reply->hdr, size,
+                                         type_dht_find_value_reply, addr);
+
+                                i++;
+                        }
+/*
                         // reply data
                         msg_data *data;
 
@@ -1007,6 +1145,7 @@ namespace libcage {
 
                         send_msg(&reply->hdr, size, type_dht_find_value_reply,
                                  addr);
+*/
                 } else {
                         // reply nodes
                         msg_nodes *data;
@@ -1073,8 +1212,8 @@ namespace libcage {
         {
                 boost::unordered_map<uint32_t, query_ptr>::iterator it;
                 msg_dht_find_value_reply *reply;
+                timer_query_ptr t;
                 cageaddr  addr;
-                timer_ptr t;
                 query_ptr q;
                 uint160_t dst;
                 uint160_t id;
@@ -1103,26 +1242,111 @@ namespace libcage {
                 addr = new_cageaddr(&reply->hdr, from);
 
                 i.id = addr.id;
-                if (q->timers.find(i) == q->timers.end())
-                        return;
+                if (q->timers.find(i) != q->timers.end()) {
+                        if (! q->is_find_value)
+                                return;
 
-                if (! q->is_find_value)
-                        return;
+                        // stop timer
+                        t = q->timers[i];
+                        m_timer.unset_timer(t.get());
+                        q->timers.erase(i);
 
-                // stop timer
-                t = q->timers[i];
-                m_timer.unset_timer(t.get());
-                q->timers.erase(i);
-
-                // add to rttale and request cache
-                add(addr);
-                m_peers.add_node(addr);
+                        // add to rttale and request cache
+                        add(addr);
+                        m_peers.add_node(addr);
 
 
-                q->sent.insert(i);
-                q->num_query--;
+                        q->sent.insert(i);
+                        q->num_query--;
+                }
+
 
                 if (reply->flag == 1) {
+                        msg_data *data;
+                        uint16_t  index;
+                        uint16_t  total;
+                        uint16_t  keylen;
+                        uint16_t  valuelen;
+                        char     *key, *value;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*data) - sizeof(data->data);
+
+                        if (len < size)
+                                return;
+
+                        data = (msg_data*)reply->data;
+
+                        keylen   = ntohs(data->keylen);
+                        valuelen = ntohs(data->valuelen);
+
+                        size += keylen + valuelen;
+
+                        if (size != len)
+                                return;
+
+                        key   = (char*)data->data;
+                        value = key + keylen;
+
+                        if (keylen != q->keylen)
+                                return;
+
+                        if (memcmp(key, q->key.get(), keylen) != 0)
+                                return;
+
+                        index = ntohs(reply->index);
+                        total = ntohs(reply->total);
+
+
+                        boost::unordered_map<_id, int>::iterator it_num;
+
+                        it_num = q->num_value.find(i);
+                        if (it_num == q->num_value.end()) {
+                                q->num_value[i] = total;
+                        } else if (it_num->second != total) {
+                                return;
+                        }
+
+
+                        boost::shared_array<char> v_ptr(new char[valuelen]);
+                        value_t v;
+
+                        memcpy(v_ptr.get(), value, valuelen);
+                        v.value = v_ptr;
+                        v.len   = valuelen;
+                        v.index = index;
+
+                        q->values[i].insert(v);
+
+
+                        if (! q->is_timer_recvd_started) {
+                                // start timer
+                                timeval tval;
+                                timer_recvd_ptr tp(new timer_recvd_value(*this,
+                                                                         q));
+
+                                tval.tv_sec  = 5;
+                                tval.tv_usec = 0;
+
+                                m_timer.set_timer(tp.get(), &tval);
+                                
+                                q->is_timer_recvd_started = true;
+                                q->timer_recvd = tp;
+                        }
+
+
+                        for (it_num = q->num_value.begin();
+                             it_num != q->num_value.end(); ++it_num) {
+                                if (it_num->second <
+                                    (int)q->values[it_num->first].size()) {
+                                        break;
+                                }
+
+                                recvd_value(q);
+                        }
+
+
+/*
                         msg_data *data;
                         uint16_t  keylen;
                         uint16_t  valuelen;
@@ -1160,7 +1384,7 @@ namespace libcage {
                         func(true, value, valuelen);
 
                         // stop all timer
-                        boost::unordered_map<_id, timer_ptr>::iterator it_tm;
+                        boost::unordered_map<_id, timer_query_ptr>::iterator it_tm;
                         for (it_tm = q->timers.begin();
                              it_tm != q->timers.end(); ++it_tm) {
                                 m_timer.unset_timer(it_tm->second.get());
@@ -1168,6 +1392,7 @@ namespace libcage {
 
                         // remove query
                         m_query.erase(nonce);
+*/
                 } else if (reply->flag == 0) {
                         std::vector<cageaddr> nodes;
                         msg_nodes *addrs;
@@ -1230,105 +1455,150 @@ namespace libcage {
         }
 
         void
+        dht::recvd_value(query_ptr q)
+        {
+                // TODO: fix this
+                // call callback function
+/*
+                callback_find_value func;
+
+                func = boost::get<callback_find_value>(q->func);
+                func(true, value, valuelen);
+*/
+
+                // stop all timer
+                boost::unordered_map<_id, timer_query_ptr>::iterator it_tm;
+                for (it_tm = q->timers.begin();
+                     it_tm != q->timers.end(); ++it_tm) {
+                        m_timer.unset_timer(it_tm->second.get());
+                }
+
+                if (q->is_timer_recvd_started)
+                        m_timer.unset_timer(q->timer_recvd.get());
+
+                // remove query
+                m_query.erase(q->nonce);
+        }
+
+        void
         dht::refresh()
         {
-                boost::unordered_map<id_key, stored_data>::iterator it;
+                boost::unordered_map<id_key, sdata_set>::iterator it1;
+                sdata_set::iterator it2;
+                
                 time_t now = time(NULL);
 
-                for(it = m_stored.begin(); it != m_stored.end();) {
-                        time_t diff;
-                        diff = now - it->second.stored_time;
-                        if (diff > it->second.ttl)
-                                m_stored.erase(it++);
+                for(it1 = m_stored.begin(); it1 != m_stored.end();) {
+                        for (it2 = it1->second.begin();
+                             it2 != it1->second.end();) {
+                                time_t diff;
+                                diff = now - it2->stored_time;
+
+                                if (diff > it2->ttl)
+                                        it1->second.erase(it2++);
+                                else
+                                        ++it2;
+                        }
+
+                        if (it1->second.size() == 0)
+                                m_stored.erase(it1++);
                         else
-                                ++it;
+                                ++it1;
                 }
         }
 
         void
         dht::restore_func::operator() (std::vector<cageaddr> &n)
         {
-                boost::unordered_map<id_key, stored_data>::iterator it;
+                boost::unordered_map<id_key, sdata_set>::iterator it1;
+                sdata_set::iterator   it2;
                 std::vector<cageaddr> nodes;
                 time_t now = time(NULL);
 
-                for(it = p_dht->m_stored.begin();
-                    it != p_dht->m_stored.end();) {
-                        msg_dht_store *msg;
-                        uint16_t       ttl;
-                        int            size;
-                        char           buf[1024 * 4];
-                        char          *p_key, *p_value;
-                        bool           me = false;
-                        time_t         diff;
+                for(it1 = p_dht->m_stored.begin();
+                    it1 != p_dht->m_stored.end();) {
+                        for (it2 = it1->second.begin();
+                             it2 != it1->second.end();) {
+                                msg_dht_store *msg;
+                                uint16_t       ttl;
+                                int            size;
+                                char           buf[1024 * 4];
+                                char          *p_key, *p_value;
+                                bool           me = false;
+                                time_t         diff;
 
-                        if (it->second.original > 0) {
-                                ++it;
-                                continue;
-                        }
+                                if (it2->original > 0) {
+                                        ++it2;
+                                        continue;
+                                }
                         
-                        p_dht->lookup(*it->second.id, num_find_node, nodes);
+                                p_dht->lookup(*it2->id, num_find_node, nodes);
 
-                        if (nodes.size() == 0) {
-                                ++it;
-                                continue;
-                        }
-
-                        size = sizeof(*msg) - sizeof(msg->data) +
-                                it->second.keylen + it->second.valuelen;
-
-                        if (size > (int)sizeof(buf)) {
-                                ++it;
-                                continue;
-                        }
-
-                        msg = (msg_dht_store*)buf;
-
-                        diff = now - it->second.stored_time;
-                        if (diff >= it->second.ttl) {
-                                ++it;
-                                continue;
-                        }
-
-                        ttl = it->second.ttl - diff;
-
-                        msg->keylen   = htons(it->second.keylen);
-                        msg->valuelen = htons(it->second.valuelen);
-                        msg->ttl      = htons(ttl);
-
-                        it->second.id->to_binary(msg->id, sizeof(msg->id));
-
-                        p_key   = (char*)msg->data;
-                        p_value = p_key + it->second.keylen;
-
-                        memcpy(p_key, it->second.key.get(), 
-                               it->second.keylen);
-                        memcpy(p_value, it->second.value.get(),
-                               it->second.valuelen);
-
-
-                        BOOST_FOREACH(cageaddr &addr, nodes) {
-                                if (p_dht->m_id == *addr.id) {
-                                        me = true;
+                                if (nodes.size() == 0) {
+                                        ++it2;
                                         continue;
                                 }
 
-                                _id    i;
+                                size = sizeof(*msg) - sizeof(msg->data) +
+                                        it2->keylen + it2->valuelen;
 
-                                i.id = addr.id;
-                                if (it->second.recvd.find(i) !=
-                                    it->second.recvd.end()) {
+                                if (size > (int)sizeof(buf)) {
+                                        ++it2;
                                         continue;
                                 }
 
-                                p_dht->send_msg(&msg->hdr, size, type_dht_store,
-                                                addr);
+                                msg = (msg_dht_store*)buf;
+
+                                diff = now - it2->stored_time;
+                                if (diff >= it2->ttl) {
+                                        ++it2;
+                                        continue;
+                                }
+
+                                ttl = it2->ttl - diff;
+
+                                msg->keylen   = htons(it2->keylen);
+                                msg->valuelen = htons(it2->valuelen);
+                                msg->ttl      = htons(ttl);
+
+                                it2->id->to_binary(msg->id, sizeof(msg->id));
+
+                                p_key   = (char*)msg->data;
+                                p_value = p_key + it2->keylen;
+
+                                memcpy(p_key, it2->key.get(), it2->keylen);
+                                memcpy(p_value, it2->value.get(),
+                                       it2->valuelen);
+
+
+                                BOOST_FOREACH(cageaddr &addr, nodes) {
+                                        if (p_dht->m_id == *addr.id) {
+                                                me = true;
+                                                continue;
+                                        }
+
+                                        _id    i;
+
+                                        i.id = addr.id;
+                                        if (it2->recvd.find(i) !=
+                                            it2->recvd.end()) {
+                                                continue;
+                                        }
+
+                                        p_dht->send_msg(&msg->hdr, size,
+                                                        type_dht_store, addr);
+                                }
+
+                                if (! me)
+                                        it1->second.erase(it2++);
+                                else
+                                        ++it2;
                         }
 
-                        if (! me)
-                                p_dht->m_stored.erase(it++);
+                        if (it1->second.size() == 0)
+                                p_dht->m_stored.erase(it1++);
                         else
-                                ++it;
+                                ++it1;
                 }
         }
 
@@ -1366,35 +1636,44 @@ namespace libcage {
 
 
                         // store original key-value pair
-                        boost::unordered_map<id_key, stored_data>::iterator it;
-                        for (it = m_stored.begin(); it != m_stored.end();) {
-                                if (it->second.original == 0) {
-                                        ++it;
-                                        continue;
+                        boost::unordered_map<id_key, sdata_set>::iterator it1;
+                        sdata_set::iterator it2;
+                        for (it1 = m_stored.begin(); it1 != m_stored.end();) {
+                                for (it2 = it1->second.begin();
+                                     it2 != it1->second.end();) {
+                                        if (it2->original == 0) {
+                                                ++it2;
+                                                continue;
+                                        }
+
+                                        time_t diff;
+                                        diff = time(NULL) - it2->stored_time;
+
+                                        if (diff > it2->ttl) {
+                                                it1->second.erase(it2++);
+                                                continue;
+                                        }
+
+
+                                        store_func sfunc;
+
+                                        sfunc.key      = it2->key;
+                                        sfunc.value    = it2->value;
+                                        sfunc.id       = it2->id;
+                                        sfunc.keylen   = it2->keylen;
+                                        sfunc.valuelen = it2->valuelen;
+                                        sfunc.ttl      = it2->ttl - diff;
+                                        sfunc.p_dht    = this;
+
+                                        find_node(*it2->id, sfunc);
+
+                                        ++it2;
                                 }
 
-                                time_t diff;
-                                diff = time(NULL) - it->second.stored_time;
-
-                                if (diff > it->second.ttl) {
-                                        m_stored.erase(it++);
-                                        continue;
-                                }
-
-
-                                store_func sfunc;
-
-                                sfunc.key      = it->second.key;
-                                sfunc.value    = it->second.value;
-                                sfunc.id       = it->second.id;
-                                sfunc.keylen   = it->second.keylen;
-                                sfunc.valuelen = it->second.valuelen;
-                                sfunc.ttl      = it->second.ttl - diff;
-                                sfunc.p_dht    = this;
-
-                                find_node(*it->second.id, sfunc);
-
-                                ++it;
+                                if (it1->second.size() == 0)
+                                        m_stored.erase(it1++);
+                                else
+                                        ++it1;
                         }
                 }
         }

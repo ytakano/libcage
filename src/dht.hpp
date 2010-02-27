@@ -60,6 +60,7 @@ namespace libcage {
                 static const int        restore_interval;
                 static const int        timer_interval;
                 static const int        original_put_num;
+                static const int        recvd_value_timeout;
 
         public:
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -150,7 +151,7 @@ namespace libcage {
 
                         bool operator== (const id_key &rhs) const
                         {
-                                if (keylen != keylen) {
+                                if (keylen != rhs.keylen) {
                                         return false;
                                 } else if (*id != *rhs.id) {
                                         return false;
@@ -169,14 +170,32 @@ namespace libcage {
                 public:
                         boost::shared_array<char>       key;
                         boost::shared_array<char>       value;
-                        boost::unordered_set<_id>       recvd;
                         uint16_t        keylen;
                         uint16_t        valuelen;
-                        uint16_t        ttl;
-                        time_t          stored_time;
                         id_ptr          id;
-                        int             original;
+
+                        mutable boost::unordered_set<_id>       recvd;
+                        mutable time_t          stored_time;
+                        mutable int             original;
+                        mutable uint16_t        ttl;
+
+
+                        bool operator== (const stored_data &rhs) const
+                        {
+                                if (valuelen != rhs.valuelen) {
+                                        return false;
+                                } else if (memcmp(value.get(), rhs.value.get(),
+                                                  valuelen) != 0) {
+                                        return false;
+                                }
+
+                                return true;
+                        }
                 };
+
+                friend size_t hash_value(const stored_data &sdata);
+
+                typedef boost::unordered_set<stored_data> sdata_set;
 
                 // for ping
                 class ping_func {
@@ -218,12 +237,37 @@ namespace libcage {
                         dht            *p_dht;
                 };
 
-                typedef boost::shared_ptr<timer_query>  timer_ptr;
+                typedef boost::shared_ptr<timer_query>  timer_query_ptr;
+
+                class value_t {
+                public:
+                        boost::shared_array<char> value;
+                        int index;
+                        int len;
+
+                        bool operator== (const value_t &rhs) const {
+                                if (len != rhs.len) {
+                                        return false;
+                                } else if (memcmp(value.get(), rhs.value.get(),
+                                                  len) != 0) {
+                                        return false;
+                                }
+
+                                return true;
+                        }
+                };
+
+                friend size_t hash_value(const value_t &value);
+
+                typedef boost::unordered_set<value_t> value_set;
+
+                class timer_recvd_value;
+                typedef boost::shared_ptr<timer_recvd_value> timer_recvd_ptr;
 
                 class query {
                 public:
                         std::vector<cageaddr>           nodes;
-                        boost::unordered_map<_id, timer_ptr>    timers;
+                        boost::unordered_map<_id, timer_query_ptr>      timers;
                         boost::unordered_set<_id>       sent;
                         id_ptr          dst;
                         uint32_t        nonce;
@@ -233,10 +277,34 @@ namespace libcage {
                         boost::shared_array<char>       key;
                         int             keylen;
 
+                        boost::unordered_map<_id, value_set> values;
+                        boost::unordered_map<_id, int>       num_value;
+
+                        timer_recvd_ptr       timer_recvd;
+                        bool                  is_timer_recvd_started;
+
                         callback_func   func;
+
+                        query() : is_timer_recvd_started(false) { }
                 };
 
                 typedef boost::shared_ptr<query> query_ptr;
+
+
+                class timer_recvd_value : public timer::callback {
+                public:
+                        dht            &m_dht;
+                        query_ptr       m_query;
+
+                        timer_recvd_value(dht &d, query_ptr q)
+                                : m_dht(d), m_query(q) { }
+                        virtual ~timer_recvd_value() { }
+
+                        virtual void operator() ()
+                        {
+                                m_dht.recvd_value(m_query);
+                        }
+                };
 
                 // for restore
                 class restore_func {
@@ -324,6 +392,8 @@ namespace libcage {
                 void            refresh();
                 void            restore();
 
+                void            recvd_value(query_ptr q);
+
 
                 const uint160_t         &m_id;
                 timer                   &m_timer;
@@ -338,7 +408,7 @@ namespace libcage {
                 sync_node                m_sync;
 
                 boost::unordered_map<uint32_t, query_ptr>       m_query;
-                boost::unordered_map<id_key, stored_data>       m_stored;
+                boost::unordered_map<id_key, sdata_set>         m_stored;
         };
 }
 
