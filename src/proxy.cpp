@@ -568,7 +568,7 @@ namespace libcage {
                                 it->second->total = ntohs(reply->total);
                         }
 
-                        if (it->second->total >= (int)it->second->vset->size()) {
+                        if (it->second->total <= (int)it->second->vset->size()) {
                                 it->second->func(true, it->second->vset);
 
                                 m_timer.unset_timer(&it->second->timeout);
