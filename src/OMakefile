@@ -20,6 +20,7 @@ SRC[] =
 	timer
 	natdetector
 	udphandler
+	rdp
 
 LIBNAME = libcage
 
