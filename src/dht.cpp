@@ -1400,6 +1400,13 @@ namespace libcage {
 
                 for(it1 = p_dht->m_stored.begin();
                     it1 != p_dht->m_stored.end();) {
+                        p_dht->lookup(*it1->first.id, num_find_node, nodes);
+
+                        if (nodes.size() == 0) {
+                                ++it1;
+                                continue;
+                        }
+
                         for (it2 = it1->second.begin();
                              it2 != it1->second.end();) {
                                 msg_dht_store *msg;
@@ -1415,12 +1422,6 @@ namespace libcage {
                                         continue;
                                 }
                         
-                                p_dht->lookup(*it2->id, num_find_node, nodes);
-
-                                if (nodes.size() == 0) {
-                                        ++it2;
-                                        continue;
-                                }
 
                                 size = sizeof(*msg) - sizeof(msg->data) +
                                         it2->keylen + it2->valuelen;
