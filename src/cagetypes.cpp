@@ -37,6 +37,12 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
+        size_t
+        hash_value(const _id &i)
+        {
+                return i.id->hash_value();
+        }
+
         cageaddr
         new_cageaddr(msg_hdr *hdr, sockaddr *saddr)
         {

@@ -92,19 +92,19 @@ namespace libcage {
 
                 friend class    timer_func;
 
-                class _id {
+                class __id {
                 public:
                         id_ptr          id;
                         mutable time_t  t;
                         uint32_t        session;
 
-                        bool operator== (const _id &rhs) const
+                        bool operator== (const __id &rhs) const
                         {
                                 return *id == *rhs.id;
                         }
                 };
                 
-                friend size_t hash_value(const _id &i);
+                friend size_t hash_value(const __id &i);
 
                 class _addr : private boost::totally_ordered<_addr> {
                 public:
@@ -115,11 +115,11 @@ namespace libcage {
                         bool operator< (const _addr &rhs) const;
                 };
 
-                typedef boost::bimaps::multiset_of<_addr>    _addr_set;
-                typedef boost::bimaps::unordered_set_of<_id> _id_set;
-                typedef boost::bimaps::bimap<_id_set,
+                typedef boost::bimaps::multiset_of<_addr>       _addr_set;
+                typedef boost::bimaps::unordered_set_of<__id>   __id_set;
+                typedef boost::bimaps::bimap<__id_set,
                                              _addr_set>::value_type value_t;
-                typedef boost::bimaps::bimap<_id_set, _addr_set>    _bimap;
+                typedef boost::bimaps::bimap<__id_set, _addr_set>       _bimap;
 
         public:
                 peers(timer &t);
@@ -147,7 +147,7 @@ namespace libcage {
 
         private:
                 _bimap          m_map;
-                boost::unordered_set<_id>       m_timeout;
+                boost::unordered_set<__id>       m_timeout;
 
                 timer           m_timer;
                 timer_func      m_timer_func;

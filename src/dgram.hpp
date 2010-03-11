@@ -69,18 +69,6 @@ namespace libcage {
 
 
         private:
-                class _id {
-                public:
-                        id_ptr  id;
-
-                        bool operator== (const _id &rhs) const
-                        {
-                                return *id == *rhs.id;
-                        }
-                };
-
-                friend size_t hash_value(const _id &i);
-
                 class request_func {
                 public:
                         void operator() (bool result, cageaddr &addr);

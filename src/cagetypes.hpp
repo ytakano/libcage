@@ -52,6 +52,18 @@ namespace libcage {
         typedef boost::shared_ptr<sockaddr_in6> in6_ptr;
         typedef boost::shared_ptr<uint160_t>    id_ptr;
 
+        class _id {
+        public:
+                id_ptr  id;
+
+                bool operator== (const _id &rhs) const
+                {
+                        return *id == *rhs.id;
+                }
+        };
+
+        size_t hash_value(const _id &i);
+
         struct cageaddr {
                 id_ptr          id;
                 uint16_t        domain;

@@ -45,12 +45,6 @@ namespace libcage {
         const int       dht::recvd_value_timeout = 3;
 
         size_t
-        hash_value(const dht::_id &i)
-        {
-                return i.id->hash_value();
-        }
-
-        size_t
         hash_value(const dht::id_key &ik)
         {
                 size_t h;

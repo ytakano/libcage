@@ -47,12 +47,6 @@ namespace libcage {
         const int       dtun::registered_ttl   = 300;
         const int       dtun::timer_interval   = 30;
 
-        size_t
-        hash_value(const dtun::_id &i)
-        {
-                return i.id->hash_value();
-        }
-
         void
         dtun::timer_query::operator() ()
         {

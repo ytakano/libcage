@@ -35,12 +35,6 @@
 #include "proxy.hpp"
 
 namespace libcage {
-        size_t
-        hash_value(const dgram::_id &i)
-        {
-                return i.id->hash_value();
-        }
-
         void
         dgram::request_func::operator() (bool result, cageaddr &addr)
         {
@@ -90,17 +84,13 @@ namespace libcage {
 
                 i.id = id;
 
-                if (m_requesting.find(i) != m_requesting.end()) {
-                        push2queue(id, msg, len, src);
-                } else {
+                push2queue(id, msg, len, src);
+
+                if (m_requesting.find(i) == m_requesting.end()) {
                         try {
                                 m_peers.get_addr(id);
-
-                                push2queue(id, msg, len, src);
                                 send_queue(id);
                         } catch (std::out_of_range) {
-                                push2queue(id, msg, len, src);
-
                                 // request
                                 if (m_dtun.is_enabled()) {
                                         request_func func;

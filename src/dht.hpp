@@ -131,16 +131,6 @@ namespace libcage {
                 void            set_enabled_dtun(bool flag);
 
         private:
-                class _id {
-                public:
-                        id_ptr  id;
-
-                        bool operator== (const _id &rhs) const
-                        {
-                                return *id == *rhs.id;
-                        }
-                };
-
                 class sync_node {
                 public:
                         sync_node(dht &d) : m_dht(d)
@@ -152,8 +142,6 @@ namespace libcage {
 
                         dht    &m_dht;
                 };
-
-                friend size_t hash_value(const _id &i);
 
                 // for store
                 class store_func {

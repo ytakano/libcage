@@ -39,7 +39,7 @@ namespace libcage {
         const time_t    peers::timer_interval = 30;
 
         size_t
-        hash_value(const peers::_id &i)
+        hash_value(const peers::__id &i)
         {
                 return i.id->hash_value();
         }
@@ -134,7 +134,7 @@ namespace libcage {
         {
                 cageaddr addr;
                 _addr    a;
-                _id      i;
+                __id     i;
 
                 i.id = id;
 
@@ -153,7 +153,7 @@ namespace libcage {
         {
                 // _bimap_its its;
                 _addr      a;
-                _id        i;
+                __id       i;
 
                 a.domain = addr.domain;
                 a.saddr  = addr.saddr;
@@ -167,7 +167,7 @@ namespace libcage {
         void
         peers::remove_id(id_ptr id)
         {
-                _id   i;
+                __id  i;
 
                 i.id = id;
                 i.t  = 0;
@@ -196,7 +196,7 @@ namespace libcage {
         bool
         peers::add_node(cageaddr &addr, uint32_t session)
         {
-                _id   i;
+                __id  i;
 
                 if (addr.domain != domain_inet && addr.domain == domain_inet6)
                         return false;
@@ -254,7 +254,7 @@ namespace libcage {
         peers::add_node_force(cageaddr &addr)
         {
                 _addr a;
-                _id   i;
+                __id  i;
 
                 if (addr.domain != domain_inet && addr.domain != domain_inet6)
                         return;
@@ -276,7 +276,7 @@ namespace libcage {
         {
                 time_t now = time(NULL);
 
-                boost::unordered_set<_id>::iterator it1;
+                boost::unordered_set<__id>::iterator it1;
                 for (it1 = m_timeout.begin(); it1 != m_timeout.end();) {
                         time_t diff = now - it1->t;
 
@@ -303,7 +303,7 @@ namespace libcage {
         void
         peers::add_timeout(id_ptr id)
         {
-                _id i;
+                __id i;
 
                 i.t  = time(NULL);
                 i.id = id;
@@ -318,7 +318,7 @@ namespace libcage {
         bool
         peers::is_timeout(id_ptr id)
         {
-                _id i;
+                __id i;
 
                 i.id = id;
 
@@ -350,7 +350,7 @@ namespace libcage {
         peers::get_next(id_ptr id)
         {
                 cageaddr addr;
-                _id      i;
+                __id     i;
 
                 i.id = id;
                 i.t  = 0;

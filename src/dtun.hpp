@@ -122,18 +122,6 @@ namespace libcage {
                 uint32_t        get_session() { return m_register_session; }
 
         private:
-                class _id {
-                public:
-                        id_ptr  id;
-
-                        bool operator== (const _id &rhs) const
-                        {
-                                return *id == *rhs.id;
-                        }
-                };
-
-                friend size_t hash_value(const _id &i);
-
                 class timer_refresh : public timer::callback {
                 public:
                         virtual void operator() ();

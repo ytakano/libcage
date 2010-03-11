@@ -43,12 +43,6 @@ namespace libcage {
         const time_t    proxy::get_timeout      = 10;
         const time_t    proxy::timer_interval   = 30;
 
-        size_t
-        hash_value(const proxy::_id &i)
-        {
-                return i.id->hash_value();
-        }
-
         static void
         no_action(void *buf, size_t len, uint8_t *addr)
         {
