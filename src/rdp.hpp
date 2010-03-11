@@ -109,9 +109,8 @@ namespace libcage {
                 void            in_state_syn_rcvd(rdp_con_ptr con,
                                                   rdp_addr addr,
                                                   rdp_head *head, int len);
-                void            in_state_open(rdp_con_ptr con,
-                                                  rdp_addr addr,
-                                                  rdp_head *head, int len);
+                void            in_state_open(rdp_con_ptr con, rdp_addr addr,
+                                              rdp_head *head, int len);
                 void            set_callback_output(callback_output func);
 
         private:

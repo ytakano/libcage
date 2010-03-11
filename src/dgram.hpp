@@ -38,12 +38,12 @@
 #include "cagetypes.hpp"
 #include "dht.hpp"
 #include "dtun.hpp"
+#include "packetbuf.hpp"
 #include "peers.hpp"
 #include "udphandler.hpp"
 
 #include <queue>
 
-#include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 
@@ -62,6 +62,7 @@ namespace libcage {
 
                 void            recv_dgram(void *msg, int len, sockaddr *from);
 
+                void            send_dgram(packetbuf *pbuf, id_ptr id);
                 void            send_dgram(const void *msg, int len, id_ptr id);
                 void            send_dgram(const void *msg, int len, id_ptr id,
                                            const uint160_t &src);
@@ -87,9 +88,16 @@ namespace libcage {
 
                 class send_data {
                 public:
-                        boost::shared_array<char>       data;
+                        packetbuf      *pbuf;
                         uint160_t       src;
                         int             len;
+
+                        send_data() : pbuf(NULL) { }
+                        virtual ~send_data()
+                        {
+                                if (pbuf != NULL)
+                                        packetbuf::destroy(pbuf);
+                        }
                 };
 
                 typedef std::queue<send_data>   type_queue;
@@ -97,6 +105,11 @@ namespace libcage {
                 void            send_queue(id_ptr id);
                 void            push2queue(id_ptr id, const void *msg, int len,
                                            const uint160_t &src);
+                void            push2queue(id_ptr id, packetbuf *pbuf,
+                                           const uint160_t &src);
+
+                void            request(id_ptr id);
+
                 void            send_msg(send_data &data, cageaddr &dst);
 
                 boost::unordered_map<_id, type_queue>   m_queue;

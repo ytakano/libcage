@@ -68,6 +68,14 @@ namespace libcage {
         }
 
         void
+        dgram::send_dgram(packetbuf *pbuf, id_ptr id)
+        {
+                push2queue(id, pbuf, m_id);
+
+                request(id);
+        }
+
+        void
         dgram::send_dgram(const void *msg, int len, id_ptr id)
         {
                 send_dgram(msg, len, id, m_id);
@@ -77,14 +85,19 @@ namespace libcage {
         dgram::send_dgram(const void *msg, int len, id_ptr id,
                           const uint160_t &src)
         {
-                _id i;
-
                 if (len < 0)
                         return;
+                push2queue(id, msg, len, src);
+
+                request(id);
+        }
+
+        void
+        dgram::request(id_ptr id)
+        {
+                _id i;
 
                 i.id = id;
-
-                push2queue(id, msg, len, src);
 
                 if (m_requesting.find(i) == m_requesting.end()) {
                         try {
@@ -161,16 +174,33 @@ namespace libcage {
         dgram::push2queue(id_ptr id, const void *msg, int len,
                           const uint160_t &src)
         {
-                boost::shared_array<char> array(new char[len]);
-                send_data data;
+                packetbuf *pbuf = packetbuf::construct();
+                send_data  data;
+                void *p;
                 _id i;
 
                 i.id = id;
 
-                memcpy(array.get(), msg, len);
+                p = pbuf->append(len);
+                memcpy(p, msg, len);
 
-                data.data = array;
+                data.pbuf = pbuf;
                 data.len  = len;
+                data.src  = src;
+
+                m_queue[i].push(data);
+        }
+
+        void
+        dgram::push2queue(id_ptr id, packetbuf *pbuf, const uint160_t &src)
+        {
+                send_data  data;
+                _id i;
+
+                i.id = id;
+
+                data.pbuf = pbuf;
+                data.len  = pbuf->get_len();
                 data.src  = src;
 
                 m_queue[i].push(data);
@@ -180,16 +210,16 @@ namespace libcage {
         dgram::send_msg(send_data &data, cageaddr &dst)
         {
                 msg_dgram *dgram;
-                char       buf[1024 * 4];
                 size_t     size;
+
+                dgram = (msg_dgram*)data.pbuf->prepend(sizeof(dgram->hdr));
+
+                if (dgram == NULL)
+                        return;
 
                 size = data.len + sizeof(msg_hdr);
 
-                if (size > sizeof(buf))
-                        return;
-
-                dgram = (msg_dgram*)buf;
-                memset(dgram, 0 , size);
+                memset(dgram, 0 , sizeof(dgram->hdr));
 
                 dgram->hdr.magic = htons(MAGIC_NUMBER);
                 dgram->hdr.ver   = CAGE_VERSION;
@@ -198,8 +228,6 @@ namespace libcage {
                 
                 data.src.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
                 dst.id->to_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
-
-                memcpy(dgram->data, data.data.get(), data.len);
 
                 if (dst.domain == domain_inet) {
                         in_ptr in;
@@ -267,6 +295,5 @@ namespace libcage {
 
                 if (m_is_callback)
                         m_callback(dgram->data, size, (uint8_t*)dgram->hdr.src);
-
         }
 }

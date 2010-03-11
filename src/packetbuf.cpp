@@ -3,6 +3,8 @@
 #include <string.h>
 
 namespace libcage {
+        boost::object_pool<packetbuf>   packetbuf::pbuf;
+
         packetbuf::packetbuf() : m_len(0)
         {
                 m_begin = &m_buf[128];
@@ -13,28 +15,51 @@ namespace libcage {
 
         }
 
-        bool
-        packetbuf::append(const void *buf, int len)
+        void*
+        packetbuf::append(int len)
         {
                 if (m_begin + m_len + len > &m_buf[sizeof(m_buf)]) {
-                        return false;
+                        return NULL;
                 } else {
-                        memcpy(&m_begin[m_len], buf, len);
+                        void *p = &m_begin[m_len];
                         m_len += len;
-                        return true;
+                        return p;
                 }
         }
 
-        bool
-        packetbuf::prepend(const void *buf, int len)
+        void*
+        packetbuf::prepend(int len)
         {
                 if (m_begin - len < m_buf) {
-                        return false;
+                        return NULL;
                 } else {
-                        memcpy(m_begin - len, buf, len);
                         m_len   += len;
                         m_begin -= len;
-                        return true;
+                        return m_begin;
                 }
+        }
+
+        void*
+        packetbuf::get_data()
+        {
+                return m_begin;
+        }
+
+        int
+        packetbuf::get_len()
+        {
+                return m_len;
+        }
+
+        packetbuf*
+        packetbuf::construct()
+        {
+                return pbuf.construct();
+        }
+
+        void
+        packetbuf::destroy(packetbuf *p)
+        {
+                pbuf.destroy(p);
         }
 }
