@@ -8,7 +8,7 @@ namespace libcage {
         const uint8_t rdp::flag_nul = 0x08;
         const uint8_t rdp::flag_ver = 2;
 
-        const uint32_t rdp::rbuf_max_default    = 1024 * 4;
+        const uint32_t rdp::rbuf_max_default    = 1024 * 2;
         const uint32_t rdp::snd_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
 
@@ -101,13 +101,15 @@ namespace libcage {
                 p_con->snd_max  = snd_max_default;
 
 
+                // XXX
                 // create syn packet
+                // enqueue
+                /*
                 rdp_syn syn;
 
                 memset(&syn, 0, sizeof(syn));
 
-                syn.head.flags = flag_syn | flag_ver;
-
+                syn.head.flags  = flag_syn | flag_ver;
                 syn.head.hlen   = (uint8_t)(sizeof(syn) / 2);
                 syn.head.sport  = htons(sport);
                 syn.head.dport  = htons(dport);
@@ -120,6 +122,7 @@ namespace libcage {
 
                 // send syn
                 m_output_func(did, &syn, sizeof(syn));
+                */
 
                 // create descriptor
                 int desc;
@@ -248,6 +251,31 @@ namespace libcage {
                 //   Discard segment
                 //   Return
                 // Endif
+
+                if (head->flags & flag_ack || head->flags & flag_nul) {
+                        rdp_head rst;
+                        uint32_t seg_ack;
+
+                        seg_ack = ntohl(head->seqnum);
+                        seg_ack++;
+
+                        memset(&rst, 0, sizeof(rst));
+
+                        rst.flags  = flag_rst | flag_ver;
+                        rst.hlen   = sizeof(rst) / 2;
+                        rst.sport  = htons(addr.dport);
+                        rst.dport  = htons(addr.sport);
+                        rst.acknum = htonl(seg_ack);
+
+                        m_output_func(addr.did, &rst, sizeof(rst));
+                } else if (head->flags & flag_syn) {
+                        // XXX
+                        // create syn ack packet
+                        // enqueue
+
+                        // XXX
+                        // create connection
+                }
         }
 
         void

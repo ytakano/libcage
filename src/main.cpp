@@ -45,11 +45,12 @@
 #include "rttable.hpp"
 #include "udphandler.hpp"
 #include "timer.hpp"
+#include "packetbuf.hpp"
 
 int
 main(int argc, char* argv[])
 {
-        event_init();
+        // event_init();
 
         // libcage::udphandler::test_udp();
         // libcage::timer::test_timer();
@@ -61,9 +62,25 @@ main(int argc, char* argv[])
 
         // libcage::peers::test_peers();
 
-        libcage::cage::test_dtun();
+        // libcage::cage::test_dtun();
 
-        event_dispatch();
+        // event_dispatch();
+
+        libcage::packetbuf pbuf;
+
+        for (int i = 0; i < 1024 * 2; i++) {
+                std::cout << i << std::endl;
+
+                if (! pbuf.prepend("a", 1))
+                        break;
+        }
+
+        for (int i = 0; i < 1024 * 2; i++) {
+                std::cout << i << std::endl;
+
+                if (! pbuf.append("a", 1))
+                        break;
+        }
 
         return 0;
 }

@@ -21,6 +21,7 @@ SRC[] =
 	natdetector
 	udphandler
 	rdp
+	packetbuf
 
 LIBNAME = libcage
 

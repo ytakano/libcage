@@ -36,7 +36,7 @@ namespace libcage {
                 uint16_t dlen;
                 uint32_t seqnum;
                 uint32_t acknum;
-                uint8_t  checksum;
+                uint32_t checksum;
         };
 
         struct rdp_syn {
