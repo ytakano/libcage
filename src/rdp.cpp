@@ -101,28 +101,29 @@ namespace libcage {
                 p_con->snd_max  = snd_max_default;
 
 
-                // XXX
                 // create syn packet
+                packetbuf *pbuf = packetbuf::construct();
+                rdp_syn   *syn;
+                
+                pbuf->inc_refc();
+
+                syn = (rdp_syn*)pbuf->append(sizeof(*syn));
+                memset(syn, 0, sizeof(*syn));
+
+                syn->head.flags  = flag_syn | flag_ver;
+                syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
+                syn->head.sport  = htons(sport);
+                syn->head.dport  = htons(dport);
+                syn->head.seqnum = htonl(p_con->snd_iss);
+
+                syn->out_segs_max = htons(p_con->snd_max);
+                syn->seg_size_max = htons(p_con->rbuf_max);
+
+                set_syn_option_seq(syn->options, true);
+
+                // XXX
                 // enqueue
-                /*
-                rdp_syn syn;
 
-                memset(&syn, 0, sizeof(syn));
-
-                syn.head.flags  = flag_syn | flag_ver;
-                syn.head.hlen   = (uint8_t)(sizeof(syn) / 2);
-                syn.head.sport  = htons(sport);
-                syn.head.dport  = htons(dport);
-                syn.head.seqnum = htonl(p_con->snd_iss);
-
-                syn.out_segs_max = htons(p_con->snd_max);
-                syn.seg_size_max = htons(p_con->rbuf_max);
-
-                set_syn_option_seq(syn.options, true);
-
-                // send syn
-                m_output_func(did, &syn, sizeof(syn));
-                */
 
                 // create descriptor
                 int desc;
@@ -253,21 +254,24 @@ namespace libcage {
                 // Endif
 
                 if (head->flags & flag_ack || head->flags & flag_nul) {
-                        rdp_head rst;
-                        uint32_t seg_ack;
+                        // send rst
+                        packetbuf *pbuf = packetbuf::construct();
+                        rdp_head  *rst;
+                        uint32_t   seg_ack;
 
                         seg_ack = ntohl(head->seqnum);
                         seg_ack++;
 
-                        memset(&rst, 0, sizeof(rst));
+                        rst = (rdp_head*)pbuf->append(sizeof(*rst));
+                        memset(rst, 0, sizeof(*rst));
 
-                        rst.flags  = flag_rst | flag_ver;
-                        rst.hlen   = sizeof(rst) / 2;
-                        rst.sport  = htons(addr.dport);
-                        rst.dport  = htons(addr.sport);
-                        rst.acknum = htonl(seg_ack);
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = sizeof(rst) / 2;
+                        rst->sport  = htons(addr.dport);
+                        rst->dport  = htons(addr.sport);
+                        rst->acknum = htonl(seg_ack);
 
-                        m_output_func(addr.did, &rst, sizeof(rst));
+                        m_output_func(addr.did, pbuf);
                 } else if (head->flags & flag_syn) {
                         // XXX
                         // create syn ack packet

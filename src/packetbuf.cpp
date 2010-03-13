@@ -5,7 +5,7 @@
 namespace libcage {
         boost::object_pool<packetbuf>   packetbuf::pbuf;
 
-        packetbuf::packetbuf() : m_len(0)
+        packetbuf::packetbuf() : m_len(0), m_ref_count(0)
         {
                 m_begin = &m_buf[128];
         }
@@ -61,5 +61,23 @@ namespace libcage {
         packetbuf::destroy(packetbuf *p)
         {
                 pbuf.destroy(p);
+        }
+
+        void
+        packetbuf::inc_refc()
+        {
+                m_ref_count++;
+        }
+
+        void
+        packetbuf::dec_refc()
+        {
+                m_ref_count++;
+        }
+
+        int
+        packetbuf::get_refc()
+        {
+                return m_ref_count;
         }
 }

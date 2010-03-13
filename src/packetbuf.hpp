@@ -18,6 +18,10 @@ namespace libcage {
                 void*           get_data();
                 int             get_len();
 
+                void            inc_refc();
+                void            dec_refc();
+                int             get_refc();
+
                 static packetbuf*       construct();
                 static void             destroy(packetbuf *p);
 
@@ -25,6 +29,7 @@ namespace libcage {
                 uint8_t         m_buf[1024 * 2];
                 uint8_t        *m_begin;
                 int             m_len;
+                int             m_ref_count;
 
                 static boost::object_pool<packetbuf>    pbuf;
         };

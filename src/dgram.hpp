@@ -44,6 +44,8 @@
 
 #include <queue>
 
+#include <boost/pool/object_pool.hpp>
+#include <boost/shared_ptr.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 
@@ -67,7 +69,6 @@ namespace libcage {
                 void            send_dgram(const void *msg, int len, id_ptr id,
                                            const uint160_t &src);
                 void            set_callback(callback func);
-
 
         private:
                 class request_func {
@@ -95,12 +96,15 @@ namespace libcage {
                         send_data() : pbuf(NULL) { }
                         virtual ~send_data()
                         {
-                                if (pbuf != NULL)
-                                        packetbuf::destroy(pbuf);
+                                if (pbuf != NULL) {
+                                        pbuf->dec_refc();
+
+                                        if (pbuf->get_refc() == 0) {
+                                                packetbuf::destroy(pbuf);
+                                        }
+                                }
                         }
                 };
-
-                typedef std::queue<send_data>   type_queue;
 
                 void            send_queue(id_ptr id);
                 void            push2queue(id_ptr id, const void *msg, int len,
@@ -110,8 +114,14 @@ namespace libcage {
 
                 void            request(id_ptr id);
 
-                void            send_msg(send_data &data, cageaddr &dst);
+                void            send_msg(send_data *data, cageaddr &dst);
 
+
+                typedef boost::object_pool<send_data>   data_pool;
+                typedef boost::shared_ptr<data_pool>    data_pool_ptr;
+                typedef std::queue<send_data*>          type_queue;
+
+                boost::unordered_map<_id, data_pool_ptr>        m_data_pool;
                 boost::unordered_map<_id, type_queue>   m_queue;
                 boost::unordered_set<_id>               m_requesting;
                 const uint160_t        &m_id;

@@ -3,6 +3,7 @@
 
 #include "cagetypes.hpp"
 #include "common.hpp"
+#include "packetbuf.hpp"
 
 #include <stdint.h>
 #include <time.h>
@@ -92,8 +93,7 @@ namespace libcage {
                 rdp_state       status(int con);
 
                 // input and output datagram to under layer
-                typedef boost::function<void (id_ptr dst, const void *buf,
-                                              int len)> callback_output;
+                typedef boost::function<void (id_ptr, packetbuf*)> callback_output;
                 void            input_dgram(id_ptr src, const void *buf,
                                             int len);
                 void            in_state_closed(rdp_addr addr, rdp_head *head,

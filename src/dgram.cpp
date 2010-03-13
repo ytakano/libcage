@@ -45,6 +45,7 @@ namespace libcage {
                 } else {
                         i.id = dst;
                         p_dgram->m_queue.erase(i);
+                        p_dgram->m_data_pool.erase(i);
                 }
 
                 i.id = dst;
@@ -56,7 +57,7 @@ namespace libcage {
         dgram::find_node_func::operator() (std::vector<cageaddr> &nodes)
         {
                 try {
-                        p_dgram->m_peers.get_addr(dst);
+                        p_dgram->m_peers.get_addr(dst); // throw std::out_of_range
 
                         p_dgram->send_queue(dst);
                 } catch (std::out_of_range) {
@@ -64,6 +65,7 @@ namespace libcage {
 
                         i.id = dst;
                         p_dgram->m_queue.erase(i);
+                        p_dgram->m_data_pool.erase(i);
                 }
         }
 
@@ -101,7 +103,7 @@ namespace libcage {
 
                 if (m_requesting.find(i) == m_requesting.end()) {
                         try {
-                                m_peers.get_addr(id);
+                                m_peers.get_addr(id); // throw std::out_of_range
                                 send_queue(id);
                         } catch (std::out_of_range) {
                                 // request
@@ -145,13 +147,13 @@ namespace libcage {
         {
                 try {
                         boost::unordered_map<_id, type_queue>::iterator it;
-                        cageaddr  addr;
-                        send_data data;
-                        _id       i;
+                        cageaddr   addr;
+                        send_data *data;
+                        _id        i;
 
                         i.id = id;
 
-                        addr = m_peers.get_addr(id);
+                        addr = m_peers.get_addr(id); // throw std::out_of_range
 
                         it = m_queue.find(i);
                         if (it == m_queue.end())
@@ -160,13 +162,15 @@ namespace libcage {
                         while (! it->second.empty()) {
                                 data = it->second.front();
                                 send_msg(data, addr);
+                                m_data_pool[i]->destroy(data);
                                 it->second.pop();
                         }
                 } catch (std::out_of_range) {
                         _id i;
-
+ 
                         i.id = id;
                         m_queue.erase(i);
+                        m_data_pool.erase(i);
                 }
         }
 
@@ -175,49 +179,51 @@ namespace libcage {
                           const uint160_t &src)
         {
                 packetbuf *pbuf = packetbuf::construct();
-                send_data  data;
                 void *p;
-                _id i;
-
-                i.id = id;
 
                 p = pbuf->append(len);
                 memcpy(p, msg, len);
 
-                data.pbuf = pbuf;
-                data.len  = len;
-                data.src  = src;
-
-                m_queue[i].push(data);
+                push2queue(id, pbuf, src);
         }
 
         void
         dgram::push2queue(id_ptr id, packetbuf *pbuf, const uint160_t &src)
         {
-                send_data  data;
+                boost::unordered_map<_id, data_pool_ptr>::iterator it;
+                send_data *data;
                 _id i;
 
                 i.id = id;
 
-                data.pbuf = pbuf;
-                data.len  = pbuf->get_len();
-                data.src  = src;
+                it = m_data_pool.find(i);
+                if (it == m_data_pool.end()) {
+                        m_data_pool[i] = data_pool_ptr(new data_pool);
+                }
+
+                data = m_data_pool[i]->construct();
+
+                pbuf->inc_refc();
+
+                data->pbuf = pbuf;
+                data->len  = pbuf->get_len();
+                data->src  = src;
 
                 m_queue[i].push(data);
         }
 
         void
-        dgram::send_msg(send_data &data, cageaddr &dst)
+        dgram::send_msg(send_data *data, cageaddr &dst)
         {
                 msg_dgram *dgram;
                 size_t     size;
 
-                dgram = (msg_dgram*)data.pbuf->prepend(sizeof(dgram->hdr));
+                dgram = (msg_dgram*)data->pbuf->prepend(sizeof(dgram->hdr));
 
                 if (dgram == NULL)
                         return;
 
-                size = data.len + sizeof(msg_hdr);
+                size = data->len + sizeof(msg_hdr);
 
                 memset(dgram, 0 , sizeof(dgram->hdr));
 
@@ -226,7 +232,7 @@ namespace libcage {
                 dgram->hdr.type  = type_dgram;
                 dgram->hdr.len   = htons(size);
                 
-                data.src.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+                data->src.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
                 dst.id->to_binary(dgram->hdr.dst, sizeof(dgram->hdr.dst));
 
                 if (dst.domain == domain_inet) {
