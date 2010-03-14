@@ -9,7 +9,7 @@ namespace libcage {
         const uint8_t rdp::flag_ver = 2;
 
         const uint32_t rdp::rbuf_max_default    = 1024 * 2;
-        const uint32_t rdp::snd_max_default     = 1024;
+        const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
 
         size_t
@@ -72,16 +72,17 @@ namespace libcage {
                 // Generate SND.ISS
                 // Set SND.NXT = SND.ISS + 1
                 //     SND.UNA = SND.ISS
-                // Fill in SND.MAX, RMAX.BUF from Open parameters
+                // Fill in RCV.MAX, RBUF.MAX from Open parameters
                 // If local port not specified
                 //   Allocate a local port
                 // Endif
-                // Send <SEQ=SND.ISS><MAX=SND.MAX><MAXBUF=RMAX.BUF><SYN>
+                // Send <SEQ=SND.ISS><MAX=RCV.MAX><BUFMAX=RBUF.MAX><SYN>
                 // Set State = SYN-SENT
                 // Return (local port, connection identifier)
 
                 rdp_con_ptr p_con(new rdp_con);
                 rdp_addr    addr;
+
 
                 // check whether resouces are avilable
                 addr.did   = did;
@@ -102,12 +103,13 @@ namespace libcage {
 
                 p_con->addr     = addr;
                 p_con->state    = SYN_SENT;
+                p_con->snd_iss  = random();
+                p_con->snd_nxt  = p_con->snd_iss + 1;
+                p_con->snd_una  = p_con->snd_iss;
+                p_con->rcv_max  = rcv_max_default;
                 p_con->rbuf_max = rbuf_max_default;
 
                 p_con->set_output_func(m_output_func);
-
-                p_con->init_snd();
-                p_con->init_swnd();
 
 
                 // create syn packet
@@ -121,18 +123,23 @@ namespace libcage {
                 syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
                 syn->head.sport  = htons(sport);
                 syn->head.dport  = htons(dport);
-                syn->head.seqnum = htonl(p_con->snd_nxt);
+                syn->head.seqnum = htonl(p_con->snd_iss);
 
-                syn->out_segs_max = htons(p_con->snd_max);
+                syn->out_segs_max = htons(p_con->rcv_max);
                 syn->seg_size_max = htons(p_con->rbuf_max);
 
                 set_syn_option_seq(syn->options, true);
 
-                // enqueue
-                if (! p_con->enqueue_swnd(pbuf))
-                        return -1;
+                p_con->syn_pbuf = pbuf;
+                p_con->syn_time = time(NULL);
+                p_con->syn_num  = 1;
 
-                p_con->snd_nxt++;
+                // XXX
+                // init recv buffer
+
+
+                // send syn
+                m_output_func(addr.did, pbuf);
 
 
                 // create descriptor
@@ -158,8 +165,8 @@ namespace libcage {
 
                 head = (rdp_head*)buf;
 
-                sport = ntohs(head->sport);
-                dport = ntohs(head->dport);
+                sport = ntohs(head->dport);
+                dport = ntohs(head->sport);
 
                 addr.did   = src;
                 addr.dport = dport;
@@ -233,6 +240,7 @@ namespace libcage {
         void
         rdp::in_state_listen(rdp_addr addr, rdp_head *head, int len)
         {
+
                 if (head->flags & flag_rst) {
                         // If RST set
                         //   Discard the segment
@@ -250,17 +258,16 @@ namespace libcage {
                         rdp_head      *rst;
                         uint32_t       seg_ack;
 
-                        seg_ack = ntohl(head->seqnum);
-                        seg_ack++;
+                        seg_ack = ntohl(head->acknum);
 
                         rst = (rdp_head*)pbuf->append(sizeof(*rst));
                         memset(rst, 0, sizeof(*rst));
 
                         rst->flags  = flag_rst | flag_ver;
-                        rst->hlen   = sizeof(rst) / 2;
-                        rst->sport  = htons(addr.dport);
-                        rst->dport  = htons(addr.sport);
-                        rst->acknum = htonl(seg_ack);
+                        rst->hlen   = sizeof(*rst) / 2;
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(seg_ack + 1);
 
                         m_output_func(addr.did, pbuf);
                 } else if (head->flags & flag_syn) {
@@ -286,6 +293,10 @@ namespace libcage {
 
                         p_con->addr     = addr;
                         p_con->state    = SYN_RCVD;
+                        p_con->snd_iss  = random();
+                        p_con->snd_nxt  = p_con->snd_iss + 1;
+                        p_con->snd_una  = p_con->snd_iss;
+                        p_con->rcv_max  = rcv_max_default;
                         p_con->rbuf_max = rbuf_max_default;
                         p_con->rcv_cur  = ntohl(syn_in->head.seqnum);
                         p_con->rcv_irs  = ntohl(syn_in->head.seqnum);
@@ -294,7 +305,6 @@ namespace libcage {
 
                         p_con->set_output_func(m_output_func);
 
-                        p_con->init_snd();
                         p_con->init_swnd();
 
 
@@ -313,19 +323,22 @@ namespace libcage {
 
                         syn_out->head.flags  = flag_syn | flag_ack | flag_ver;
                         syn_out->head.hlen   = (uint8_t)sizeof(*syn_out) / 2;
-                        syn_out->head.sport  = syn_in->head.dport;
-                        syn_out->head.dport  = syn_in->head.sport;
+                        syn_out->head.sport  = htons(addr.sport);
+                        syn_out->head.dport  = htons(addr.dport);
                         syn_out->head.seqnum = htonl(p_con->snd_iss);
-                        syn_out->head.acknum = syn_in->head.seqnum;
+                        syn_out->head.acknum = htonl(p_con->rcv_cur);
 
-                        syn_out->out_segs_max = htons(p_con->snd_max);
+                        syn_out->out_segs_max = htons(p_con->rcv_max);
                         syn_out->seg_size_max = htons(p_con->rbuf_max);
                         syn_out->options      = syn_in->options;
 
-                        if (! p_con->enqueue_swnd(pbuf))
-                                return;
+                        p_con->syn_pbuf = pbuf;
+                        p_con->syn_time = time(NULL);
+                        p_con->syn_num  = 1;
 
-                        p_con->snd_nxt++;
+
+                        // send syn ack
+                        m_output_func(addr.did, pbuf);
 
 
                         // create descriptor
@@ -343,43 +356,136 @@ namespace libcage {
         }
 
         void
-        rdp::in_state_syn_sent(rdp_con_ptr con, rdp_addr addr, rdp_head *head,
+        rdp::in_state_syn_sent(rdp_con_ptr p_con, rdp_addr addr, rdp_head *head,
                                int len)
         {
-                // If ACK set
-                //   If RST clear and SEG.ACK != SND.ISS
-                //     Send <SEQ=SEG.ACK + 1><RST>
-                //   Endif
-                //   Discard segment; Return
-                // Endif
-                //
-                // If RST set
-                //   If ACK set
-                //     Signal "Connection Refused"
-                //     Set State =  CLOSED
-                //     Deallocate connection record
-                //   Endif
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If SYN set
-                //   Set RCV.CUR = SEG.SEQ
-                //   RCV.IRS = SEG.SEQ
-                //   SND.MAX = SEG.MAX
-                //   RBUF.MAX = SEG.BMAX
-                //   If ACK set
-                //     Set SND.UNA = SEG.ACK
-                //     State = OPEN
-                //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
-                //   else
-                //     Set State = SYN-RCVD
-                //     Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
-                //          <BUFMAX=RBUF.MAX><SYN><ACK>
-                //   Endif
-                //   Return
-                // Endif
-                //
+                if (head->flags & flag_ack && ~head->flags & flag_rst) {
+                        // If ACK set
+                        //   If RST clear and SEG.ACK != SND.ISS
+                        //     Send <SEQ=SEG.ACK + 1><RST>
+                        //   Endif
+                        //   Discard segment; Return
+                        // Endif
+
+                        uint32_t ack = ntohl(head->acknum);
+
+                        if (ack != p_con->snd_iss) {
+                                packetbuf_ptr  pbuf = packetbuf::construct();
+                                rdp_head      *rst;
+
+                                rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                                memset(rst, 0, sizeof(*rst));
+
+                                rst->flags  = flag_rst | flag_ver;
+                                rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                                rst->sport  = htons(addr.sport);
+                                rst->dport  = htons(addr.dport);
+                                rst->seqnum = htonl(ack + 1);
+
+                                m_output_func(addr.did, pbuf);
+                        }
+
+                } else if (head->flags & flag_rst) {
+                        // If RST set
+                        //   If ACK set
+                        //     Signal "Connection Refused"
+                        //     Set State =  CLOSED
+                        //     Deallocate connection record
+                        //   Endif
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        if (head->flags & flag_ack) {
+                                p_con->state = CLOSED;
+
+                                // XXX
+                                // invoke the singal of "Connection Refused"
+                        }
+                } else if (head->flags & flag_syn) {
+                        // If SYN set
+                        //   Set RCV.CUR = SEG.SEQ
+                        //       RCV.IRS = SEG.SEQ
+                        //       SND.MAX = SEG.MAX
+                        //       SBUF.MAX = SEG.BMAX
+                        //   If ACK set
+                        //     Set SND.UNA = SEG.ACK
+                        //     State = OPEN
+                        //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                        //   else
+                        //     Set State = SYN-RCVD
+                        //     Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
+                        //          <BUFMAX=RBUF.MAX><SYN><ACK>
+                        //   Endif
+                        //   Return
+                        // Endif
+
+                        if (len < (int)sizeof(rdp_syn))
+                                return;
+
+                        rdp_syn *syn = (rdp_syn*)head;
+
+                        p_con->rcv_cur  = ntohl(syn->head.seqnum);
+                        p_con->rcv_irs  = p_con->rcv_cur;
+                        p_con->snd_max  = ntohs(syn->out_segs_max);
+                        p_con->sbuf_max = ntohs(syn->seg_size_max);
+
+                        p_con->init_swnd();
+
+                        if (syn->head.flags & flag_ack) {
+                                p_con->snd_una = ntohl(syn->head.acknum);
+                                p_con->state   = OPEN;
+
+                                // send ack
+                                packetbuf_ptr  pbuf = packetbuf::construct();
+                                rdp_head      *ack;
+
+                                ack = (rdp_head*)pbuf->append(sizeof(*ack));
+
+                                memset(ack, 0, sizeof(*ack));
+
+                                ack->flags  = flag_ack | flag_ver;
+                                ack->hlen   = (uint8_t)sizeof(*ack) / 2;
+                                ack->sport  = htons(addr.sport);
+                                ack->sport  = htons(addr.dport);
+                                ack->seqnum = htonl(p_con->snd_nxt);
+                                ack->acknum = htonl(p_con->rcv_cur);
+
+                                if (! p_con->enqueue_swnd(pbuf))
+                                        return;
+
+                                p_con->snd_nxt++;
+                                p_con->syn_pbuf.reset();
+                        } else {
+                                p_con->state = SYN_RCVD;
+
+                                // send syn ack
+                                packetbuf_ptr  pbuf = packetbuf::construct();
+                                rdp_syn       *syn_out;
+
+                                syn_out = (rdp_syn*)pbuf->append(sizeof(*syn_out));
+
+                                memset(syn_out, 0, sizeof(*syn_out));
+
+                                syn_out->head.flags  = flag_syn | flag_ack | flag_ver;
+                                syn_out->head.hlen   = (uint8_t)sizeof(*syn_out) / 2;
+                                syn_out->head.sport  = htons(addr.sport);
+                                syn_out->head.dport  = htons(addr.dport);
+                                syn_out->head.seqnum = htonl(p_con->snd_iss);
+                                syn_out->head.acknum = htonl(p_con->rcv_cur);
+
+                                syn_out->out_segs_max = htons(p_con->rcv_max);
+                                syn_out->seg_size_max = htons(p_con->rbuf_max);
+
+                                p_con->syn_pbuf = pbuf;
+                                p_con->syn_time = time(NULL);
+                                p_con->syn_num  = 1;
+
+                                m_output_func(addr.did, pbuf);
+                        }
+                }
+
                 // If anything else
                 //   Discard segment
                 //   Return
@@ -678,14 +784,5 @@ namespace libcage {
 
                 // XXX
                 // send
-        }
-
-        void
-        rdp_con::init_snd()
-        {
-                snd_iss  = random();
-                snd_nxt  = snd_iss;
-                snd_una  = snd_iss;
-                snd_max  = rdp::snd_max_default;
         }
 }

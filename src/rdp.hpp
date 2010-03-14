@@ -80,7 +80,7 @@ namespace libcage {
                 static const uint8_t   flag_ver;
 
                 static const uint32_t  rbuf_max_default;
-                static const uint32_t  snd_max_default;
+                static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
 
                 rdp();
@@ -103,7 +103,7 @@ namespace libcage {
                 void            in_state_closed_wait(rdp_con_ptr con,
                                                      rdp_addr addr,
                                                      rdp_head *head, int len);
-                void            in_state_syn_sent(rdp_con_ptr con,
+                void            in_state_syn_sent(rdp_con_ptr p_con,
                                                   rdp_addr addr,
                                                   rdp_head *head, int len);
                 void            in_state_syn_rcvd(rdp_con_ptr con,
@@ -184,7 +184,10 @@ namespace libcage {
                                                    // acknowledged out of
                                                    // sequence.
 
-                void            init_snd();
+                packetbuf_ptr   syn_pbuf;
+                time_t          syn_time;
+                int             syn_num;
+
                 void            init_swnd();
                 bool            enqueue_swnd(packetbuf_ptr pbuf);
 
