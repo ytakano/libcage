@@ -64,7 +64,7 @@ namespace libcage {
 
                 void            recv_dgram(void *msg, int len, sockaddr *from);
 
-                void            send_dgram(packetbuf *pbuf, id_ptr id);
+                void            send_dgram(packetbuf_ptr pbuf, id_ptr id);
                 void            send_dgram(const void *msg, int len, id_ptr id);
                 void            send_dgram(const void *msg, int len, id_ptr id,
                                            const uint160_t &src);
@@ -89,27 +89,15 @@ namespace libcage {
 
                 class send_data {
                 public:
-                        packetbuf      *pbuf;
+                        packetbuf_ptr   pbuf;
                         uint160_t       src;
                         int             len;
-
-                        send_data() : pbuf(NULL) { }
-                        virtual ~send_data()
-                        {
-                                if (pbuf != NULL) {
-                                        pbuf->dec_refc();
-
-                                        if (pbuf->get_refc() == 0) {
-                                                packetbuf::destroy(pbuf);
-                                        }
-                                }
-                        }
                 };
 
                 void            send_queue(id_ptr id);
                 void            push2queue(id_ptr id, const void *msg, int len,
                                            const uint160_t &src);
-                void            push2queue(id_ptr id, packetbuf *pbuf,
+                void            push2queue(id_ptr id, packetbuf_ptr pbuf,
                                            const uint160_t &src);
 
                 void            request(id_ptr id);

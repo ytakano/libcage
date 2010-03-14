@@ -3,9 +3,9 @@
 #include <string.h>
 
 namespace libcage {
-        boost::object_pool<packetbuf>   packetbuf::pbuf;
+        boost::object_pool<packetbuf>   packetbuf::pbuf_pool;
 
-        packetbuf::packetbuf() : m_len(0), m_ref_count(0)
+        packetbuf::packetbuf() : m_len(0), m_refc(0)
         {
                 m_begin = &m_buf[128];
         }
@@ -51,33 +51,24 @@ namespace libcage {
                 return m_len;
         }
 
-        packetbuf*
+        packetbuf_ptr
         packetbuf::construct()
         {
-                return pbuf.construct();
+                packetbuf_ptr p(pbuf_pool.construct());
+                return p;
         }
 
         void
-        packetbuf::destroy(packetbuf *p)
+        intrusive_ptr_add_ref(packetbuf *pbuf)
         {
-                pbuf.destroy(p);
+                pbuf->m_refc++;
         }
 
         void
-        packetbuf::inc_refc()
+        intrusive_ptr_release(packetbuf *pbuf)
         {
-                m_ref_count++;
-        }
-
-        void
-        packetbuf::dec_refc()
-        {
-                m_ref_count++;
-        }
-
-        int
-        packetbuf::get_refc()
-        {
-                return m_ref_count;
+                pbuf->m_refc--;
+                if (pbuf->m_refc == 0)
+                        packetbuf::pbuf_pool.destroy(pbuf);
         }
 }

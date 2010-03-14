@@ -5,9 +5,17 @@
 
 #include <stdint.h>
 
+#include <boost/intrusive_ptr.hpp>
 #include <boost/pool/object_pool.hpp>
 
 namespace libcage {
+        class packetbuf;
+
+        void    intrusive_ptr_add_ref(packetbuf *pbuf);
+        void    intrusive_ptr_release(packetbuf *pbuf);
+
+        typedef boost::intrusive_ptr<packetbuf> packetbuf_ptr;
+
         class packetbuf {
         public:
                 packetbuf();
@@ -18,22 +26,19 @@ namespace libcage {
                 void*           get_data();
                 int             get_len();
 
-                void            inc_refc();
-                void            dec_refc();
-                int             get_refc();
+                static packetbuf_ptr    construct();
 
-                static packetbuf*       construct();
-                static void             destroy(packetbuf *p);
+                friend void     intrusive_ptr_add_ref(packetbuf *pbuf);
+                friend void     intrusive_ptr_release(packetbuf *pbuf);
 
         private:
                 uint8_t         m_buf[1024 * 2];
                 uint8_t        *m_begin;
                 int             m_len;
-                int             m_ref_count;
+                int             m_refc;
 
-                static boost::object_pool<packetbuf>    pbuf;
+                static boost::object_pool<packetbuf>    pbuf_pool;
         };
 }
-
 
 #endif // PACKETBUF_HPP

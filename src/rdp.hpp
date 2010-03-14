@@ -12,8 +12,9 @@
 #include <functional>
 
 #include <boost/bimap/bimap.hpp>
-#include <boost/bimap/unordered_set_of.hpp> 
+#include <boost/bimap/unordered_set_of.hpp>
 #include <boost/function.hpp>
+#include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 
@@ -66,6 +67,8 @@ namespace libcage {
 
         size_t hash_value(const rdp_addr &addr);
 
+        typedef boost::function<void (id_ptr, packetbuf_ptr)> callback_dgram_out;
+
 
         class rdp {
         public:
@@ -92,8 +95,6 @@ namespace libcage {
                 void            receive(int con, void *buf, int *len);
                 rdp_state       status(int con);
 
-                // input and output datagram to under layer
-                typedef boost::function<void (id_ptr, packetbuf*)> callback_output;
                 void            input_dgram(id_ptr src, const void *buf,
                                             int len);
                 void            in_state_closed(rdp_addr addr, rdp_head *head,
@@ -111,7 +112,7 @@ namespace libcage {
                                                   rdp_head *head, int len);
                 void            in_state_open(rdp_con_ptr con, rdp_addr addr,
                                               rdp_head *head, int len);
-                void            set_callback_output(callback_output func);
+                void            set_callback_dgram_out(callback_dgram_out func);
 
         private:
                 typedef boost::bimaps::unordered_set_of<uint16_t> _uint16_set;
@@ -127,7 +128,7 @@ namespace libcage {
                 boost::unordered_map<rdp_addr, rdp_con_ptr>     m_addr2conn;
                 boost::unordered_map<int, rdp_con_ptr>          m_desc2conn;
 
-                callback_output         m_output_func;
+                callback_dgram_out         m_output_func;
 
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);
@@ -195,6 +196,34 @@ namespace libcage {
                                           // host on a connection, as specified
                                           // in the SYN segment that established
                                           // the connection.
+
+                void            init_snd();
+                void            init_swnd();
+                bool            enqueue_swnd(packetbuf_ptr pbuf);
+
+                void            set_output_func(callback_dgram_out func);
+
+                void            recv_ack(uint32_t ack);
+                void            recv_eack(uint32_t eack);
+
+        private:
+                class wnd {
+                public:
+                        packetbuf_ptr   pbuf;
+                        time_t          sent_time;
+                        bool            is_acked;
+                        bool            is_sent;
+                        uint32_t        seqnum;
+                };
+
+                boost::shared_array<wnd>        m_swnd;
+                int             m_swnd_len;
+                int             m_swnd_used;
+                int             m_swnd_head;
+                int             m_swnd_tail;
+                uint32_t        m_swnd_ostand;
+
+                callback_dgram_out      m_output_func;
         };
 }
 

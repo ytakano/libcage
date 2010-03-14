@@ -95,18 +95,16 @@ namespace libcage {
                 p_con->state    = SYN_SENT;
                 p_con->rbuf_max = rbuf_max_default;
 
-                p_con->snd_iss  = random();
-                p_con->snd_nxt  = p_con->snd_iss + 1;
-                p_con->snd_una  = p_con->snd_iss;
-                p_con->snd_max  = snd_max_default;
+                p_con->set_output_func(m_output_func);
+
+                p_con->init_snd();
+                p_con->init_swnd();
 
 
                 // create syn packet
-                packetbuf *pbuf = packetbuf::construct();
-                rdp_syn   *syn;
+                packetbuf_ptr  pbuf = packetbuf::construct();
+                rdp_syn       *syn;
                 
-                pbuf->inc_refc();
-
                 syn = (rdp_syn*)pbuf->append(sizeof(*syn));
                 memset(syn, 0, sizeof(*syn));
 
@@ -114,15 +112,16 @@ namespace libcage {
                 syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
                 syn->head.sport  = htons(sport);
                 syn->head.dport  = htons(dport);
-                syn->head.seqnum = htonl(p_con->snd_iss);
+                syn->head.seqnum = htonl(p_con->snd_nxt);
 
                 syn->out_segs_max = htons(p_con->snd_max);
                 syn->seg_size_max = htons(p_con->rbuf_max);
 
                 set_syn_option_seq(syn->options, true);
 
-                // XXX
                 // enqueue
+                if (! p_con->enqueue_swnd(pbuf))
+                        return -1;
 
 
                 // create descriptor
@@ -255,9 +254,9 @@ namespace libcage {
 
                 if (head->flags & flag_ack || head->flags & flag_nul) {
                         // send rst
-                        packetbuf *pbuf = packetbuf::construct();
-                        rdp_head  *rst;
-                        uint32_t   seg_ack;
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_head      *rst;
+                        uint32_t       seg_ack;
 
                         seg_ack = ntohl(head->seqnum);
                         seg_ack++;
@@ -453,7 +452,7 @@ namespace libcage {
         }
 
         void
-        rdp::set_callback_output(callback_output func)
+        rdp::set_callback_dgram_out(callback_dgram_out func)
         {
                 m_output_func = func;
         }
@@ -465,5 +464,122 @@ namespace libcage {
                         options |= 0x8000;
                 else
                         options &= 0x7fff;
+        }
+
+        void
+        rdp_con::init_swnd()
+        {
+                m_swnd_len    = snd_max * 4;
+                m_swnd_used   = 0;
+                m_swnd_head   = 0;
+                m_swnd_tail   = 0;
+                m_swnd_ostand = 0;
+
+                m_swnd = boost::shared_array<wnd>(new wnd[m_swnd_len]);
+        }
+
+        bool
+        rdp_con::enqueue_swnd(packetbuf_ptr pbuf)
+        {
+                if (m_swnd_used >= m_swnd_len)
+                        return false;
+
+                int  pos = (m_swnd_head + m_swnd_used) % m_swnd_len;
+                wnd *p_wnd;
+
+                p_wnd = &m_swnd[pos];
+                p_wnd->pbuf      = pbuf;
+                p_wnd->sent_time = 0;
+                p_wnd->is_acked  = false;
+                p_wnd->is_sent   = false;
+                p_wnd->seqnum    = snd_nxt;
+
+                snd_nxt++;
+
+                m_swnd_used++;
+
+                if (m_swnd_ostand < snd_max) {
+                        p_wnd->sent_time = time(NULL);
+                        p_wnd->is_sent   = true;
+
+                        m_output_func(addr.did, pbuf);
+
+                        m_swnd_tail++;
+                        m_swnd_ostand++;
+
+                        if (m_swnd_tail >= m_swnd_len)
+                                m_swnd_tail = 0;
+                }
+
+                return true;
+        }
+
+        void
+        rdp_con::set_output_func(callback_dgram_out func)
+        {
+                m_output_func = func;
+        }
+
+        void
+        rdp_con::recv_ack(uint32_t ack)
+        {
+
+        }
+
+        void
+        rdp_con::recv_eack(uint32_t eack)
+        {
+                uint32_t hseq = m_swnd[m_swnd_head].seqnum;
+                uint32_t pos;
+
+                if (eack > hseq) {
+                        pos = eack - hseq;
+                } else {
+                        pos = eack + (0xffffffff - hseq) + 1;
+                }
+
+                if (pos > (uint32_t)m_swnd_used)
+                        return;
+
+                pos += m_swnd_head;
+                if (pos >= (uint32_t)m_swnd_len)
+                        pos %= m_swnd_len;
+
+                wnd *p_wnd = &m_swnd[pos];
+                if (p_wnd->is_sent) {
+                        p_wnd->is_acked = true;
+                        p_wnd->pbuf.reset();
+
+                        m_swnd_ostand--;
+
+                        if (pos == (uint32_t)m_swnd_head) {
+                                m_swnd_used--;
+
+                                if (m_swnd_head == m_swnd_tail) {
+                                        m_swnd_tail++;
+
+                                        if (m_swnd_tail >= m_swnd_len)
+                                                m_swnd_tail %= m_swnd_len;
+
+                                        m_swnd_head = m_swnd_tail;
+                                } else {
+                                        m_swnd_head++;
+                                        if (m_swnd_head >= m_swnd_len)
+                                                m_swnd_head %= m_swnd_len;
+                                }
+                        }
+
+                        // XXX
+                        // send
+                }
+        }
+
+        void
+        rdp_con::init_snd()
+        {
+                snd_iss  = random();
+                snd_nxt  = snd_iss;
+                snd_una  = snd_iss;
+                snd_max  = rdp::snd_max_default;
         }
 }

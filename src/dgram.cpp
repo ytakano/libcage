@@ -70,7 +70,7 @@ namespace libcage {
         }
 
         void
-        dgram::send_dgram(packetbuf *pbuf, id_ptr id)
+        dgram::send_dgram(packetbuf_ptr pbuf, id_ptr id)
         {
                 push2queue(id, pbuf, m_id);
 
@@ -178,7 +178,7 @@ namespace libcage {
         dgram::push2queue(id_ptr id, const void *msg, int len,
                           const uint160_t &src)
         {
-                packetbuf *pbuf = packetbuf::construct();
+                packetbuf_ptr pbuf = packetbuf::construct();
                 void *p;
 
                 p = pbuf->append(len);
@@ -188,7 +188,7 @@ namespace libcage {
         }
 
         void
-        dgram::push2queue(id_ptr id, packetbuf *pbuf, const uint160_t &src)
+        dgram::push2queue(id_ptr id, packetbuf_ptr pbuf, const uint160_t &src)
         {
                 boost::unordered_map<_id, data_pool_ptr>::iterator it;
                 send_data *data;
@@ -202,8 +202,6 @@ namespace libcage {
                 }
 
                 data = m_data_pool[i]->construct();
-
-                pbuf->inc_refc();
 
                 data->pbuf = pbuf;
                 data->len  = pbuf->get_len();
