@@ -25,7 +25,8 @@ namespace libcage {
 
         rdp::rdp()
         {
-                
+                // XXX
+                // start retransmission timer
         }
 
         rdp::~rdp()
@@ -33,16 +34,24 @@ namespace libcage {
 
         }
 
+        int
+        rdp::generate_desc()
+        {
+                int desc;
+
+                do {
+                        desc = random();
+                } while (m_desc_set.find(desc) != m_desc_set.end());
+
+                return desc;
+        }
+
         // passive open
         int
         rdp::listen(uint16_t sport)
         {
                 if (m_listening.left.find(sport) == m_listening.left.end()) {
-                        int desc;
-
-                        do {
-                                desc = random();
-                        } while (m_desc_set.find(desc) != m_desc_set.end());
+                        int desc = generate_desc();
 
                         m_desc_set.insert(desc);
                         m_listening.insert(listening_val(sport, desc));
@@ -123,20 +132,15 @@ namespace libcage {
                 if (! p_con->enqueue_swnd(pbuf))
                         return -1;
 
+                p_con->snd_nxt++;
+
 
                 // create descriptor
-                int desc;
-
-                do {
-                        desc = random();
-                } while (m_desc_set.find(desc) != m_desc_set.end());
+                int desc = generate_desc();
 
                 m_desc_set.insert(desc);
                 m_addr2conn[addr] = p_con;
                 m_desc2conn[desc] = p_con;
-
-                // XXX
-                // start retransmission timer
 
                 return desc;
         }
@@ -148,6 +152,9 @@ namespace libcage {
                 rdp_addr  addr;
                 uint16_t  sport;
                 uint16_t  dport;
+
+                if (len < (int)sizeof(rdp_head))
+                        return;
 
                 head = (rdp_head*)buf;
 
@@ -226,33 +233,18 @@ namespace libcage {
         void
         rdp::in_state_listen(rdp_addr addr, rdp_head *head, int len)
         {
-                // If RST set
-                //   Discard the segment
-                //   Return
-                // Endif
-                // 
-                // If ACK or NUL set
-                //   Send <SEQ=SEG.ACK + 1><RST>
-                //   Return
-                // Endif
-                // 
-                // If SYN set
-                //   Set RCV.CUR = SEG.SEQ
-                //   RCV.IRS = SEG.SEQ
-                //   SND.MAX = SEG.MAX
-                //   SBUF.MAX = SEG.BMAX
-                //   Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
-                //        <BUFMAX=RBUF.MAX><ACK><SYN>
-                //   Set State = SYN-RCVD
-                //   Return
-                // Endif
-                // 
-                // If anything else (should never get here)
-                //   Discard segment
-                //   Return
-                // Endif
+                if (head->flags & flag_rst) {
+                        // If RST set
+                        //   Discard the segment
+                        //   Return
+                        // Endif
+                        return;
+                } else if (head->flags & flag_ack || head->flags & flag_nul) {
+                        // If ACK or NUL set
+                        //   Send <SEQ=SEG.ACK + 1><RST>
+                        //   Return
+                        // Endif
 
-                if (head->flags & flag_ack || head->flags & flag_nul) {
                         // send rst
                         packetbuf_ptr  pbuf = packetbuf::construct();
                         rdp_head      *rst;
@@ -272,13 +264,82 @@ namespace libcage {
 
                         m_output_func(addr.did, pbuf);
                 } else if (head->flags & flag_syn) {
-                        // XXX
-                        // create syn ack packet
-                        // enqueue
+                        // If SYN set
+                        //   Set RCV.CUR = SEG.SEQ
+                        //       RCV.IRS = SEG.SEQ
+                        //       SND.MAX = SEG.MAX
+                        //       SBUF.MAX = SEG.BMAX
+                        //   Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
+                        //        <BUFMAX=RBUF.MAX><ACK><SYN>
+                        //   Set State = SYN-RCVD
+                        //   Return
+                        // Endif
+
+                        if (len < (int)sizeof(rdp_syn))
+                                return;
+
+                        // create connection
+                        rdp_con_ptr  p_con(new rdp_con);
+                        rdp_syn     *syn_in;
+
+                        syn_in = (rdp_syn*)head;
+
+                        p_con->addr     = addr;
+                        p_con->state    = SYN_RCVD;
+                        p_con->rbuf_max = rbuf_max_default;
+                        p_con->rcv_cur  = ntohl(syn_in->head.seqnum);
+                        p_con->rcv_irs  = ntohl(syn_in->head.seqnum);
+                        p_con->snd_max  = ntohs(syn_in->out_segs_max);
+                        p_con->sbuf_max = ntohs(syn_in->seg_size_max);
+
+                        p_con->set_output_func(m_output_func);
+
+                        p_con->init_snd();
+                        p_con->init_swnd();
+
 
                         // XXX
-                        // create connection
+                        // init recv buffer
+
+
+                        // create syn ack packet
+                        // enqueue
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_syn       *syn_out;
+
+                        syn_out = (rdp_syn*)pbuf->append(sizeof(*syn_out));
+
+                        memset(syn_out, 0, sizeof(*syn_out));
+
+                        syn_out->head.flags  = flag_syn | flag_ack | flag_ver;
+                        syn_out->head.hlen   = (uint8_t)sizeof(*syn_out) / 2;
+                        syn_out->head.sport  = syn_in->head.dport;
+                        syn_out->head.dport  = syn_in->head.sport;
+                        syn_out->head.seqnum = htonl(p_con->snd_iss);
+                        syn_out->head.acknum = syn_in->head.seqnum;
+
+                        syn_out->out_segs_max = htons(p_con->snd_max);
+                        syn_out->seg_size_max = htons(p_con->rbuf_max);
+                        syn_out->options      = syn_in->options;
+
+                        if (! p_con->enqueue_swnd(pbuf))
+                                return;
+
+                        p_con->snd_nxt++;
+
+
+                        // create descriptor
+                        int desc = generate_desc();
+
+                        m_desc_set.insert(desc);
+                        m_addr2conn[addr] = p_con;
+                        m_desc2conn[desc] = p_con;
                 }
+
+                // If anything else (should never get here)
+                //   Discard segment
+                //   Return
+                // Endif
         }
 
         void
@@ -494,8 +555,6 @@ namespace libcage {
                 p_wnd->is_sent   = false;
                 p_wnd->seqnum    = snd_nxt;
 
-                snd_nxt++;
-
                 m_swnd_used++;
 
                 if (m_swnd_ostand < snd_max) {
@@ -520,39 +579,68 @@ namespace libcage {
                 m_output_func = func;
         }
 
-        void
-        rdp_con::recv_ack(uint32_t ack)
-        {
+        // m_swnd =
+        // [0, seqnum = 4  | 1, unused      | 2, unused     |
+        //  3, seqnum = 98 | 4, seqnum = 99 | 5, seqnum = 0 |
+        //  6, seqnum = 1  | 7, seqnum = 2  | 8, seqnum = 3 ]
+        //
+        // m_swnd_head = 3
+        //
+        // num_from_head(99) = 1
+        // num_from_head(2)  = 4
+        //
+        // seq2pos(98) = 3
+        // seq2pos(0)  = 5
+        // seq2pos(4)  = 0
+        uint32_t
+        rdp_con::num_from_head(uint32_t seqnum) {
+                uint32_t hseq = m_swnd[m_swnd_head].seqnum;
+                uint32_t num;
 
+                if (seqnum > hseq) {
+                        num = seqnum - hseq;
+                } else {
+                        num = seqnum + (0xffffffff - hseq) + 1;
+                }
+
+                return num;
+        }
+
+        int
+        rdp_con::seq2pos(uint32_t seqnum)
+        {
+                uint32_t num;
+                int      pos;
+
+                num = num_from_head(seqnum);
+
+                if (num > (uint32_t)m_swnd_used)
+                        return -1;
+
+                pos = m_swnd_head + num;
+
+                if (pos >= m_swnd_len)
+                        pos %= m_swnd_len;
+
+                return pos;
         }
 
         void
-        rdp_con::recv_eack(uint32_t eack)
+        rdp_con::ack_ostand(int pos)
         {
-                uint32_t hseq = m_swnd[m_swnd_head].seqnum;
-                uint32_t pos;
-
-                if (eack > hseq) {
-                        pos = eack - hseq;
-                } else {
-                        pos = eack + (0xffffffff - hseq) + 1;
-                }
-
-                if (pos > (uint32_t)m_swnd_used)
-                        return;
-
-                pos += m_swnd_head;
-                if (pos >= (uint32_t)m_swnd_len)
-                        pos %= m_swnd_len;
-
                 wnd *p_wnd = &m_swnd[pos];
-                if (p_wnd->is_sent) {
+
+                if (p_wnd->is_sent && ! p_wnd->is_acked) {
                         p_wnd->is_acked = true;
                         p_wnd->pbuf.reset();
 
                         m_swnd_ostand--;
 
-                        if (pos == (uint32_t)m_swnd_head) {
+                        if (pos == m_swnd_head) {
+                                p_wnd->sent_time = 0;
+                                p_wnd->is_sent   = false;
+                                p_wnd->is_acked  = false;
+
                                 m_swnd_used--;
 
                                 if (m_swnd_head == m_swnd_tail) {
@@ -568,10 +656,28 @@ namespace libcage {
                                                 m_swnd_head %= m_swnd_len;
                                 }
                         }
-
-                        // XXX
-                        // send
                 }
+        }
+
+        void
+        rdp_con::recv_ack(uint32_t ack)
+        {
+
+        }
+
+        void
+        rdp_con::recv_eack(uint32_t eack)
+        {
+                uint32_t pos;
+
+                pos = seq2pos(eack);
+                if (pos < 0)
+                        return;
+
+                ack_ostand(eack);
+
+                // XXX
+                // send
         }
 
         void

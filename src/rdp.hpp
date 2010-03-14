@@ -36,18 +36,18 @@ namespace libcage {
                 uint16_t sport;
                 uint16_t dport;
                 uint16_t dlen;
-                uint32_t seqnum;
-                uint32_t acknum;
+                uint32_t seqnum;   // SEG.SEQ
+                uint32_t acknum;   // SEG.ACK
                 uint32_t checksum;
         };
 
         struct rdp_syn {
                 rdp_head head;
-                uint16_t out_segs_max;
-                uint16_t seg_size_max;
+                uint16_t out_segs_max; // SEG.MAX
+                uint16_t seg_size_max; // SEG.BMAX
                 uint16_t options;
+                uint16_t padding;
         };
-
 
         class rdp_con;
         typedef boost::shared_ptr<rdp_con> rdp_con_ptr;
@@ -89,11 +89,10 @@ namespace libcage {
                 int             listen(uint16_t sport); // passive open
                 int             connect(uint16_t sport, id_ptr did,
                                         uint16_t dport); // active open
-                int             accept(uint16_t con);
-                void            close(int con);
-                int             send(int con, const void *buf, int len);
-                void            receive(int con, void *buf, int *len);
-                rdp_state       status(int con);
+                void            close(int desc);
+                int             send(int desc, const void *buf, int len);
+                void            receive(int desc, void *buf, int *len);
+                rdp_state       status(int desc);
 
                 void            input_dgram(id_ptr src, const void *buf,
                                             int len);
@@ -123,7 +122,7 @@ namespace libcage {
                                              _int_set>::value_type listening_val;
 
                 boost::unordered_set<int>       m_desc_set;
-                listening_t                     m_listening;
+                listening_t                     m_listening; // <port, desc>
                 
                 boost::unordered_map<rdp_addr, rdp_con_ptr>     m_addr2conn;
                 boost::unordered_map<int, rdp_con_ptr>          m_desc2conn;
@@ -132,6 +131,7 @@ namespace libcage {
 
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);
+                int             generate_desc();
         };
 
         class rdp_con {
@@ -174,28 +174,15 @@ namespace libcage {
                                          // sequence.
                 uint32_t        rcv_max; // The maximum number of segments that
                                          // can be buffered for this connection.
-                std::vector<uint32_t>   rcvdsendq; // The array of sequence
+                uint32_t        rcv_irs; // The initial receive sequence number.
+                                         // This is  the  sequence number of the
+                                         // SYN segment that established this
+                                         // connection.
+                std::vector<uint32_t>   rcvdseqno; // The array of sequence
                                                    // numbers of segments that
                                                    // have been received and
                                                    // acknowledged out of
                                                    // sequence.
-
-                // Variables from Current Segment:
-                uint32_t        seg_seq;  // The sequence number of the segment
-                                          // currently being processed.
-                uint32_t        seg_ack;  // The acknowledgement sequence
-                                          // number in the segment currently
-                                          // being processed.
-                uint32_t        seg_max;  // The maximum number of outstanding
-                                          // segments the receiver is willing to
-                                          // hold, as specified in the SYN
-                                          // segment that established the
-                                          // connection.
-                uint32_t        seg_bmax; // The maximum segment size (in
-                                          // octets) accepted by the foreign
-                                          // host on a connection, as specified
-                                          // in the SYN segment that established
-                                          // the connection.
 
                 void            init_snd();
                 void            init_swnd();
@@ -224,6 +211,10 @@ namespace libcage {
                 uint32_t        m_swnd_ostand;
 
                 callback_dgram_out      m_output_func;
+
+                uint32_t        num_from_head(uint32_t seqnum);
+                int             seq2pos(uint32_t num);
+                void            ack_ostand(int pos);
         };
 }
 
