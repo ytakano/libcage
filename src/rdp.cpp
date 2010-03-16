@@ -102,6 +102,7 @@ namespace libcage {
                 }
 
                 p_con->addr     = addr;
+                p_con->is_pasv  = false;
                 p_con->state    = SYN_SENT;
                 p_con->snd_iss  = random();
                 p_con->snd_nxt  = p_con->snd_iss + 1;
@@ -144,6 +145,8 @@ namespace libcage {
 
                 // create descriptor
                 int desc = generate_desc();
+
+                p_con->desc = desc;
 
                 m_desc_set.insert(desc);
                 m_addr2conn[addr] = p_con;
@@ -191,6 +194,8 @@ namespace libcage {
                                 in_state_syn_rcvd(con, addr, head, len);
                         case OPEN:
                                 in_state_open(con, addr, head, len);
+                        case CLOSED:
+                                in_state_closed(addr, head, len);
                         default:
                                 break;
                         }
@@ -231,7 +236,7 @@ namespace libcage {
                 //   Discard segment
                 //   Return
                 // else
-                //   Send <SEQ=0><RST><ACK=RCV.CUR><ACK>
+                //   Send <SEQ=0><RST><ACK=SEG.SEQ><ACK>
                 //   Discard segment
                 //   Return
                 // Endif
@@ -292,6 +297,7 @@ namespace libcage {
                         syn_in = (rdp_syn*)head;
 
                         p_con->addr     = addr;
+                        p_con->is_pasv  = true;
                         p_con->state    = SYN_RCVD;
                         p_con->snd_iss  = random();
                         p_con->snd_nxt  = p_con->snd_iss + 1;
@@ -343,6 +349,8 @@ namespace libcage {
 
                         // create descriptor
                         int desc = generate_desc();
+
+                        p_con->desc = desc;
 
                         m_desc_set.insert(desc);
                         m_addr2conn[addr] = p_con;
@@ -493,70 +501,180 @@ namespace libcage {
         }
 
         void
-        rdp::in_state_syn_rcvd(rdp_con_ptr con, rdp_addr addr, rdp_head *head,
+        rdp::in_state_syn_rcvd(rdp_con_ptr p_con, rdp_addr addr, rdp_head *head,
                                int len)
         {
-                // If RCV.IRS < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
-                //   Segment sequence number acceptable
-                // else
-                //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If RST set
-                //   If passive Open
-                //     Set State = LISTEN
-                //   else
-                //     Set State = CLOSED
-                //     Signal "Connection Refused"
-                //     Discard segment
-                //     Deallocate connection record
-                //   Endif
-                //   Return
-                // Endif
-                //
-                // If SYN set
-                //   Send <SEQ=SEG.ACK + 1><RST>
-                //   Set State = CLOSED
-                //   Signal "Connection Reset"
-                //   Discard segment
-                //   Deallocate connection record
-                //   Return
-                // Endif
-                //
-                // If EACK set
-                //   Send <SEQ=SEG.ACK + 1><RST>
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If ACK set
-                //   If SEG.ACK = SND.ISS
-                //     Set State = OPEN
-                //   else
-                //     Send <SEQ=SEG.ACK + 1><RST>
-                //     Discard segment
-                //     Return
-                //   Endif
-                // else
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If Data in segment or NUL set
-                //   If the received segment is in sequence
-                //     Copy the data (if any) to user buffers
-                //     Set RCV.CUR=SEG.SEQ
-                //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
-                //   else
-                //     If out-of-sequence delivery permitted
-                //       Copy the data (if any) to user buffers
-                //     Endif
-                //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK><EACK><RCVDSEQNO1>
-                //          ...<RCVDSEQNOn>
-                //   Endif
-                // Endif
+                uint32_t seq = ntohl(head->seqnum);
+
+                if (!(p_con->rcv_irs < seq &&
+                      seq <= p_con->rcv_cur + (p_con->rcv_max * 2))) {
+                        // If RCV.IRS < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
+                        //   Segment sequence number acceptable
+                        // else
+                        //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_head      *ack;
+
+                        ack = (rdp_head*)pbuf->append(sizeof(*ack));
+
+                        memset(ack, 0, sizeof(*ack));
+
+                        ack->flags  = flag_ack | flag_ver;
+                        ack->hlen   = (uint8_t)sizeof(*ack) / 2;
+                        ack->sport  = htons(addr.sport);
+                        ack->dport  = htons(addr.dport);
+                        ack->seqnum = htonl(p_con->snd_nxt);
+                        ack->acknum = htonl(p_con->rcv_cur);
+
+                        if (! p_con->enqueue_swnd(pbuf))
+                                return;
+
+                        p_con->snd_nxt++;
+
+                        m_output_func(p_con->addr.did, pbuf);
+                } else if (head->flags & flag_rst) {
+                        // If RST set
+                        //   If passive Open
+                        //     Set State = LISTEN
+                        //   else
+                        //     Set State = CLOSED
+                        //     Signal "Connection Refused"
+                        //     Discard segment
+                        //     Deallocate connection record
+                        //   Endif
+                        //   Return
+                        // Endif
+
+                        if (p_con->is_pasv) {
+                                m_addr2conn.erase(p_con->addr);
+                                m_desc2conn.erase(p_con->desc);
+                        } else {
+                                p_con->state = CLOSED;
+
+                                // XXX
+                                // invoke the singnal of "Connection Refused"
+                        }
+                } else if (head->flags & flag_syn) {
+                        // If SYN set
+                        //   Send <SEQ=SEG.ACK + 1><RST>
+                        //   Set State = CLOSED
+                        //   Signal "Connection Reset"
+                        //   Discard segment
+                        //   Deallocate connection record
+                        //   Return
+                        // Endif
+
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_head      *rst;
+                        uint32_t       acknum;
+
+                        acknum = ntohl(head->acknum);
+
+                        rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(acknum + 1);
+
+                        m_output_func(addr.did, pbuf);
+
+                        if (p_con->is_pasv) {
+                                m_addr2conn.erase(p_con->addr);
+                                m_desc2conn.erase(p_con->desc);
+                        } else {
+                                p_con->state = CLOSED;
+
+                                // XXX
+                                // invoke the signal of "Connection Reset"
+                        }
+                } else if (head->flags & flag_eak) {
+                        // If EACK set
+                        //   Send <SEQ=SEG.ACK + 1><RST>
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_head      *rst;
+                        uint8_t        acknum;
+
+                        acknum = ntohl(head->acknum);
+
+                        rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(acknum + 1);
+
+                        m_output_func(addr.did, pbuf);
+                } else if (head->flags & flag_ack) {
+                        // If ACK set
+                        //   If SEG.ACK = SND.ISS
+                        //     Set State = OPEN
+                        //   else
+                        //     Send <SEQ=SEG.ACK + 1><RST>
+                        //     Discard segment
+                        //     Return
+                        //   Endif
+                        // else
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        uint32_t acknum;
+
+                        acknum = ntohl(head->acknum);
+
+                        if (acknum == p_con->snd_iss) {
+                                p_con->state = OPEN;
+
+                                if (p_con->is_pasv) {
+                                        // XXX
+                                        // invoke the signal of "Connection
+                                        // Established"
+                                }
+                                // If Data in segment or NUL set
+                                //   If the received segment is in sequence
+                                //     Copy the data (if any) to user buffers
+                                //     Set RCV.CUR=SEG.SEQ
+                                //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                                //   else
+                                //     If out-of-sequence delivery permitted
+                                //       Copy the data (if any) to user buffers
+                                //     Endif
+                                //     Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                                //          <EACK><RCVDSEQNO1>...<RCVDSEQNOn>
+                                //   Endif
+                                // Endif
+                        } else {
+                                packetbuf_ptr  pbuf = packetbuf::construct();
+                                rdp_head      *rst;
+
+                                rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                                memset(rst, 0, sizeof(*rst));
+
+                                rst->flags  = flag_rst | flag_ver;
+                                rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                                rst->sport  = htons(addr.sport);
+                                rst->dport  = htons(addr.dport);
+                                rst->seqnum = htonl(acknum + 1);
+
+                                m_output_func(addr.did, pbuf);
+                        }
+                }
         }
 
         void
@@ -631,6 +749,8 @@ namespace libcage {
                         options |= 0x8000;
                 else
                         options &= 0x7fff;
+
+                options = htons(options);
         }
 
         void

@@ -106,7 +106,7 @@ namespace libcage {
                 void            in_state_syn_sent(rdp_con_ptr p_con,
                                                   rdp_addr addr,
                                                   rdp_head *head, int len);
-                void            in_state_syn_rcvd(rdp_con_ptr con,
+                void            in_state_syn_rcvd(rdp_con_ptr p_con,
                                                   rdp_addr addr,
                                                   rdp_head *head, int len);
                 void            in_state_open(rdp_con_ptr con, rdp_addr addr,
@@ -137,6 +137,8 @@ namespace libcage {
         class rdp_con {
         public:
                 rdp_addr        addr;
+                int             desc;
+                bool            is_pasv;
 
                 rdp_state       state;     // The current state of the
                                            // connection.
