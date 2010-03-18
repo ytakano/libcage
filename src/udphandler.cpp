@@ -59,7 +59,7 @@ namespace libcage {
                 udphandler           &udp  = *(udphandler*)arg;
                 udphandler::callback &func = *udp.m_callback;
                 sockaddr_storage      from;
-                char                  buf[1024 * 2];
+                packetbuf_ptr         pbuf = packetbuf::construct();
 
 #ifndef WIN32
                 ssize_t   len;
@@ -70,7 +70,7 @@ namespace libcage {
 #endif // WIN32
 
                 if (event == EV_TIMEOUT) {
-                        func(udp, NULL, 0, NULL, 0, true);
+                        func(udp, pbuf, NULL, 0, true);
                         return;
                 }
 
@@ -78,8 +78,12 @@ namespace libcage {
                 memset(&from, 0, sizeof(from));
                 fromlen = sizeof(from);
 
-                len = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from,
-                               &fromlen);
+                pbuf->use_whole();
+
+                len = recvfrom(fd, pbuf->get_data(), pbuf->get_len(), 0,
+                               (sockaddr*)&from, &fromlen);
+
+                pbuf->set_len(len);
 
 #ifndef WIN32
                 if (len < 0) {
@@ -97,8 +101,7 @@ namespace libcage {
                         return;
                 }
 
-                func(udp, (void*)buf, (int)len, (sockaddr*)&from,
-                     (int)fromlen, false);
+                func(udp, pbuf, (sockaddr*)&from, (int)fromlen, false);
         }
 
         udphandler::udphandler() : m_callback(NULL), m_opened(false)

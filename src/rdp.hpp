@@ -21,6 +21,14 @@
 #define RDP_VER 2
 
 namespace libcage {
+        enum rdp_event {
+                ESTABLISHED_FROM,
+                ESTABLISHED,
+                REFUSED,
+                RESET,
+                READY_READ,
+        };
+
         enum rdp_state {
                 CLOSED,
                 LISTEN,
@@ -68,6 +76,8 @@ namespace libcage {
         size_t hash_value(const rdp_addr &addr);
 
         typedef boost::function<void (id_ptr, packetbuf_ptr)> callback_dgram_out;
+        typedef boost::function<void (int desc, rdp_addr addr,
+                                      rdp_event event)> callback_rdp_event;
 
 
         class rdp {
@@ -94,23 +104,24 @@ namespace libcage {
                 void            receive(int desc, void *buf, int *len);
                 rdp_state       status(int desc);
 
-                void            input_dgram(id_ptr src, const void *buf,
-                                            int len);
-                void            in_state_closed(rdp_addr addr, rdp_head *head,
-                                                int len);
-                void            in_state_listen(rdp_addr addr, rdp_head *head,
-                                                int len);
+                void            set_callback_rdp_event(callback_rdp_event func);
+
+                void            input_dgram(id_ptr src, packetbuf_ptr pbuf);
+                void            in_state_closed(rdp_addr addr,
+                                                packetbuf_ptr pbuf);
+                void            in_state_listen(rdp_addr addr,
+                                                packetbuf_ptr pbuf);
                 void            in_state_closed_wait(rdp_con_ptr con,
                                                      rdp_addr addr,
-                                                     rdp_head *head, int len);
+                                                     packetbuf_ptr pbuf);
                 void            in_state_syn_sent(rdp_con_ptr p_con,
                                                   rdp_addr addr,
-                                                  rdp_head *head, int len);
+                                                  packetbuf_ptr pbuf);
                 void            in_state_syn_rcvd(rdp_con_ptr p_con,
                                                   rdp_addr addr,
-                                                  rdp_head *head, int len);
+                                                  packetbuf_ptr pbuf);
                 void            in_state_open(rdp_con_ptr con, rdp_addr addr,
-                                              rdp_head *head, int len);
+                                              packetbuf_ptr pbuf);
                 void            set_callback_dgram_out(callback_dgram_out func);
 
         private:
@@ -128,6 +139,7 @@ namespace libcage {
                 boost::unordered_map<int, rdp_con_ptr>          m_desc2conn;
 
                 callback_dgram_out         m_output_func;
+                callback_rdp_event         m_event_func;
 
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);

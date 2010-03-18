@@ -25,6 +25,8 @@ namespace libcage {
                 void*           prepend(int len);
                 void*           get_data();
                 int             get_len();
+                void            set_len(int len);
+                void            use_whole();
 
                 static packetbuf_ptr    construct();
 
@@ -33,7 +35,7 @@ namespace libcage {
 
         private:
                 uint8_t         m_buf[1024 * 2];
-                uint8_t        *m_begin;
+                uint8_t        *m_head;
                 int             m_len;
                 int             m_refc;
 

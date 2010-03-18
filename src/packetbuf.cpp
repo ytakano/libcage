@@ -7,7 +7,7 @@ namespace libcage {
 
         packetbuf::packetbuf() : m_len(0), m_refc(0)
         {
-                m_begin = &m_buf[128];
+                m_head = &m_buf[128];
         }
 
         packetbuf::~packetbuf()
@@ -18,10 +18,10 @@ namespace libcage {
         void*
         packetbuf::append(int len)
         {
-                if (m_begin + m_len + len > &m_buf[sizeof(m_buf)]) {
+                if (m_head + m_len + len > &m_buf[sizeof(m_buf)]) {
                         return NULL;
                 } else {
-                        void *p = &m_begin[m_len];
+                        void *p = &m_head[m_len];
                         m_len += len;
                         return p;
                 }
@@ -30,25 +30,38 @@ namespace libcage {
         void*
         packetbuf::prepend(int len)
         {
-                if (m_begin - len < m_buf) {
+                if (m_head - len < m_buf) {
                         return NULL;
                 } else {
-                        m_len   += len;
-                        m_begin -= len;
-                        return m_begin;
+                        m_len  += len;
+                        m_head -= len;
+                        return m_head;
                 }
         }
 
         void*
         packetbuf::get_data()
         {
-                return m_begin;
+                return m_head;
         }
 
         int
         packetbuf::get_len()
         {
                 return m_len;
+        }
+
+        void
+        packetbuf::set_len(int len)
+        {
+                m_len = len;
+        }
+
+        void
+        packetbuf::use_whole()
+        {
+                m_head = m_buf;
+                m_len = sizeof(m_buf);
         }
 
         packetbuf_ptr

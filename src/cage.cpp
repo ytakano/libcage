@@ -42,14 +42,17 @@ namespace libcage {
         bool cage::m_is_srand = false;
 
         void
-        cage::udp_receiver::operator() (udphandler &udp, void *buf, int len,
+        cage::udp_receiver::operator() (udphandler &udp, packetbuf_ptr pbuf,
                                         sockaddr *from, int fromlen,
                                         bool is_timeout)
         {
+                int len = pbuf->get_len();
+                
                 if (len < (int)sizeof(msg_hdr)) {
                         return;
                 }
 
+                void    *buf = pbuf->get_data();
                 msg_hdr *hdr = (msg_hdr*)buf;
 
                 if (ntohs(hdr->magic) != MAGIC_NUMBER ||

@@ -59,9 +59,10 @@ namespace libcage {
         }
 
         void
-        natdetector::udp_receiver::operator() (udphandler &udp, void *buf,
-                                               int len, sockaddr *from,
-                                               int fromlen, bool is_timeout)
+        natdetector::udp_receiver::operator() (udphandler &udp,
+                                               packetbuf_ptr pbuf,
+                                               sockaddr *from, int fromlen,
+                                               bool is_timeout)
         {
                 if (is_timeout) {
                         m_nat->m_state = nat;
@@ -71,15 +72,16 @@ namespace libcage {
                         // do not reference menber variables after this code
                         m_nat->m_udps.erase(m_nonce);
                 } else {
-                        if (len == (int)sizeof(msg_nat_echo_redirect_reply)) {
-                                msg_hdr *hdr = (msg_hdr*)buf;
+                        if (pbuf->get_len() ==
+                            (int)sizeof(msg_nat_echo_redirect_reply)) {
+                                msg_hdr *hdr = (msg_hdr*)pbuf->get_data();
 
                                 if (hdr->type ==
                                     type_nat_echo_redirect_reply) {
 #ifdef DEBUG_NAT
                                         printf("recv nat_echo_redirect_reply\n");
 #endif // DEBUG_NAT
-                                        m_nat->recv_echo_redirect_reply(buf);
+                                        m_nat->recv_echo_redirect_reply(pbuf->get_data());
                                 }
                         } else {
                                 m_nat->m_state = undefined;

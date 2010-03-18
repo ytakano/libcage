@@ -40,6 +40,7 @@
 #include "dtun.hpp"
 #include "dht.hpp"
 #include "natdetector.hpp"
+#include "packetbuf.hpp"
 #include "peers.hpp"
 #include "proxy.hpp"
 #include "timer.hpp"
@@ -84,9 +85,9 @@ namespace libcage {
         private:
                 class udp_receiver : public udphandler::callback {
                 public:
-                        virtual void operator() (udphandler &udp, void *buf,
-                                                 int len, sockaddr *from,
-                                                 int fromlen,
+                        virtual void operator() (udphandler &udp,
+                                                 packetbuf_ptr pbuf,
+                                                 sockaddr *from, int fromlen,
                                                  bool is_timeout);
 
                         udp_receiver(cage &c) : m_cage(c) {}

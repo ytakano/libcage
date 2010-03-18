@@ -33,6 +33,7 @@
 #define UDPHANDLER_HPP
 
 #include "common.hpp"
+#include "packetbuf.hpp"
 
 #include <event.h>
 
@@ -48,9 +49,9 @@ namespace libcage {
         public:
                 class callback {
                 public:
-                        virtual void operator() (udphandler &udp, void *buf,
-                                                 int len, sockaddr *from,
-                                                 int fromlen,
+                        virtual void operator() (udphandler &udp,
+                                                 packetbuf_ptr pbuf,
+                                                 sockaddr *from, int fromlen,
                                                  bool is_timeout) = 0;
 
                         virtual ~callback() {}
