@@ -8,6 +8,8 @@ namespace libcage {
         const uint8_t rdp::flag_nul = 0x08;
         const uint8_t rdp::flag_ver = 2;
 
+        const uint16_t rdp::syn_opt_in_seq = 0x8000;
+
         const uint32_t rdp::rbuf_max_default    = 1024 * 2;
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
@@ -135,8 +137,8 @@ namespace libcage {
                 p_con->syn_time = time(NULL);
                 p_con->syn_num  = 1;
 
-                // XXX
                 // init recv buffer
+                p_con->init_rwnd();
 
 
                 // send syn
@@ -293,8 +295,11 @@ namespace libcage {
                         // create connection
                         rdp_con_ptr  p_con(new rdp_con);
                         rdp_syn     *syn_in;
+                        uint16_t     opts;
 
                         syn_in = (rdp_syn*)head;
+
+                        opts = ntohs(syn_in->options);
 
                         p_con->addr     = addr;
                         p_con->is_pasv  = true;
@@ -309,13 +314,16 @@ namespace libcage {
                         p_con->snd_max  = ntohs(syn_in->out_segs_max);
                         p_con->sbuf_max = ntohs(syn_in->seg_size_max);
 
+                        if (opts & syn_opt_in_seq) {
+                                p_con->is_in_seq = true;
+                        } else {
+                                p_con->is_in_seq = false;
+                        }
+
                         p_con->set_output_func(m_output_func);
 
                         p_con->init_swnd();
-
-
-                        // XXX
-                        // init recv buffer
+                        p_con->init_rwnd();
 
 
                         // create syn ack packet
@@ -436,11 +444,20 @@ namespace libcage {
                                 return;
 
                         rdp_syn *syn = (rdp_syn*)head;
+                        uint16_t opts;
+
+                        opts = ntohs(syn->options);
 
                         p_con->rcv_cur  = ntohl(syn->head.seqnum);
                         p_con->rcv_irs  = p_con->rcv_cur;
                         p_con->snd_max  = ntohs(syn->out_segs_max);
                         p_con->sbuf_max = ntohs(syn->seg_size_max);
+
+                        if (opts & syn_opt_in_seq) {
+                                p_con->is_in_seq = true;
+                        } else {
+                                p_con->is_in_seq = false;
+                        }
 
                         p_con->init_swnd();
 
@@ -463,11 +480,12 @@ namespace libcage {
                                 ack->seqnum = htonl(p_con->snd_nxt);
                                 ack->acknum = htonl(p_con->rcv_cur);
 
-                                if (! p_con->enqueue_swnd(pbuf_ack))
-                                        return;
+                                m_output_func(addr.did, pbuf_ack);
 
-                                p_con->snd_nxt++;
                                 p_con->syn_pbuf.reset();
+
+                                // invoke the signal of "Connection Established"
+                                m_event_func(p_con->desc, addr, ESTABLISHED);
                         } else {
                                 p_con->state = SYN_RCVD;
 
@@ -534,12 +552,7 @@ namespace libcage {
                         ack->seqnum = htonl(p_con->snd_nxt);
                         ack->acknum = htonl(p_con->rcv_cur);
 
-                        if (! p_con->enqueue_swnd(pbuf_ack))
-                                return;
-
-                        p_con->snd_nxt++;
-
-                        m_output_func(p_con->addr.did, pbuf_ack);
+                        m_output_func(addr.did, pbuf_ack);
                 } else if (head->flags & flag_rst) {
                         // If RST set
                         //   If passive Open
@@ -650,7 +663,6 @@ namespace libcage {
                                         // Established"
                                         m_event_func(p_con->desc, addr,
                                                      ESTABLISHED_FROM);
-
                                 }
                                 // If Data in segment or NUL set
                                 //   If the received segment is in sequence
@@ -759,11 +771,21 @@ namespace libcage {
         rdp::set_syn_option_seq(uint16_t &options, bool sequenced)
         {
                 if (sequenced)
-                        options |= 0x8000;
+                        options |= syn_opt_in_seq;
                 else
-                        options &= 0x7fff;
+                        options &= ~syn_opt_in_seq;
 
                 options = htons(options);
+        }
+
+        void
+        rdp_con::init_rwnd()
+        {
+                m_rwnd_len  = rdp::rcv_max_default;
+                m_rwnd_head = 0;
+                m_rwnd_used = 0;
+
+                m_rwnd = boost::shared_array<rwnd>(new rwnd[m_rwnd_len]);
         }
 
         void
@@ -775,7 +797,7 @@ namespace libcage {
                 m_swnd_tail   = 0;
                 m_swnd_ostand = 0;
 
-                m_swnd = boost::shared_array<wnd>(new wnd[m_swnd_len]);
+                m_swnd = boost::shared_array<swnd>(new swnd[m_swnd_len]);
         }
 
         bool
@@ -784,8 +806,8 @@ namespace libcage {
                 if (m_swnd_used >= m_swnd_len)
                         return false;
 
-                int  pos = (m_swnd_head + m_swnd_used) % m_swnd_len;
-                wnd *p_wnd;
+                int   pos = (m_swnd_head + m_swnd_used) % m_swnd_len;
+                swnd *p_wnd;
 
                 p_wnd = &m_swnd[pos];
                 p_wnd->pbuf      = pbuf;
@@ -867,7 +889,7 @@ namespace libcage {
         void
         rdp_con::ack_ostand(int pos)
         {
-                wnd *p_wnd = &m_swnd[pos];
+                swnd *p_wnd = &m_swnd[pos];
 
                 if (p_wnd->is_sent && ! p_wnd->is_acked) {
                         p_wnd->is_acked = true;

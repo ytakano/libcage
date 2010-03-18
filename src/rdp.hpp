@@ -89,6 +89,8 @@ namespace libcage {
                 static const uint8_t   flag_nul;
                 static const uint8_t   flag_ver;
 
+                static const uint16_t  syn_opt_in_seq;
+
                 static const uint32_t  rbuf_max_default;
                 static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
@@ -151,6 +153,7 @@ namespace libcage {
                 rdp_addr        addr;
                 int             desc;
                 bool            is_pasv;
+                bool            is_in_seq;
 
                 rdp_state       state;     // The current state of the
                                            // connection.
@@ -203,6 +206,7 @@ namespace libcage {
                 int             syn_num;
 
                 void            init_swnd();
+                void            init_rwnd();
                 bool            enqueue_swnd(packetbuf_ptr pbuf);
 
                 void            set_output_func(callback_dgram_out func);
@@ -211,7 +215,7 @@ namespace libcage {
                 void            recv_eack(uint32_t eack);
 
         private:
-                class wnd {
+                class swnd {
                 public:
                         packetbuf_ptr   pbuf;
                         time_t          sent_time;
@@ -220,7 +224,7 @@ namespace libcage {
                         uint32_t        seqnum;
                 };
 
-                boost::shared_array<wnd>        m_swnd;
+                boost::shared_array<swnd>        m_swnd;
                 int             m_swnd_len;
                 int             m_swnd_used;
                 int             m_swnd_head;
@@ -232,6 +236,21 @@ namespace libcage {
                 uint32_t        num_from_head(uint32_t seqnum);
                 int             seq2pos(uint32_t num);
                 void            ack_ostand(int pos);
+
+
+                class rwnd {
+                public:
+                        packetbuf_ptr   pbuf;
+                        uint32_t        seqnum;
+                        bool            is_used;
+
+                        rwnd() : is_used(false) { }
+                };
+
+                boost::shared_array<rwnd>       m_rwnd;
+                int             m_rwnd_len;
+                int             m_rwnd_head;
+                int             m_rwnd_used;
         };
 }
 
