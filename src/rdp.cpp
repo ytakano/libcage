@@ -1,3 +1,34 @@
+/*
+ * Copyright (c) 2010, Yuuki Takano (ytakanoster@gmail.com).
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the writers nor the names of its contributors may be
+ *    used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "rdp.hpp"
 
 namespace libcage {
@@ -28,7 +59,7 @@ namespace libcage {
         rdp::rdp()
         {
                 // XXX
-                // start retransmission timer
+                // start timer for retransmission, close wait and delayed ack
         }
 
         rdp::~rdp()
@@ -268,7 +299,7 @@ namespace libcage {
                         memset(rst, 0, sizeof(*rst));
 
                         rst->flags  = flag_rst | flag_ver;
-                        rst->hlen   = sizeof(*rst) / 2;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                         rst->sport  = htons(addr.sport);
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(seg_ack + 1);
@@ -335,7 +366,7 @@ namespace libcage {
                         memset(syn_out, 0, sizeof(*syn_out));
 
                         syn_out->head.flags  = flag_syn | flag_ack | flag_ver;
-                        syn_out->head.hlen   = (uint8_t)sizeof(*syn_out) / 2;
+                        syn_out->head.hlen   = (uint8_t)(sizeof(*syn_out) / 2);
                         syn_out->head.sport  = htons(addr.sport);
                         syn_out->head.dport  = htons(addr.dport);
                         syn_out->head.seqnum = htonl(p_con->snd_iss);
@@ -403,7 +434,7 @@ namespace libcage {
                                 memset(rst, 0, sizeof(*rst));
 
                                 rst->flags  = flag_rst | flag_ver;
-                                rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                                rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                                 rst->sport  = htons(addr.sport);
                                 rst->dport  = htons(addr.dport);
                                 rst->seqnum = htonl(ack + 1);
@@ -491,7 +522,7 @@ namespace libcage {
                                 memset(ack, 0, sizeof(*ack));
 
                                 ack->flags  = flag_ack | flag_ver;
-                                ack->hlen   = (uint8_t)sizeof(*ack) / 2;
+                                ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
                                 ack->sport  = htons(addr.sport);
                                 ack->sport  = htons(addr.dport);
                                 ack->seqnum = htonl(p_con->snd_nxt);
@@ -515,7 +546,7 @@ namespace libcage {
                                 memset(syn_out, 0, sizeof(*syn_out));
 
                                 syn_out->head.flags  = flag_syn | flag_ack | flag_ver;
-                                syn_out->head.hlen   = (uint8_t)sizeof(*syn_out) / 2;
+                                syn_out->head.hlen   = (uint8_t)(sizeof(*syn_out) / 2);
                                 syn_out->head.sport  = htons(addr.sport);
                                 syn_out->head.dport  = htons(addr.dport);
                                 syn_out->head.seqnum = htonl(p_con->snd_iss);
@@ -570,7 +601,7 @@ namespace libcage {
                         memset(ack, 0, sizeof(*ack));
 
                         ack->flags  = flag_ack | flag_ver;
-                        ack->hlen   = (uint8_t)sizeof(*ack) / 2;
+                        ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
                         ack->sport  = htons(addr.sport);
                         ack->dport  = htons(addr.dport);
                         ack->seqnum = htonl(p_con->snd_nxt);
@@ -629,7 +660,7 @@ namespace libcage {
                         memset(rst, 0, sizeof(*rst));
 
                         rst->flags  = flag_rst | flag_ver;
-                        rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                         rst->sport  = htons(addr.sport);
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(acknum + 1);
@@ -663,7 +694,7 @@ namespace libcage {
                         memset(rst, 0, sizeof(*rst));
 
                         rst->flags  = flag_rst | flag_ver;
-                        rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                         rst->sport  = htons(addr.sport);
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(acknum + 1);
@@ -745,7 +776,7 @@ namespace libcage {
                                 memset(rst, 0, sizeof(*rst));
 
                                 rst->flags  = flag_rst | flag_ver;
-                                rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                                rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                                 rst->sport  = htons(addr.sport);
                                 rst->dport  = htons(addr.dport);
                                 rst->seqnum = htonl(acknum + 1);
@@ -756,49 +787,140 @@ namespace libcage {
         }
 
         void
-        rdp::in_state_open(rdp_con_ptr con, rdp_addr addr, 
+        rdp::in_state_open(rdp_con_ptr p_con, rdp_addr addr, 
                            packetbuf_ptr pbuf)
         {
-                // If RCV.CUR < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
-                //   Segment sequence number acceptable
-                // else
-                //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
-                //   Discard segment and return
-                // Endif
-                //
-                // If RST set
-                //   Set State = CLOSE-WAIT
-                //   Signal "Connection Reset"
-                //   Return
-                // Endif
-                //
-                // If NUL set
-                //   Set RCV.CUR=SEG.SEQ
-                //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If SYN set
-                //   Send <SEQ=SEG.ACK + 1><RST>
-                //   Set State = CLOSED
-                //   Signal "Connection Reset"
-                //   Discard segment
-                //   Deallocate connection record
-                //   Return
-                // Endif
-                //
-                // If ACK set
-                //   If SND.UNA =< SEG.ACK < SND.NXT
-                //     Set SND.UNA = SEG.ACK
-                //     Flush acknowledged segments
-                //   Endif
-                // Endif
-                //
-                // If EACK set
-                //   Flush acknowledged segments
-                // Endif
-                //
+                rdp_head *head = (rdp_head*)pbuf->get_data();
+                uint32_t  seq = ntohl(head->seqnum);
+                uint32_t  seq_irs;
+                uint32_t  rcv_max2;
+
+                seq_irs = seq - p_con->rcv_irs;
+
+                rcv_max2  = p_con->rcv_cur + (p_con->rcv_max * 2);
+                rcv_max2 -= p_con->rcv_irs;
+
+                if (! (0 < seq_irs && seq_irs <= rcv_max2) ) {
+                        // If RCV.CUR < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
+                        //   Segment sequence number acceptable
+                        // else
+                        //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                        //   Discard segment and return
+                        // Endif
+
+                        packetbuf_ptr  pbuf_ack = packetbuf::construct();
+                        rdp_head      *ack;
+
+                        ack = (rdp_head*)pbuf_ack->append(sizeof(*ack));
+
+                        memset(ack, 0, sizeof(*ack));
+
+                        ack->flags  = flag_ack | flag_ver;
+                        ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
+                        ack->sport  = htons(addr.sport);
+                        ack->dport  = htons(addr.dport);
+                        ack->seqnum = htonl(p_con->snd_nxt);
+                        ack->acknum = htonl(p_con->rcv_cur);
+
+                        m_output_func(addr.did, pbuf_ack);
+
+                        p_con->rcv_ack = p_con->rcv_cur;
+
+#ifndef WIN32
+                        gettimeofday(&p_con->acked_time, NULL);
+#else
+                        // XXX
+                        // for Windows
+#endif
+
+                        return;
+                } else if (head->flags & flag_rst) {
+                        // If RST set
+                        //   Set State = CLOSE-WAIT
+                        //   Signal "Connection Reset"
+                        //   Return
+                        // Endif
+
+                        p_con->state = CLOSE_WAIT;
+
+                        // invoke the signal of "Connection Reset"
+                        m_event_func(p_con->desc, addr, RESET);
+
+                        // XXX
+                        // Start Timer
+
+                        return;
+                } else if (head->flags & flag_nul) {
+                        // If NUL set
+                        //   Set RCV.CUR=SEG.SEQ
+                        //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        if (pbuf->get_len() != (int)sizeof(rdp_head))
+                                return;
+
+                        pbuf->rm_head(pbuf->get_len());
+
+                        p_con->rwnd_rcv_data(pbuf, seq);
+
+                        return;
+                } else if (head->flags & flag_syn) {
+                        // If SYN set
+                        //   Send <SEQ=SEG.ACK + 1><RST>
+                        //   Set State = CLOSED
+                        //   Signal "Connection Reset"
+                        //   Discard segment
+                        //   Deallocate connection record
+                        //   Return
+                        // Endif
+
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+                        uint32_t       acknum;
+
+                        acknum = ntohl(head->acknum);
+
+                        rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(acknum + 1);
+
+                        m_output_func(addr.did, pbuf);
+
+                        p_con->state = CLOSED;
+
+                        // invoke the signal of "Connetion Reset"
+                        m_event_func(p_con->desc, addr, RESET);
+
+                        return;
+                }
+
+                if (head->flags & flag_ack) {
+                        // If ACK set
+                        //   If SND.UNA =< SEG.ACK < SND.NXT
+                        //     Set SND.UNA = SEG.ACK
+                        //     Flush acknowledged segments
+                        //   Endif
+                        // Endif
+
+                        // XXX
+                }
+
+                if (head->flags & flag_eak) {
+                        // If EACK set
+                        //   Flush acknowledged segments
+                        // Endif
+
+                        // XXX
+                }
+
                 // If Data in segment
                 //   If the received segment is in sequence
                 //     Copy the data to user buffers
@@ -812,6 +934,23 @@ namespace libcage {
                 //          ...<RCVDSEQNOn>
                 //   Endif
                 // Endif
+
+                uint16_t dlen;
+                uint16_t hlen;
+
+                dlen = ntohs(head->dlen);
+                hlen = head->hlen * 2;
+
+                if (dlen > 0 && dlen + hlen == pbuf->get_len()) {
+                        pbuf->rm_head(hlen);
+
+                        p_con->rwnd_rcv_data(pbuf, seq);
+
+                        if (p_con->rqueue.size() > 0) {
+                                // invoke the signal of "Ready to Read"
+                                m_event_func(p_con->desc, addr, READY2READ);
+                        }
+                }
         }
 
         void
@@ -840,7 +979,7 @@ namespace libcage {
         void
         rdp_con::init_rwnd()
         {
-                m_rwnd_len  = rdp::rcv_max_default;
+                m_rwnd_len  = rcv_max * 2;
                 m_rwnd_head = 0;
 
                 m_rwnd = boost::shared_array<rwnd>(new rwnd[m_rwnd_len]);
@@ -1033,7 +1172,7 @@ namespace libcage {
                                 m_rwnd_head %= m_rwnd_len;
                 }
 
-                if (rcv_cur - rcv_ack > rcv_max / 4) {
+                if (rcv_cur - rcv_ack > rcv_max / 4 || pbuf->get_len() == 0) {
                         // delayed ack
                         packetbuf_ptr  pbuf_ack = packetbuf::construct();
                         rdp_head      *ack;
