@@ -27,6 +27,7 @@ namespace libcage {
                 int             get_len();
                 void            set_len(int len);
                 void            use_whole();
+                void            rm_head(int len);
 
                 static packetbuf_ptr    construct();
 

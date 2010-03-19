@@ -10,7 +10,7 @@ namespace libcage {
 
         const uint16_t rdp::syn_opt_in_seq = 0x8000;
 
-        const uint32_t rdp::rbuf_max_default    = 1024 * 2;
+        const uint32_t rdp::rbuf_max_default    = 1500;
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
 
@@ -136,9 +136,6 @@ namespace libcage {
                 p_con->syn_pbuf = pbuf;
                 p_con->syn_time = time(NULL);
                 p_con->syn_num  = 1;
-
-                // init recv buffer
-                p_con->init_rwnd();
 
 
                 // send syn
@@ -281,6 +278,7 @@ namespace libcage {
                         // If SYN set
                         //   Set RCV.CUR = SEG.SEQ
                         //       RCV.IRS = SEG.SEQ
+                        //       RCV.ACK = SEG.SEQ
                         //       SND.MAX = SEG.MAX
                         //       SBUF.MAX = SEG.BMAX
                         //   Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
@@ -310,7 +308,8 @@ namespace libcage {
                         p_con->rcv_max  = rcv_max_default;
                         p_con->rbuf_max = rbuf_max_default;
                         p_con->rcv_cur  = ntohl(syn_in->head.seqnum);
-                        p_con->rcv_irs  = ntohl(syn_in->head.seqnum);
+                        p_con->rcv_irs  = p_con->rcv_cur;
+                        p_con->rcv_ack  = p_con->rcv_cur;
                         p_con->snd_max  = ntohs(syn_in->out_segs_max);
                         p_con->sbuf_max = ntohs(syn_in->seg_size_max);
 
@@ -350,6 +349,13 @@ namespace libcage {
                         p_con->syn_pbuf = pbuf_syn;
                         p_con->syn_time = time(NULL);
                         p_con->syn_num  = 1;
+
+#ifndef WIN32
+                        gettimeofday(&p_con->acked_time, NULL);
+#else
+                        // XXX
+                        // for Windows
+#endif
 
 
                         // send syn ack
@@ -426,6 +432,7 @@ namespace libcage {
                         // If SYN set
                         //   Set RCV.CUR = SEG.SEQ
                         //       RCV.IRS = SEG.SEQ
+                        //       RCV.ACK = SEG.SEQ
                         //       SND.MAX = SEG.MAX
                         //       SBUF.MAX = SEG.BMAX
                         //   If ACK set
@@ -450,8 +457,19 @@ namespace libcage {
 
                         p_con->rcv_cur  = ntohl(syn->head.seqnum);
                         p_con->rcv_irs  = p_con->rcv_cur;
+                        p_con->rcv_ack  = p_con->rcv_cur;
                         p_con->snd_max  = ntohs(syn->out_segs_max);
                         p_con->sbuf_max = ntohs(syn->seg_size_max);
+
+                        p_con->init_swnd();
+                        p_con->init_rwnd();
+
+#ifndef WIN32
+                        gettimeofday(&p_con->acked_time, NULL);
+#else
+                        // XXX
+                        // for Windows
+#endif
 
                         if (opts & syn_opt_in_seq) {
                                 p_con->is_in_seq = true;
@@ -459,7 +477,6 @@ namespace libcage {
                                 p_con->is_in_seq = false;
                         }
 
-                        p_con->init_swnd();
 
                         if (syn->head.flags & flag_ack) {
                                 p_con->snd_una = ntohl(syn->head.acknum);
@@ -527,12 +544,19 @@ namespace libcage {
         {
                 rdp_head *head = (rdp_head*)pbuf->get_data();
                 uint32_t  seq = ntohl(head->seqnum);
+                uint32_t  seq_irs;
+                uint32_t  rcv_max2;
 
-                if (!(p_con->rcv_irs < seq &&
-                      seq <= p_con->rcv_cur + (p_con->rcv_max * 2))) {
+                seq_irs = seq - p_con->rcv_irs;
+
+                rcv_max2  = p_con->rcv_cur + (p_con->rcv_max * 2);
+                rcv_max2 -= p_con->rcv_irs;
+
+                if (! (0 < seq_irs && seq_irs <= rcv_max2) ) {
                         // If RCV.IRS < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
                         //   Segment sequence number acceptable
                         // else
+                        //   Set RCV.ACK = RCV.CUR
                         //   Send <SEQ=SND.NXT><ACK=RCV.CUR><ACK>
                         //   Discard segment
                         //   Return
@@ -553,6 +577,15 @@ namespace libcage {
                         ack->acknum = htonl(p_con->rcv_cur);
 
                         m_output_func(addr.did, pbuf_ack);
+
+                        p_con->rcv_ack = p_con->rcv_cur;
+
+#ifndef WIN32
+                        gettimeofday(&p_con->acked_time, NULL);
+#else
+                        // XXX
+                        // for Windows
+#endif
                 } else if (head->flags & flag_rst) {
                         // If RST set
                         //   If passive Open
@@ -677,6 +710,32 @@ namespace libcage {
                                 //          <EACK><RCVDSEQNO1>...<RCVDSEQNOn>
                                 //   Endif
                                 // Endif
+
+                                if (pbuf->get_len() - (int)sizeof(*head) > 0 ||
+                                    head->flags & flag_nul) {
+                                        uint16_t dlen = ntohs(head->dlen);
+
+                                        if ((int)(dlen + sizeof(*head)) !=
+                                            pbuf->get_len()) {
+                                                return;
+                                        }
+
+                                        if (head->flags & flag_nul &&
+                                            dlen > 0) {
+                                                return;
+                                        }
+
+                                        pbuf->rm_head(sizeof(*head));
+                                        
+                                        p_con->rwnd_rcv_data(pbuf, seq);
+
+                                        if (p_con->rqueue.size() > 0) {
+                                                // invoke the signal of
+                                                // "Ready to Read"
+                                                m_event_func(p_con->desc, addr,
+                                                             READY2READ);
+                                        }
+                                }
                         } else {
                                 packetbuf_ptr  pbuf_rst = packetbuf::construct();
                                 rdp_head      *rst;
@@ -783,7 +842,6 @@ namespace libcage {
         {
                 m_rwnd_len  = rdp::rcv_max_default;
                 m_rwnd_head = 0;
-                m_rwnd_used = 0;
 
                 m_rwnd = boost::shared_array<rwnd>(new rwnd[m_rwnd_len]);
         }
@@ -854,7 +912,7 @@ namespace libcage {
         // seq2pos(0)  = 5
         // seq2pos(4)  = 0
         uint32_t
-        rdp_con::num_from_head(uint32_t seqnum) {
+        rdp_con::swnd_num_from_head(uint32_t seqnum) {
                 uint32_t hseq = m_swnd[m_swnd_head].seqnum;
                 uint32_t num;
 
@@ -868,12 +926,12 @@ namespace libcage {
         }
 
         int
-        rdp_con::seq2pos(uint32_t seqnum)
+        rdp_con::swnd_seq2pos(uint32_t seqnum)
         {
                 uint32_t num;
                 int      pos;
 
-                num = num_from_head(seqnum);
+                num = swnd_num_from_head(seqnum);
 
                 if (num > (uint32_t)m_swnd_used)
                         return -1;
@@ -887,7 +945,7 @@ namespace libcage {
         }
 
         void
-        rdp_con::ack_ostand(int pos)
+        rdp_con::swnd_ack_ostand(int pos)
         {
                 swnd *p_wnd = &m_swnd[pos];
 
@@ -931,13 +989,78 @@ namespace libcage {
         {
                 uint32_t pos;
 
-                pos = seq2pos(eack);
+                pos = swnd_seq2pos(eack);
                 if (pos < 0)
                         return;
 
-                ack_ostand(eack);
+                swnd_ack_ostand(eack);
 
                 // XXX
                 // send
+        }
+
+        void
+        rdp_con::rwnd_rcv_data(packetbuf_ptr pbuf, uint32_t seqnum)
+        {
+                uint32_t seq_cur;
+                int      idx;
+
+                seq_cur = seqnum - rcv_cur;
+
+                if (! (0 < seq_cur && seq_cur <= (uint32_t)m_rwnd_len))
+                        return;
+
+                idx = m_rwnd_head + seq_cur - 1;
+                if (idx >= m_rwnd_len)
+                        idx %= m_rwnd_len;
+
+                if (! m_rwnd[idx].is_used) {
+                        m_rwnd[idx].pbuf    = pbuf;
+                        m_rwnd[idx].is_used = true;
+                }
+
+                while (m_rwnd[m_rwnd_head].is_used) {
+                        rcv_cur++;
+
+                        if (m_rwnd[m_rwnd_head].pbuf->get_len() > 0)
+                                rqueue.push(m_rwnd[m_rwnd_head].pbuf);
+
+                        m_rwnd[m_rwnd_head].pbuf.reset();
+                        m_rwnd[m_rwnd_head].is_used = false;
+
+                        m_rwnd_head++;
+                        if (m_rwnd_head >= m_rwnd_len)
+                                m_rwnd_head %= m_rwnd_len;
+                }
+
+                if (rcv_cur - rcv_ack > rcv_max / 4) {
+                        // delayed ack
+                        packetbuf_ptr  pbuf_ack = packetbuf::construct();
+                        rdp_head      *ack;
+
+                        ack = (rdp_head*)pbuf_ack->append(sizeof(*ack));
+
+                        memset(ack, 0, sizeof(*ack));
+
+                        ack->flags  = rdp::flag_ack | rdp::flag_ver;
+                        ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
+                        ack->sport  = htons(addr.sport);
+                        ack->dport  = htons(addr.dport);
+                        ack->seqnum = htonl(snd_nxt);
+                        ack->acknum = htonl(rcv_cur);
+
+                        m_output_func(addr.did, pbuf_ack);
+
+                        rcv_ack = rcv_cur;
+
+#ifndef WIN32
+                        gettimeofday(&acked_time, NULL);
+#else
+                        // XXX
+                        // for Windows
+#endif
+                }
+
+                return;
         }
 }

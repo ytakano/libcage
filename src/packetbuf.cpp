@@ -72,6 +72,16 @@ namespace libcage {
         }
 
         void
+        packetbuf::rm_head(int len)
+        {
+                if (len > m_len)
+                        return;
+
+                m_head += len;
+                m_len  -= len;
+        }
+
+        void
         intrusive_ptr_add_ref(packetbuf *pbuf)
         {
                 pbuf->m_refc++;

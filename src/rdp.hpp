@@ -8,8 +8,16 @@
 #include <stdint.h>
 #include <time.h>
 
-#include <vector>
+#ifndef WIN32
+  #include <sys/time.h>
+#else
+  // XXX
+  // for Windows
+#endif
+
 #include <functional>
+#include <vector>
+#include <queue>
 
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
@@ -26,7 +34,7 @@ namespace libcage {
                 ESTABLISHED,
                 REFUSED,
                 RESET,
-                READY_READ,
+                READY2READ,
         };
 
         enum rdp_state {
@@ -195,6 +203,15 @@ namespace libcage {
                                          // This is  the  sequence number of the
                                          // SYN segment that established this
                                          // connection.
+                uint32_t        rcv_ack; // The sequence number last acked
+
+#ifndef WIN32
+                timeval         acked_time;
+#else
+                // XXX
+                // for Windows
+#endif
+
                 std::vector<uint32_t>   rcvdseqno; // The array of sequence
                                                    // numbers of segments that
                                                    // have been received and
@@ -206,13 +223,16 @@ namespace libcage {
                 int             syn_num;
 
                 void            init_swnd();
-                void            init_rwnd();
                 bool            enqueue_swnd(packetbuf_ptr pbuf);
+
+                void            init_rwnd();
 
                 void            set_output_func(callback_dgram_out func);
 
                 void            recv_ack(uint32_t ack);
                 void            recv_eack(uint32_t eack);
+
+                std::queue<packetbuf_ptr>       rqueue; // read queue
 
         private:
                 class swnd {
@@ -233,15 +253,14 @@ namespace libcage {
 
                 callback_dgram_out      m_output_func;
 
-                uint32_t        num_from_head(uint32_t seqnum);
-                int             seq2pos(uint32_t num);
-                void            ack_ostand(int pos);
+                uint32_t        swnd_num_from_head(uint32_t seqnum);
+                int             swnd_seq2pos(uint32_t num);
+                void            swnd_ack_ostand(int pos);
 
 
                 class rwnd {
                 public:
                         packetbuf_ptr   pbuf;
-                        uint32_t        seqnum;
                         bool            is_used;
 
                         rwnd() : is_used(false) { }
@@ -250,7 +269,10 @@ namespace libcage {
                 boost::shared_array<rwnd>       m_rwnd;
                 int             m_rwnd_len;
                 int             m_rwnd_head;
-                int             m_rwnd_used;
+
+        public:
+                void            rwnd_rcv_data(packetbuf_ptr pbuf,
+                                              uint32_t seqnum);
         };
 }
 
