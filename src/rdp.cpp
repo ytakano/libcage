@@ -981,6 +981,7 @@ namespace libcage {
         {
                 m_rwnd_len  = rcv_max * 2;
                 m_rwnd_head = 0;
+                m_rwnd_used = 0;
 
                 m_rwnd = boost::shared_array<rwnd>(new rwnd[m_rwnd_len]);
         }
@@ -1154,8 +1155,12 @@ namespace libcage {
                         idx %= m_rwnd_len;
 
                 if (! m_rwnd[idx].is_used) {
-                        m_rwnd[idx].pbuf    = pbuf;
-                        m_rwnd[idx].is_used = true;
+                        m_rwnd[idx].pbuf      = pbuf;
+                        m_rwnd[idx].seqnum    = seqnum;
+                        m_rwnd[idx].is_used   = true;
+                        m_rwnd[idx].is_eacked = false;
+
+                        m_rwnd_used++;
                 }
 
                 while (m_rwnd[m_rwnd_head].is_used) {
@@ -1165,8 +1170,10 @@ namespace libcage {
                                 rqueue.push(m_rwnd[m_rwnd_head].pbuf);
 
                         m_rwnd[m_rwnd_head].pbuf.reset();
-                        m_rwnd[m_rwnd_head].is_used = false;
+                        m_rwnd[m_rwnd_head].is_used   = false;
+                        m_rwnd[m_rwnd_head].is_eacked = false;
 
+                        m_rwnd_used--;
                         m_rwnd_head++;
                         if (m_rwnd_head >= m_rwnd_len)
                                 m_rwnd_head %= m_rwnd_len;
@@ -1187,6 +1194,42 @@ namespace libcage {
                         ack->dport  = htons(addr.dport);
                         ack->seqnum = htonl(snd_nxt);
                         ack->acknum = htonl(rcv_cur);
+
+
+#define MAX_EACK 64
+                        uint32_t seqs[MAX_EACK];
+                        int idx;
+                        int i, j;
+
+                        idx = m_rwnd_head;
+
+                        i = 0;
+                        j = 0;
+                        while (i < m_rwnd_used && j < MAX_EACK) {
+                                if (m_rwnd[idx].is_used) {
+                                        if (! m_rwnd[idx].is_eacked) {
+                                                seqs[j] = htonl(m_rwnd[idx].seqnum);
+                                                m_rwnd[idx].is_eacked = true;
+                                                j++;
+                                        }
+                                        i++;
+                                }
+
+                                idx++;
+                                if (idx >= m_rwnd_len)
+                                        idx %= m_rwnd_len;
+                        }
+
+                        if (j > 0) {
+                                pbuf_ack->append(sizeof(seqs[0]) * j);
+
+                                memcpy(&ack[1], seqs, sizeof(seqs[0]) * j);
+
+                                ack->flags |= rdp::flag_eak;
+                                ack->hlen  += (uint8_t)(sizeof(seqs[0]) *
+                                                        j / 2);
+                        }
+
 
                         m_output_func(addr.did, pbuf_ack);
 

@@ -292,14 +292,17 @@ namespace libcage {
                 class rwnd {
                 public:
                         packetbuf_ptr   pbuf;
+                        uint32_t        seqnum;
                         bool            is_used;
+                        bool            is_eacked;
 
-                        rwnd() : is_used(false) { }
+                        rwnd() : is_used(false), is_eacked(false) { }
                 };
 
                 boost::shared_array<rwnd>       m_rwnd;
                 int             m_rwnd_len;
                 int             m_rwnd_head;
+                int             m_rwnd_used;
 
         public:
                 void            rwnd_rcv_data(packetbuf_ptr pbuf,
