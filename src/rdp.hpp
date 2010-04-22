@@ -255,12 +255,13 @@ namespace libcage {
 
                 void            init_swnd();
                 bool            enqueue_swnd(packetbuf_ptr pbuf);
+                void            send_ostand_swnd();
 
                 void            init_rwnd();
 
                 void            set_output_func(callback_dgram_out func);
 
-                void            recv_ack(uint32_t ack);
+                void            recv_ack(uint32_t acknum);
                 void            recv_eack(uint32_t eack);
 
                 std::queue<packetbuf_ptr>       rqueue; // read queue
@@ -277,17 +278,11 @@ namespace libcage {
 
                 boost::shared_array<swnd>        m_swnd;
                 int             m_swnd_len;
-                int             m_swnd_used;
                 int             m_swnd_head;
-                int             m_swnd_tail;
-                uint32_t        m_swnd_ostand;
+                int             m_swnd_used;
+                int             m_swnd_ostand; // index of outstanding data
 
                 callback_dgram_out      m_output_func;
-
-                uint32_t        swnd_num_from_head(uint32_t seqnum);
-                int             swnd_seq2pos(uint32_t num);
-                void            swnd_ack_ostand(int pos);
-
 
                 class rwnd {
                 public:
@@ -305,8 +300,8 @@ namespace libcage {
                 int             m_rwnd_used;
 
         public:
-                void            rwnd_rcv_data(packetbuf_ptr pbuf,
-                                              uint32_t seqnum);
+                void            rwnd_recv_data(packetbuf_ptr pbuf,
+                                               uint32_t seqnum);
         };
 }
 
