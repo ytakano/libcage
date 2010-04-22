@@ -1055,7 +1055,7 @@ namespace libcage {
                                 snd_nxt++;
 
                                 i++;
-                                if (i > m_swnd_len)
+                                if (i >= m_swnd_len)
                                         i %= m_swnd_len;
 
                         } else {
@@ -1084,8 +1084,11 @@ namespace libcage {
 
                                 if (p_wnd->seqnum - snd_una <
                                     acknum - snd_una) {
-                                        p_wnd->pbuf.reset();
-                                        m_swnd_used--;
+                                        if (p_wnd->is_sent) {
+                                                if (! p_wnd->is_acked)
+                                                        p_wnd->pbuf.reset();
+                                                m_swnd_used--;
+                                        }
                                 } else {
                                         break;
                                 }
@@ -1100,6 +1103,39 @@ namespace libcage {
                 }
 
                 send_ostand_swnd();
+        }
+
+        void
+        rdp_con::recv_eack(uint32_t eacknum)
+        {
+                if (m_swnd_used == 0)
+                        return;
+
+                uint32_t pos = eacknum - m_swnd[m_swnd_head].seqnum;
+
+                if (pos >= (uint32_t)m_swnd_len)
+                        return;
+
+                pos += m_swnd_head;
+
+                
+                swnd *p_wnd = &m_swnd[pos];
+
+                if (p_wnd->seqnum == eacknum &&
+                    p_wnd->is_sent && ! p_wnd->is_acked) {
+                        p_wnd->pbuf.reset();
+                        p_wnd->is_acked = true;
+                }
+
+
+                // remove head of sending window
+                while (m_swnd_head != m_swnd_ostand &&
+                       m_swnd[m_swnd_head].is_sent &&
+                       m_swnd[m_swnd_head].is_acked) {
+                        m_swnd_head++;
+                        if (m_swnd_head >= m_swnd_len)
+                                m_swnd_head %= m_swnd_len;
+                }
         }
 
         void

@@ -262,7 +262,7 @@ namespace libcage {
                 void            set_output_func(callback_dgram_out func);
 
                 void            recv_ack(uint32_t acknum);
-                void            recv_eack(uint32_t eack);
+                void            recv_eack(uint32_t eacknum);
 
                 std::queue<packetbuf_ptr>       rqueue; // read queue
 
