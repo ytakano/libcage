@@ -911,7 +911,17 @@ namespace libcage {
                         //   Flush acknowledged segments
                         // Endif
 
-                        // XXX
+                        uint32_t *eacks;
+                        uint8_t   len = head->hlen;
+                        int       i;
+
+                        len -= sizeof(*head) / 2;
+                        len /= 2;
+
+                        eacks = (uint32_t*)&head[1];
+                        for (i = 0; i < len; i++) {
+                                p_con->recv_eack(ntohl(eacks[i]));
+                        }
                 }
 
                 // If Data in segment
@@ -1117,6 +1127,8 @@ namespace libcage {
                         return;
 
                 pos += m_swnd_head;
+                if (pos >= (uint32_t)m_swnd_len)
+                        pos %= m_swnd_len;
 
                 
                 swnd *p_wnd = &m_swnd[pos];
