@@ -250,25 +250,72 @@ namespace libcage {
                 // else
                 //   Discard segment
                 // Endif
+
+                rdp_head *head = (rdp_head*)pbuf->get_data();
+
+                if (head->flags == flag_rst) {
+                        con->state = CLOSED;
+
+                        // XXX
+                        // stop close wiat timer
+                }
         }
 
         void
         rdp::in_state_closed(rdp_addr addr, packetbuf_ptr pbuf)
         {
-                // If RST set
-                //   Discard segment
-                //   Return
-                // Endif
-                //
-                // If ACK or NUL set
-                //   Send <SEQ=SEG.ACK + 1><RST>
-                //   Discard segment
-                //   Return
-                // else
-                //   Send <SEQ=0><RST><ACK=SEG.SEQ><ACK>
-                //   Discard segment
-                //   Return
-                // Endif
+                rdp_head *head = (rdp_head*)pbuf->get_data();
+
+                if (head->flags == flag_rst) {
+                        // If RST set
+                        //   Discard segment
+                        //   Return
+                        // Endif
+                } else if (head->flags == flag_ack || head->flags == flag_nul) {
+                        // If ACK or NUL set
+                        //   Send <SEQ=SEG.ACK + 1><RST>
+                        //   Discard segment
+                        //   Return
+
+                        // send rst
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+                        uint32_t       seg_ack;
+
+                        seg_ack = ntohl(head->acknum);
+
+                        rst = (rdp_head*)pbuf_rst->append(sizeof(*rst));
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(seg_ack + 1);
+
+                        m_output_func(addr.did, pbuf_rst);
+                } else {
+                        // else
+                        //   Send <SEQ=0><RST><ACK=SEG.SEQ><ACK>
+                        //   Discard segment
+                        //   Return
+                        // Endif
+
+                        // send rst | ack
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+
+                        rst = (rdp_head*)pbuf_rst->append(sizeof(*rst));
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ack | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->acknum = head->seqnum;
+                        
+                        m_output_func(addr.did, pbuf_rst);
+                }
         }
 
         void
@@ -847,7 +894,7 @@ namespace libcage {
                         m_event_func(p_con->desc, addr, RESET);
 
                         // XXX
-                        // Start Timer
+                        // start close wait timer
 
                         return;
                 } else if (head->flags & flag_nul) {
