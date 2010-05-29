@@ -31,6 +31,8 @@
 
 #include "rdp.hpp"
 
+#include <boost/foreach.hpp>
+
 namespace libcage {
         const uint8_t rdp::flag_syn = 0x80;
         const uint8_t rdp::flag_ack = 0x40;
@@ -44,6 +46,7 @@ namespace libcage {
         const uint32_t rdp::rbuf_max_default    = 1500;
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
+        const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
 
         size_t
         hash_value(const rdp_addr &addr)
@@ -55,11 +58,31 @@ namespace libcage {
 
                 return h;
         }
-
-        rdp::rdp()
+        
+        void
+        rdp::timer_rdp::operator() ()
         {
+                // retransmit
+                typedef boost::unordered_map<int, rdp_con_ptr> map;
+                
+                BOOST_FOREACH(map::value_type &p, m_rdp.m_desc2conn) {
+                        p.second->retransmit();
+                }
+
+
                 // XXX
-                // start timer for retransmission, close wait and delayed ack
+                // delayed ack
+        }
+
+        rdp::rdp(timer &tm) : m_timer(tm), m_timer_rdp(*this)
+        {
+                timeval   tval;
+
+                // start timer for retransmission and delayed ack
+                tval.tv_sec  = 0;
+                tval.tv_usec = timer_rdp_usec;
+
+                m_timer.set_timer(&m_timer_rdp, &tval);
         }
 
         rdp::~rdp()
@@ -144,6 +167,7 @@ namespace libcage {
                 p_con->rbuf_max = rbuf_max_default;
 
                 p_con->set_output_func(m_output_func);
+                p_con->set_event_func(m_event_func);
 
 
                 // create syn packet
@@ -398,6 +422,7 @@ namespace libcage {
                         }
 
                         p_con->set_output_func(m_output_func);
+                        p_con->set_event_func(m_event_func);
 
                         p_con->init_swnd();
                         p_con->init_rwnd();
@@ -1033,6 +1058,12 @@ namespace libcage {
         }
 
         void
+        rdp_con::set_event_func(callback_rdp_event func)
+        {
+                m_event_func = func;
+        }
+
+        void
         rdp_con::init_rwnd()
         {
                 m_rwnd_len  = rcv_max * 2;
@@ -1053,6 +1084,42 @@ namespace libcage {
                 m_swnd = boost::shared_array<swnd>(new swnd[m_swnd_len]);
         }
 
+        void
+        rdp_con::retransmit()
+        {
+                if (m_swnd_used == 0)
+                        return;
+
+                for (int i = m_swnd_head;; i++) {
+                        swnd   *p_wnd = &m_swnd[i];
+                        time_t  diff  = time(NULL) - p_wnd->sent_time;
+
+                        if (! p_wnd->is_sent)
+                                break;
+
+                        if (p_wnd->is_acked)
+                                continue;
+
+                        if (diff > 32) {
+                                // broken pipe
+                                state = CLOSE_WAIT;
+                                m_event_func(desc, addr, BROKEN);
+
+                                // XXX
+                                // start close wait timer
+                        } else if (diff > p_wnd->rt_sec) {
+                                // retransmit
+                                rdp_head *head = (rdp_head*)p_wnd->pbuf.get();
+
+                                head->acknum = htonl(rcv_cur);
+
+                                p_wnd->sent_time = time(NULL);
+
+                                m_output_func(addr.did, p_wnd->pbuf);
+                        }
+                }
+        }
+
         bool
         rdp_con::enqueue_swnd(packetbuf_ptr pbuf)
         {
@@ -1068,6 +1135,7 @@ namespace libcage {
                 p_wnd->sent_time = 0;
                 p_wnd->is_acked  = false;
                 p_wnd->is_sent   = false;
+                p_wnd->rt_sec    = 1;
 
                 m_swnd_used++;
 

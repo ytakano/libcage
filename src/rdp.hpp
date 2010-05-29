@@ -35,6 +35,7 @@
 #include "cagetypes.hpp"
 #include "common.hpp"
 #include "packetbuf.hpp"
+#include "timer.hpp"
 
 #include <stdint.h>
 #include <time.h>
@@ -66,6 +67,7 @@ namespace libcage {
                 REFUSED,
                 RESET,
                 READY2READ,
+                BROKEN,
         };
 
         enum rdp_state {
@@ -133,8 +135,9 @@ namespace libcage {
                 static const uint32_t  rbuf_max_default;
                 static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
+                static const uint32_t  timer_rdp_usec;
 
-                rdp();
+                rdp(timer &tm);
                 virtual ~rdp();
 
                 int             listen(uint16_t sport); // passive open
@@ -166,6 +169,15 @@ namespace libcage {
                 void            set_callback_dgram_out(callback_dgram_out func);
 
         private:
+                class timer_rdp : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        timer_rdp(rdp &r) : m_rdp(r) { }
+
+                        rdp    &m_rdp;
+                };
+
                 typedef boost::bimaps::unordered_set_of<uint16_t> _uint16_set;
                 typedef boost::bimaps::unordered_set_of<int>      _int_set;
                 typedef boost::bimaps::bimap<_uint16_set,
@@ -181,6 +193,9 @@ namespace libcage {
 
                 callback_dgram_out         m_output_func;
                 callback_rdp_event         m_event_func;
+
+                timer                     &m_timer;
+                timer_rdp                  m_timer_rdp;
 
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);
@@ -259,7 +274,10 @@ namespace libcage {
 
                 void            init_rwnd();
 
+                void            retransmit();
+
                 void            set_output_func(callback_dgram_out func);
+                void            set_event_func(callback_rdp_event func);
 
                 void            recv_ack(uint32_t acknum);
                 void            recv_eack(uint32_t eacknum);
@@ -274,6 +292,7 @@ namespace libcage {
                         bool            is_acked;
                         bool            is_sent;
                         uint32_t        seqnum;
+                        time_t          rt_sec;
                 };
 
                 boost::shared_array<swnd>        m_swnd;
@@ -283,6 +302,7 @@ namespace libcage {
                 int             m_swnd_ostand; // index of outstanding data
 
                 callback_dgram_out      m_output_func;
+                callback_rdp_event      m_event_func;
 
                 class rwnd {
                 public:
