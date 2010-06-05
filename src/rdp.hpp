@@ -136,6 +136,7 @@ namespace libcage {
                 static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
                 static const uint32_t  timer_rdp_usec;
+                static const double    ack_interval;
 
                 rdp(timer &tm);
                 virtual ~rdp();

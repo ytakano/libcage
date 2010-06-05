@@ -47,6 +47,7 @@ namespace libcage {
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
+        const double   rdp::ack_interval        = 0.3;
 
         size_t
         hash_value(const rdp_addr &addr)
@@ -80,7 +81,7 @@ namespace libcage {
                         sec2 = p.second->acked_time.tv_sec + 
                                 p.second->acked_time.tv_usec;
 
-                        if (sec1 - sec2)
+                        if (sec1 - sec2 > ack_interval)
                                 p.second->delayed_ack();
 #else
                         // XXX
