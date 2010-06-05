@@ -62,16 +62,31 @@ namespace libcage {
         void
         rdp::timer_rdp::operator() ()
         {
-                // retransmit
                 typedef boost::unordered_map<int, rdp_con_ptr> map;
                 
                 BOOST_FOREACH(map::value_type &p, m_rdp.m_desc2conn) {
+                        // retransmission
                         p.second->retransmit();
+
+
+                        // delayed ack;
+#ifndef WIN32
+                        timeval t;
+                        double  sec1, sec2;
+
+                        gettimeofday(&t, NULL);
+
+                        sec1 = t.tv_sec + t.tv_usec / 1000000.0;
+                        sec2 = p.second->acked_time.tv_sec + 
+                                p.second->acked_time.tv_usec;
+
+                        if (sec1 - sec2)
+                                p.second->delayed_ack();
+#else
+                        // XXX
+                        // for Windows
+#endif
                 }
-
-
-                // XXX
-                // delayed ack
         }
 
         rdp::rdp(timer &tm) : m_timer(tm), m_timer_rdp(*this)
@@ -87,7 +102,7 @@ namespace libcage {
 
         rdp::~rdp()
         {
-
+                m_timer.unset_timer(&m_timer_rdp);
         }
 
         int
@@ -1308,71 +1323,74 @@ namespace libcage {
                 }
 
                 // send ack
-                if (rcv_cur - rcv_ack > rcv_max / 4 || pbuf->get_len() == 0) {
-                        // delayed ack
-                        packetbuf_ptr  pbuf_ack = packetbuf::construct();
-                        rdp_head      *ack;
-
-                        ack = (rdp_head*)pbuf_ack->append(sizeof(*ack));
-
-                        memset(ack, 0, sizeof(*ack));
-
-                        ack->flags  = rdp::flag_ack | rdp::flag_ver;
-                        ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
-                        ack->sport  = htons(addr.sport);
-                        ack->dport  = htons(addr.dport);
-                        ack->seqnum = htonl(snd_nxt);
-                        ack->acknum = htonl(rcv_cur);
-
-
-                        // for eack
-#define MAX_EACK 64
-                        uint32_t seqs[MAX_EACK];
-                        int idx;
-                        int i, j;
-
-                        idx = m_rwnd_head;
-
-                        i = 0;
-                        j = 0;
-                        while (i < m_rwnd_used && j < MAX_EACK) {
-                                if (m_rwnd[idx].is_used) {
-                                        if (! m_rwnd[idx].is_eacked) {
-                                                seqs[j] = htonl(m_rwnd[idx].seqnum);
-                                                m_rwnd[idx].is_eacked = true;
-                                                j++;
-                                        }
-                                        i++;
-                                }
-
-                                idx++;
-                                if (idx >= m_rwnd_len)
-                                        idx %= m_rwnd_len;
-                        }
-
-                        if (j > 0) {
-                                pbuf_ack->append(sizeof(seqs[0]) * j);
-
-                                memcpy(&ack[1], seqs, sizeof(seqs[0]) * j);
-
-                                ack->flags |= rdp::flag_eak;
-                                ack->hlen  += (uint8_t)(sizeof(seqs[0]) *
-                                                        j / 2);
-                        }
-
-
-                        m_output_func(addr.did, pbuf_ack);
-
-                        rcv_ack = rcv_cur;
-
-#ifndef WIN32
-                        gettimeofday(&acked_time, NULL);
-#else
-                        // XXX
-                        // for Windows
-#endif
-                }
+                if (rcv_cur - rcv_ack > rcv_max / 4 || pbuf->get_len() == 0)
+                        delayed_ack();
 
                 return;
+        }
+
+        void
+        rdp_con::delayed_ack()
+        {
+                packetbuf_ptr  pbuf_ack = packetbuf::construct();
+                rdp_head      *ack;
+
+                ack = (rdp_head*)pbuf_ack->append(sizeof(*ack));
+
+                memset(ack, 0, sizeof(*ack));
+
+                ack->flags  = rdp::flag_ack | rdp::flag_ver;
+                ack->hlen   = (uint8_t)(sizeof(*ack) / 2);
+                ack->sport  = htons(addr.sport);
+                ack->dport  = htons(addr.dport);
+                ack->seqnum = htonl(snd_nxt);
+                ack->acknum = htonl(rcv_cur);
+
+
+                // for eack
+#define MAX_EACK 64
+                uint32_t seqs[MAX_EACK];
+                int idx;
+                int i, j;
+
+                idx = m_rwnd_head;
+
+                i = 0;
+                j = 0;
+                while (i < m_rwnd_used && j < MAX_EACK) {
+                        if (m_rwnd[idx].is_used) {
+                                if (! m_rwnd[idx].is_eacked) {
+                                        seqs[j] = htonl(m_rwnd[idx].seqnum);
+                                        m_rwnd[idx].is_eacked = true;
+                                        j++;
+                                }
+                                i++;
+                        }
+
+                        idx++;
+                        if (idx >= m_rwnd_len)
+                                idx %= m_rwnd_len;
+                }
+
+                if (j > 0) {
+                        pbuf_ack->append(sizeof(seqs[0]) * j);
+
+                        memcpy(&ack[1], seqs, sizeof(seqs[0]) * j);
+
+                        ack->flags |= rdp::flag_eak;
+                        ack->hlen  += (uint8_t)(sizeof(seqs[0]) * j / 2);
+                }
+
+
+                m_output_func(addr.did, pbuf_ack);
+
+                rcv_ack = rcv_cur;
+
+#ifndef WIN32
+                gettimeofday(&acked_time, NULL);
+#else
+                // XXX
+                // for Windows
+#endif
         }
 }

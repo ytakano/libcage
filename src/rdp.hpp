@@ -282,6 +282,8 @@ namespace libcage {
                 void            recv_ack(uint32_t acknum);
                 void            recv_eack(uint32_t eacknum);
 
+                void            delayed_ack();
+
                 std::queue<packetbuf_ptr>       rqueue; // read queue
 
         private:
