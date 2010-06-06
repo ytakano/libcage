@@ -58,7 +58,7 @@
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 
-#define RDP_VER 2
+#define RDP_VER 3
 
 namespace libcage {
         enum rdp_event {
@@ -77,6 +77,7 @@ namespace libcage {
                 SYN_RCVD,
                 OPEN,
                 CLOSE_WAIT_PASV,
+                CLOSE_WAIT_ACTIVE,
         };
 
         struct rdp_head {
@@ -139,6 +140,7 @@ namespace libcage {
                 static const uint32_t  timer_rdp_usec;
                 static const time_t    max_retrans;
                 static const double    ack_interval;
+                static const int       max_data_size;
 
                 rdp(timer &tm);
                 virtual ~rdp();
@@ -161,6 +163,9 @@ namespace libcage {
                 void            in_state_closed_wait_pasv(rdp_con_ptr p_con,
                                                           rdp_addr addr,
                                                           packetbuf_ptr pbuf);
+                void            in_state_closed_wait_active(rdp_con_ptr p_con,
+                                                            rdp_addr addr,
+                                                            packetbuf_ptr pbuf);
                 void            in_state_syn_sent(rdp_con_ptr p_con,
                                                   rdp_addr addr,
                                                   packetbuf_ptr pbuf);
@@ -208,12 +213,13 @@ namespace libcage {
         };
 
         class rdp_con {
-                class timer_close_wait_pasv : public timer::callback {
+                class timer_close_wait : public timer::callback {
                 public:
                         virtual void operator() ();
 
-                        timer_close_wait_pasv(rdp_con &con) : m_con(con) { }
+                        timer_close_wait(rdp_con &con) : m_con(con) { }
 
+                        uint8_t  m_flags;
                         rdp_con &m_con;
                         int      m_sec;
                 };
@@ -280,7 +286,7 @@ namespace libcage {
                                                    // acknowledged out of
                                                    // sequence.
 
-                timer_close_wait_pasv      timer_cw_pasv;
+                timer_close_wait        timer_cw;
 
                 packetbuf_ptr   syn_pbuf;
                 time_t          syn_time;
@@ -307,7 +313,7 @@ namespace libcage {
 
                 rdp            &ref_rdp;
 
-                rdp_con(rdp &r) : timer_cw_pasv(*this), ref_rdp(r) { }
+                rdp_con(rdp &r) : timer_cw(*this), ref_rdp(r) { }
 
         private:
                 class swnd {

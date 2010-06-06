@@ -50,6 +50,7 @@ namespace libcage {
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
         const time_t   rdp::max_retrans         = 32;
         const double   rdp::ack_interval        = 0.3;
+        const int      rdp::max_data_size       = 1024; // should be 380?
 
         size_t
         hash_value(const rdp_addr &addr)
@@ -113,6 +114,122 @@ namespace libcage {
         rdp::~rdp()
         {
                 m_timer.unset_timer(&m_timer_rdp);
+        }
+
+        int
+        rdp::send(int desc, const void *buf, int len)
+        {
+                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+
+                it = m_desc2conn.find(desc);
+                if (it == m_desc2conn.end())
+                        return -1;
+
+                if (len <= 0)
+                        return 0;
+
+                int total = 0;
+
+                for (;;) {
+                        packetbuf_ptr pbuf = packetbuf::construct();
+                        int   size = (len < max_data_size) ? len : max_data_size;
+                        void *data;
+
+                        data = pbuf->append(max_data_size);
+                        memcpy(data, buf, len);
+
+                        if (! it->second->enqueue_swnd(pbuf))
+                                return total;
+
+                        total += size;
+
+                        if (total == len)
+                                return total;
+
+                        buf = (char*)buf + size;
+                }
+
+                return -1;
+        }
+
+        void
+        rdp::close(int desc)
+        {
+                if (m_desc_set.find(desc) == m_desc_set.end())
+                        return;
+
+                // close socket listening
+                if (m_listening.right.find(desc) != m_listening.right.end()) {
+                        m_desc_set.erase(desc);
+                        m_listening.right.erase(desc);
+                        return;
+                }
+
+
+                rdp_con_ptr p_con = m_desc2conn[desc];
+                packetbuf_ptr  pbuf_rst;
+                rdp_head      *rst;
+
+                switch (p_con->state) {
+                case CLOSED:
+                        m_desc_set.erase(desc);
+                        m_addr2conn.erase(p_con->addr);
+                        m_desc2conn.erase(desc);
+                        break;
+                case CLOSE_WAIT_PASV:
+                        p_con->is_closed = true;
+                        break;
+                case OPEN:
+                case SYN_RCVD:
+                case SYN_SENT:
+                        // active close
+
+                        // Send <SEQ=SND.NXT><RST>
+
+                        pbuf_rst = packetbuf::construct();
+                        rst      = (rdp_head*)pbuf_rst.get();
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(p_con->addr.sport);
+                        rst->dport  = htons(p_con->addr.dport);
+                        rst->seqnum = htonl(p_con->snd_nxt);
+
+                        m_output_func(p_con->addr.did, pbuf_rst);
+
+
+                        if (p_con->state == OPEN) {
+                                // Set State = CLOSE-WAIT-ACTIVE
+                                // Start TIMWAIT Timer
+                                // Return
+
+                                p_con->state = CLOSE_WAIT_ACTIVE;
+
+                                // start close wait timer
+                                timeval tval;
+
+                                tval.tv_sec  = 1;
+                                tval.tv_usec = 0;
+
+                                p_con->timer_cw.m_sec   = 1;
+                                p_con->timer_cw.m_flags = flag_rst | flag_ver;
+
+                                m_timer.set_timer(&p_con->timer_cw, &tval);
+                        } else {
+                                // Set State = CLOSED
+                                // Return
+
+                                m_desc_set.erase(desc);
+                                m_addr2conn.erase(p_con->addr);
+                                m_desc2conn.erase(desc);
+                        }
+
+                        break;
+                default:
+                        ;
+                }
         }
 
         int
@@ -266,6 +383,9 @@ namespace libcage {
                         case CLOSE_WAIT_PASV:
                                 in_state_closed_wait_pasv(con, addr, pbuf);
                                 break;
+                        case CLOSE_WAIT_ACTIVE:
+                                in_state_closed_wait_active(con, addr, pbuf);
+                                break;
                         case SYN_SENT:
                                 in_state_syn_sent(con, addr, pbuf);
                                 break;
@@ -289,6 +409,50 @@ namespace libcage {
         }
 
         void
+        rdp::in_state_closed_wait_active(rdp_con_ptr p_con, rdp_addr addr,
+                                         packetbuf_ptr pbuf)
+        {
+                // If RST, FIN set
+                //   Set State = CLOSED
+                //   Discard segment
+                //   Cancel TIMWAIT timer
+                //   Send <SEQ=SND.NXT><FIN>
+                //   Deallocate connection record
+                // else
+                //   Discard segment
+                // Endif
+
+                rdp_head *head = (rdp_head*)pbuf->get_data();
+
+                if (head->flags & flag_fin && head->flags && flag_rst) {
+                        p_con->state = CLOSED;
+
+                        // stop close wiat timer
+                        m_timer.unset_timer(&p_con->timer_cw);
+
+                        if (p_con->is_closed) {
+                                m_desc_set.erase(p_con->desc);
+                                m_addr2conn.erase(p_con->addr);
+                                m_desc2conn.erase(p_con->desc);
+                        }
+
+                        // send fin
+                        packetbuf_ptr  pbuf_fin = packetbuf::construct();
+                        rdp_head      *fin = (rdp_head*)pbuf_fin.get();
+
+                        memset(fin, 0, sizeof(*fin));
+
+                        fin->flags  = flag_fin | flag_ver;
+                        fin->hlen   = (uint8_t)(sizeof(*fin) / 2);
+                        fin->sport  = htons(p_con->addr.sport);
+                        fin->dport  = htons(p_con->addr.dport);
+                        fin->seqnum = htonl(p_con->snd_nxt);
+
+                        m_output_func(p_con->addr.did, pbuf_fin);
+                }
+        }
+
+        void
         rdp::in_state_closed_wait_pasv(rdp_con_ptr p_con, rdp_addr addr,
                                        packetbuf_ptr pbuf)
         {
@@ -303,11 +467,11 @@ namespace libcage {
 
                 rdp_head *head = (rdp_head*)pbuf->get_data();
 
-                if (head->flags == flag_rst) {
+                if (head->flags & flag_fin) {
                         p_con->state = CLOSED;
 
                         // stop close wiat timer
-                        m_timer.unset_timer(&p_con->timer_cw_pasv);
+                        m_timer.unset_timer(&p_con->timer_cw);
 
                         if (p_con->is_closed) {
                                 m_desc_set.erase(p_con->desc);
@@ -945,7 +1109,7 @@ namespace libcage {
                         // If RST set
                         //   Set State = CLOSE-WAIT-PASV
                         //   Signal "Connection Reset"
-                        //   Send <SEQ=SND.NXT><ACK=RCV.CUR><FIN><RST>
+                        //   Send <SEQ=SND.NXT><FIN><RST>
                         //   Return
                         // Endif
 
@@ -968,7 +1132,6 @@ namespace libcage {
                         rst->sport  = htons(addr.sport);
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(p_con->snd_nxt);
-                        rst->acknum = htonl(p_con->rcv_cur);
 
                         m_output_func(addr.did, pbuf_rst);
                         
@@ -979,9 +1142,10 @@ namespace libcage {
                         tval.tv_sec  = 1;
                         tval.tv_usec = 0;
 
-                        p_con->timer_cw_pasv.m_sec = 1;
+                        p_con->timer_cw.m_sec   = 1;
+                        p_con->timer_cw.m_flags = flag_rst | flag_fin | flag_ver;
 
-                        m_timer.set_timer(&p_con->timer_cw_pasv, &tval);
+                        m_timer.set_timer(&p_con->timer_cw, &tval);
 
                         return;
                 } else if (head->flags & flag_nul) {
@@ -1394,7 +1558,7 @@ namespace libcage {
 
 
                 // for eack
-#define MAX_EACK 64
+#define MAX_EACK 16
                 uint32_t seqs[MAX_EACK];
                 int idx;
                 int i, j;
@@ -1441,7 +1605,7 @@ namespace libcage {
         }
 
         void
-        rdp_con::timer_close_wait_pasv::operator() ()
+        rdp_con::timer_close_wait::operator() ()
         {
                 if (m_sec > rdp::max_retrans) {
                         m_con.state = CLOSED;
@@ -1452,7 +1616,7 @@ namespace libcage {
                                 m_con.ref_rdp.m_desc2conn.erase(m_con.desc);
                         }
                 } else {
-                        // send rst | fin
+                        // send rst, fin
                         packetbuf_ptr  pbuf_rst = packetbuf::construct();
                         rdp_head      *rst;
 
@@ -1460,7 +1624,7 @@ namespace libcage {
 
                         memset(rst, 0, sizeof(*rst));
 
-                        rst->flags  = rdp::flag_rst | rdp::flag_fin | rdp::flag_ver;
+                        rst->flags  = m_flags;
                         rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
                         rst->sport  = htons(m_con.addr.sport);
                         rst->dport  = htons(m_con.addr.dport);
