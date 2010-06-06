@@ -76,7 +76,7 @@ namespace libcage {
                 SYN_SENT,
                 SYN_RCVD,
                 OPEN,
-                CLOSE_WAIT,
+                CLOSE_WAIT_PASV,
         };
 
         struct rdp_head {
@@ -128,6 +128,7 @@ namespace libcage {
                 static const uint8_t   flag_eak;
                 static const uint8_t   flag_rst;
                 static const uint8_t   flag_nul;
+                static const uint8_t   flag_fin;
                 static const uint8_t   flag_ver;
 
                 static const uint16_t  syn_opt_in_seq;
@@ -136,6 +137,7 @@ namespace libcage {
                 static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
                 static const uint32_t  timer_rdp_usec;
+                static const time_t    max_retrans;
                 static const double    ack_interval;
 
                 rdp(timer &tm);
@@ -156,9 +158,9 @@ namespace libcage {
                                                 packetbuf_ptr pbuf);
                 void            in_state_listen(rdp_addr addr,
                                                 packetbuf_ptr pbuf);
-                void            in_state_closed_wait(rdp_con_ptr con,
-                                                     rdp_addr addr,
-                                                     packetbuf_ptr pbuf);
+                void            in_state_closed_wait_pasv(rdp_con_ptr p_con,
+                                                          rdp_addr addr,
+                                                          packetbuf_ptr pbuf);
                 void            in_state_syn_sent(rdp_con_ptr p_con,
                                                   rdp_addr addr,
                                                   packetbuf_ptr pbuf);
@@ -201,13 +203,26 @@ namespace libcage {
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);
                 int             generate_desc();
+
+                friend class rdp_con;
         };
 
         class rdp_con {
+                class timer_close_wait_pasv : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        timer_close_wait_pasv(rdp_con &con) : m_con(con) { }
+
+                        rdp_con &m_con;
+                        int      m_sec;
+                };
+
         public:
                 rdp_addr        addr;
                 int             desc;
                 bool            is_pasv;
+                bool            is_closed;
                 bool            is_in_seq;
 
                 rdp_state       state;     // The current state of the
@@ -265,6 +280,8 @@ namespace libcage {
                                                    // acknowledged out of
                                                    // sequence.
 
+                timer_close_wait_pasv      timer_cw_pasv;
+
                 packetbuf_ptr   syn_pbuf;
                 time_t          syn_time;
                 int             syn_num;
@@ -286,6 +303,11 @@ namespace libcage {
                 void            delayed_ack();
 
                 std::queue<packetbuf_ptr>       rqueue; // read queue
+
+
+                rdp            &ref_rdp;
+
+                rdp_con(rdp &r) : timer_cw_pasv(*this), ref_rdp(r) { }
 
         private:
                 class swnd {

@@ -39,6 +39,7 @@ namespace libcage {
         const uint8_t rdp::flag_eak = 0x20;
         const uint8_t rdp::flag_rst = 0x10;
         const uint8_t rdp::flag_nul = 0x08;
+        const uint8_t rdp::flag_fin = 0x04;
         const uint8_t rdp::flag_ver = 2;
 
         const uint16_t rdp::syn_opt_in_seq = 0x8000;
@@ -47,6 +48,7 @@ namespace libcage {
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
+        const time_t   rdp::max_retrans         = 32;
         const double   rdp::ack_interval        = 0.3;
 
         size_t
@@ -88,6 +90,13 @@ namespace libcage {
                         // for Windows
 #endif
                 }
+
+                timeval tval;
+
+                tval.tv_sec  = 0;
+                tval.tv_usec = rdp::timer_rdp_usec;
+
+                get_timer()->set_timer(this, &tval);
         }
 
         rdp::rdp(timer &tm) : m_timer(tm), m_timer_rdp(*this)
@@ -152,7 +161,7 @@ namespace libcage {
                 // Set State = SYN-SENT
                 // Return (local port, connection identifier)
 
-                rdp_con_ptr p_con(new rdp_con);
+                rdp_con_ptr p_con(new rdp_con(*this));
                 rdp_addr    addr;
 
 
@@ -173,14 +182,15 @@ namespace libcage {
                         } while (m_addr2conn.find(addr) != m_addr2conn.end());
                 }
 
-                p_con->addr     = addr;
-                p_con->is_pasv  = false;
-                p_con->state    = SYN_SENT;
-                p_con->snd_iss  = random();
-                p_con->snd_nxt  = p_con->snd_iss + 1;
-                p_con->snd_una  = p_con->snd_iss;
-                p_con->rcv_max  = rcv_max_default;
-                p_con->rbuf_max = rbuf_max_default;
+                p_con->addr      = addr;
+                p_con->is_pasv   = false;
+                p_con->state     = SYN_SENT;
+                p_con->snd_iss   = random();
+                p_con->snd_nxt   = p_con->snd_iss + 1;
+                p_con->snd_una   = p_con->snd_iss;
+                p_con->rcv_max   = rcv_max_default;
+                p_con->rbuf_max  = rbuf_max_default;
+                p_con->is_closed = false;
 
                 p_con->set_output_func(m_output_func);
                 p_con->set_event_func(m_event_func);
@@ -253,8 +263,8 @@ namespace libcage {
                         rdp_con_ptr con = it->second;
 
                         switch (con->state) {
-                        case CLOSE_WAIT:
-                                in_state_closed_wait(con, addr, pbuf);
+                        case CLOSE_WAIT_PASV:
+                                in_state_closed_wait_pasv(con, addr, pbuf);
                                 break;
                         case SYN_SENT:
                                 in_state_syn_sent(con, addr, pbuf);
@@ -279,10 +289,10 @@ namespace libcage {
         }
 
         void
-        rdp::in_state_closed_wait(rdp_con_ptr con, rdp_addr addr,
-                                  packetbuf_ptr pbuf)
+        rdp::in_state_closed_wait_pasv(rdp_con_ptr p_con, rdp_addr addr,
+                                       packetbuf_ptr pbuf)
         {
-                // If RST set
+                // If FIN set
                 //   Set State = CLOSED
                 //   Discard segment
                 //   Cancel TIMWAIT timer
@@ -294,10 +304,16 @@ namespace libcage {
                 rdp_head *head = (rdp_head*)pbuf->get_data();
 
                 if (head->flags == flag_rst) {
-                        con->state = CLOSED;
+                        p_con->state = CLOSED;
 
-                        // XXX
                         // stop close wiat timer
+                        m_timer.unset_timer(&p_con->timer_cw_pasv);
+
+                        if (p_con->is_closed) {
+                                m_desc_set.erase(p_con->desc);
+                                m_addr2conn.erase(p_con->addr);
+                                m_desc2conn.erase(p_con->desc);
+                        }
                 }
         }
 
@@ -409,7 +425,7 @@ namespace libcage {
                                 return;
 
                         // create connection
-                        rdp_con_ptr  p_con(new rdp_con);
+                        rdp_con_ptr  p_con(new rdp_con(*this));
                         rdp_syn     *syn_in;
                         uint16_t     opts;
 
@@ -417,19 +433,20 @@ namespace libcage {
 
                         opts = ntohs(syn_in->options);
 
-                        p_con->addr     = addr;
-                        p_con->is_pasv  = true;
-                        p_con->state    = SYN_RCVD;
-                        p_con->snd_iss  = random();
-                        p_con->snd_nxt  = p_con->snd_iss + 1;
-                        p_con->snd_una  = p_con->snd_iss;
-                        p_con->rcv_max  = rcv_max_default;
-                        p_con->rbuf_max = rbuf_max_default;
-                        p_con->rcv_cur  = ntohl(syn_in->head.seqnum);
-                        p_con->rcv_irs  = p_con->rcv_cur;
-                        p_con->rcv_ack  = p_con->rcv_cur;
-                        p_con->snd_max  = ntohs(syn_in->out_segs_max);
-                        p_con->sbuf_max = ntohs(syn_in->seg_size_max);
+                        p_con->addr      = addr;
+                        p_con->is_pasv   = true;
+                        p_con->state     = SYN_RCVD;
+                        p_con->snd_iss   = random();
+                        p_con->snd_nxt   = p_con->snd_iss + 1;
+                        p_con->snd_una   = p_con->snd_iss;
+                        p_con->rcv_max   = rcv_max_default;
+                        p_con->rbuf_max  = rbuf_max_default;
+                        p_con->rcv_cur   = ntohl(syn_in->head.seqnum);
+                        p_con->rcv_irs   = p_con->rcv_cur;
+                        p_con->rcv_ack   = p_con->rcv_cur;
+                        p_con->snd_max   = ntohs(syn_in->out_segs_max);
+                        p_con->sbuf_max  = ntohs(syn_in->seg_size_max);
+                        p_con->is_closed = false;
 
                         if (opts & syn_opt_in_seq) {
                                 p_con->is_in_seq = true;
@@ -923,19 +940,48 @@ namespace libcage {
 
                         return;
                 } else if (head->flags & flag_rst) {
+                        // passive close
+
                         // If RST set
-                        //   Set State = CLOSE-WAIT
+                        //   Set State = CLOSE-WAIT-PASV
                         //   Signal "Connection Reset"
+                        //   Send <SEQ=SND.NXT><ACK=RCV.CUR><FIN><RST>
                         //   Return
                         // Endif
 
-                        p_con->state = CLOSE_WAIT;
+                        p_con->state = CLOSE_WAIT_PASV;
 
                         // invoke the signal of "Connection Reset"
                         m_event_func(p_con->desc, addr, RESET);
 
-                        // XXX
+
+                        // send rst | fin
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+
+                        rst = (rdp_head*)pbuf_rst.get();
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_fin | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(p_con->snd_nxt);
+                        rst->acknum = htonl(p_con->rcv_cur);
+
+                        m_output_func(addr.did, pbuf_rst);
+                        
+
                         // start close wait timer
+                        timeval tval;
+
+                        tval.tv_sec  = 1;
+                        tval.tv_usec = 0;
+
+                        p_con->timer_cw_pasv.m_sec = 1;
+
+                        m_timer.set_timer(&p_con->timer_cw_pasv, &tval);
 
                         return;
                 } else if (head->flags & flag_nul) {
@@ -1116,13 +1162,12 @@ namespace libcage {
                         if (p_wnd->is_acked)
                                 continue;
 
-                        if (diff > 32) {
+                        if (diff > rdp::max_retrans) {
                                 // broken pipe
-                                state = CLOSE_WAIT;
+                                state = CLOSED;
                                 m_event_func(desc, addr, BROKEN);
 
-                                // XXX
-                                // start close wait timer
+                                return;
                         } else if (diff > p_wnd->rt_sec) {
                                 // retransmit
                                 rdp_head *head = (rdp_head*)p_wnd->pbuf.get();
@@ -1393,5 +1438,47 @@ namespace libcage {
                 // XXX
                 // for Windows
 #endif
+        }
+
+        void
+        rdp_con::timer_close_wait_pasv::operator() ()
+        {
+                if (m_sec > rdp::max_retrans) {
+                        m_con.state = CLOSED;
+
+                        if (m_con.is_closed) {
+                                m_con.ref_rdp.m_desc_set.erase(m_con.desc);
+                                m_con.ref_rdp.m_addr2conn.erase(m_con.addr);
+                                m_con.ref_rdp.m_desc2conn.erase(m_con.desc);
+                        }
+                } else {
+                        // send rst | fin
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+
+                        rst = (rdp_head*)pbuf_rst.get();
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = rdp::flag_rst | rdp::flag_fin | rdp::flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(m_con.addr.sport);
+                        rst->dport  = htons(m_con.addr.dport);
+                        rst->seqnum = htonl(m_con.snd_nxt);
+                        rst->acknum = htonl(m_con.rcv_cur);
+
+                        m_con.m_output_func(m_con.addr.did, pbuf_rst);
+
+
+                        // restart timer
+                        timeval tval;
+
+                        m_sec *= 2;
+
+                        tval.tv_sec  = m_sec;
+                        tval.tv_usec = 0;
+
+                        get_timer()->set_timer(this, &tval);
+                }
         }
 }
