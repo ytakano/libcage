@@ -116,6 +116,38 @@ namespace libcage {
                 m_timer.unset_timer(&m_timer_rdp);
         }
 
+        void
+        rdp::receive(int desc, void *buf, int *len)
+        {
+                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+
+                it = m_desc2conn.find(desc);
+                if (it == m_desc2conn.end()) {
+                        *len = 0;
+                        return;
+                }
+                
+                int   total = 0;
+                char *dst = (char*)buf;
+                while (! it->second->rqueue.empty()) {
+                        packetbuf_ptr  pbuf = it->second->rqueue.front();
+
+                        if (total + pbuf->get_len() > *len) {
+                                *len = total;
+                                return;
+                        }
+
+                        memcpy(dst, pbuf->get_data(), pbuf->get_len());
+
+                        total += pbuf->get_len();
+                        dst   += pbuf->get_len();
+
+                        it->second->rqueue.pop();
+                }
+
+                *len = total;
+        }
+
         int
         rdp::send(int desc, const void *buf, int len)
         {
@@ -1558,7 +1590,7 @@ namespace libcage {
 
 
                 // for eack
-#define MAX_EACK 16
+#define MAX_EACK 64
                 uint32_t seqs[MAX_EACK];
                 int idx;
                 int i, j;

@@ -25,10 +25,10 @@
     $ omake install PREFIX=/opt/local
 
 4. Uninstall
-    If you installed to /user/local, please type:
+    If you have installed to /user/local, please type:
     $ omake uninstall
 
-    If you installed to any other places, use PREFIX option.
+    If you have installed to any other places, use PREFIX option.
     $ omake uninstall PREFIX=/opt/local
 
     You can uninstall to delete files of libcage.
