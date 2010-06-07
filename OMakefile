@@ -66,7 +66,7 @@ uninstall:
 # If so, define the subdirectory targets and uncomment this section.
 #
 
-.SUBDIRS: src sample
+.SUBDIRS: src sample test
 
 
 ########################################################################

@@ -1,0 +1,14 @@
+CXXFLAGS += -Wall -O3 -g -I../include
+LDFLAGS += -levent -lcrypto
+LIBS += ../src/libcage
+
+
+.PHONY: clean rdp_test
+
+rdp_test: $(CXXProgram rdp_test, rdp_test)
+
+clean:
+	rm -f *~ *.o
+	rm -f rdp_test
+
+.DEFAULT: rdp_test

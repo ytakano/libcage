@@ -62,10 +62,11 @@
 
 namespace libcage {
         enum rdp_event {
-                ESTABLISHED_FROM,
-                ESTABLISHED,
+                ACCEPTED,
+                CONNECTED,
                 REFUSED,
                 RESET,
+                FAILED,
                 READY2READ,
                 BROKEN,
         };
@@ -123,7 +124,6 @@ namespace libcage {
 
 
         class rdp {
-        public:
                 static const uint8_t   flag_syn;
                 static const uint8_t   flag_ack;
                 static const uint8_t   flag_eak;
@@ -142,6 +142,7 @@ namespace libcage {
                 static const double    ack_interval;
                 static const int       max_data_size;
 
+        public:
                 rdp(timer &tm);
                 virtual ~rdp();
 
@@ -154,27 +155,8 @@ namespace libcage {
                 rdp_state       status(int desc);
 
                 void            set_callback_rdp_event(callback_rdp_event func);
-
-                void            input_dgram(id_ptr src, packetbuf_ptr pbuf);
-                void            in_state_closed(rdp_addr addr,
-                                                packetbuf_ptr pbuf);
-                void            in_state_listen(rdp_addr addr,
-                                                packetbuf_ptr pbuf);
-                void            in_state_closed_wait_pasv(rdp_con_ptr p_con,
-                                                          rdp_addr addr,
-                                                          packetbuf_ptr pbuf);
-                void            in_state_closed_wait_active(rdp_con_ptr p_con,
-                                                            rdp_addr addr,
-                                                            packetbuf_ptr pbuf);
-                void            in_state_syn_sent(rdp_con_ptr p_con,
-                                                  rdp_addr addr,
-                                                  packetbuf_ptr pbuf);
-                void            in_state_syn_rcvd(rdp_con_ptr p_con,
-                                                  rdp_addr addr,
-                                                  packetbuf_ptr pbuf);
-                void            in_state_open(rdp_con_ptr p_con, rdp_addr addr,
-                                              packetbuf_ptr pbuf);
                 void            set_callback_dgram_out(callback_dgram_out func);
+                void            input_dgram(id_ptr src, packetbuf_ptr pbuf);
 
         private:
                 class timer_rdp : public timer::callback {
@@ -209,21 +191,29 @@ namespace libcage {
                                                    bool sequenced);
                 int             generate_desc();
 
+                void            in_state_closed(rdp_addr addr,
+                                                packetbuf_ptr pbuf);
+                void            in_state_listen(rdp_addr addr,
+                                                packetbuf_ptr pbuf);
+                void            in_state_close_wait_pasv(rdp_con_ptr p_con,
+                                                         rdp_addr addr,
+                                                         packetbuf_ptr pbuf);
+                void            in_state_close_wait_active(rdp_con_ptr p_con,
+                                                           rdp_addr addr,
+                                                           packetbuf_ptr pbuf);
+                void            in_state_syn_sent(rdp_con_ptr p_con,
+                                                  rdp_addr addr,
+                                                  packetbuf_ptr pbuf);
+                void            in_state_syn_rcvd(rdp_con_ptr p_con,
+                                                  rdp_addr addr,
+                                                  packetbuf_ptr pbuf);
+                void            in_state_open(rdp_con_ptr p_con, rdp_addr addr,
+                                              packetbuf_ptr pbuf);
+
                 friend class rdp_con;
         };
 
         class rdp_con {
-                class timer_close_wait : public timer::callback {
-                public:
-                        virtual void operator() ();
-
-                        timer_close_wait(rdp_con &con) : m_con(con) { }
-
-                        uint8_t  m_flags;
-                        rdp_con &m_con;
-                        int      m_sec;
-                };
-
         public:
                 rdp_addr        addr;
                 int             desc;
@@ -286,11 +276,14 @@ namespace libcage {
                                                    // acknowledged out of
                                                    // sequence.
 
-                timer_close_wait        timer_cw;
-
                 packetbuf_ptr   syn_pbuf;
                 time_t          syn_time;
-                int             syn_num;
+                time_t          syn_tout;
+
+                packetbuf_ptr   rst_pbuf;
+                time_t          rst_time;
+                time_t          rst_tout;
+                bool            is_retry_rst;
 
                 void            init_swnd();
                 bool            enqueue_swnd(packetbuf_ptr pbuf);
@@ -313,7 +306,7 @@ namespace libcage {
 
                 rdp            &ref_rdp;
 
-                rdp_con(rdp &r) : timer_cw(*this), ref_rdp(r) { }
+                rdp_con(rdp &r) : ref_rdp(r) { }
 
         private:
                 class swnd {
