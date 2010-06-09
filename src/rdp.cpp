@@ -48,7 +48,7 @@ namespace libcage {
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
-        const time_t   rdp::max_retrans         = 8;
+        const time_t   rdp::max_retrans         = 32;
         const double   rdp::ack_interval        = 0.3;
         const int      rdp::max_data_size       = 1024; // should be 380?
 
