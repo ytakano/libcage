@@ -297,7 +297,7 @@ namespace libcage {
 
                 void            init_rwnd();
 
-                void            retransmit();
+                bool            retransmit();
 
                 void            set_output_func(callback_dgram_out func);
                 void            set_event_func(callback_rdp_event func);

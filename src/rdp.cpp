@@ -48,7 +48,7 @@ namespace libcage {
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
-        const time_t   rdp::max_retrans         = 32;
+        const time_t   rdp::max_retrans         = 8;
         const double   rdp::ack_interval        = 0.3;
         const int      rdp::max_data_size       = 1024; // should be 380?
 
@@ -102,9 +102,11 @@ namespace libcage {
                                                 rdp_addr addr = it->second->addr;
                                                 int desc      = it->first;
 
+                                                ++it;
                                                 m_rdp.invoke_event(desc, 0,
                                                                    addr,
                                                                    FAILED);
+                                                break;
                                         }
                                 } else if (diff > it->second->syn_tout) {
                                         // retry sending syn
@@ -145,8 +147,13 @@ namespace libcage {
                         }
                         case OPEN:
                         {
+                                rdp_con_ptr p_con = it->second;
+
+                                ++it;
+
                                 // retransmission
-                                it->second->retransmit();
+                                if (! p_con->retransmit())
+                                        break;
 
 
                                 // delayed ack;
@@ -157,16 +164,15 @@ namespace libcage {
                                 gettimeofday(&t, NULL);
 
                                 sec1 = t.tv_sec + t.tv_usec / 1000000.0;
-                                sec2 = it->second->acked_time.tv_sec + 
-                                        it->second->acked_time.tv_usec / 1000000.0;
+                                sec2 = p_con->acked_time.tv_sec + 
+                                        p_con->acked_time.tv_usec / 1000000.0;
 
                                 if (sec1 - sec2 > ack_interval)
-                                        it->second->delayed_ack();
+                                        p_con->delayed_ack();
 #else
                                 // XXX
                                 // for Windows
 #endif
-                                ++it;
                                 break;
                         }
                         default:
@@ -340,6 +346,7 @@ namespace libcage {
                         m_desc2event.erase(it->first);
                         m_addr2conn.erase(it->second->addr);
                         m_desc2conn.erase(it);
+
                         break;
                 }
                 case SYN_SENT:
@@ -1190,12 +1197,10 @@ namespace libcage {
                                         it = m_listening.left.find(addr.sport);
 
                                         if (it != m_listening.left.end()) {
-                                                std::cout << "invoke" << std::endl;
                                                 invoke_event(it->second,
                                                              p_con->desc, addr,
                                                              ACCEPTED);
                                         } else {
-                                                std::cout << "not inoke" << std::endl;
                                                 close(p_con->desc);
                                         }
                                 }
@@ -1317,10 +1322,6 @@ namespace libcage {
 
                         p_con->state = CLOSE_WAIT_PASV;
 
-                        // invoke the signal of "Connection Reset"
-                        invoke_event(p_con->desc, 0, addr, RESET);
-
-
                         // send rst | fin
                         packetbuf_ptr  pbuf_rst = packetbuf::construct();
                         rdp_head      *rst;
@@ -1339,6 +1340,10 @@ namespace libcage {
                         p_con->rst_time     = time(NULL);
                         p_con->rst_tout     = 1;
                         p_con->is_retry_rst = true;
+
+
+                        // invoke the signal of "Connection Reset"
+                        invoke_event(p_con->desc, 0, addr, RESET);
 
                         m_output_func(addr.did, pbuf_rst);
                         
@@ -1502,11 +1507,11 @@ namespace libcage {
                 m_swnd = boost::shared_array<swnd>(new swnd[m_swnd_len]);
         }
 
-        void
+        bool
         rdp_con::retransmit()
         {
                 if (m_swnd_used == 0)
-                        return;
+                        return true;
 
                 for (int i = m_swnd_head;; i++) {
                         swnd   *p_wnd = &m_swnd[i];
@@ -1523,7 +1528,7 @@ namespace libcage {
                                 state = CLOSED;
                                 ref_rdp.invoke_event(desc, 0, addr, BROKEN);
 
-                                return;
+                                return false;
                         } else if (diff > p_wnd->rt_sec) {
                                 // retransmit
                                 rdp_head *head = (rdp_head*)p_wnd->pbuf->get_data();
@@ -1536,12 +1541,14 @@ namespace libcage {
                                 m_output_func(addr.did, p_wnd->pbuf);
                         }
                 }
+
+                return true;
         }
 
         bool
         rdp_con::enqueue_swnd(packetbuf_ptr pbuf)
         {
-                if (m_swnd_used >= m_swnd_len)
+                if (m_swnd_used >= m_swnd_len || state != OPEN)
                         return false;
 
                 swnd *p_wnd;
