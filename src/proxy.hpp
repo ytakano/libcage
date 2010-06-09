@@ -86,6 +86,8 @@ namespace libcage {
                                     dht::callback_find_value func);
 
                 void            send_dgram(const void *msg, int len, id_ptr id);
+                void            send_dgram(packetbuf_ptr pbuf, id_ptr id,
+                                           uint8_t type = type_proxy_dgram);
 
                 void            forward_msg(msg_dgram *data, int size,
                                             sockaddr *from);

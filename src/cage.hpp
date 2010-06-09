@@ -43,6 +43,7 @@
 #include "packetbuf.hpp"
 #include "peers.hpp"
 #include "proxy.hpp"
+#include "rdp.hpp"
 #include "timer.hpp"
 #include "udphandler.hpp"
 
@@ -104,6 +105,15 @@ namespace libcage {
                         cage   *p_cage;
                 };
 
+                class rdp_output {
+                public:
+                        cage &m_cage;
+                        
+                        rdp_output(cage &c) : m_cage(c) { }
+
+                        void operator() (id_ptr id_dst, packetbuf_ptr pbuf);
+                };
+
                 static bool     m_is_srand;
 
                 udphandler      m_udp;
@@ -115,6 +125,7 @@ namespace libcage {
                 dtun            m_dtun;
                 dht             m_dht;
                 bool            m_is_dtun;
+                rdp             m_rdp;
                 dgram           m_dgram;
                 proxy           m_proxy;
                 advertise       m_advertise;

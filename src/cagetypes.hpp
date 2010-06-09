@@ -116,7 +116,10 @@ namespace libcage {
         static const uint8_t type_proxy_get_reply         = 0x85;
         static const uint8_t type_proxy_dgram             = 0x86;
         static const uint8_t type_proxy_dgram_forwarded   = 0x87;
-        
+        static const uint8_t type_proxy_rdp               = 0x88;
+        static const uint8_t type_proxy_rdp_forwarded     = 0x89;
+        static const uint8_t type_rdp                     = 0x90;
+
 
         struct msg_hdr {
                 uint16_t        magic;

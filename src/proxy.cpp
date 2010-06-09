@@ -629,6 +629,34 @@ namespace libcage {
         }
 
         void
+        proxy::send_dgram(packetbuf_ptr pbuf, id_ptr id, uint8_t type)
+        {
+                cageaddr addr;
+                try {
+                        addr = m_peers.get_addr(id);
+                } catch (std::out_of_range) {
+                        if (! m_is_registered) {
+                                if (m_nat.get_state() == node_symmetric)
+                                        register_node();
+
+                                return;
+                        }
+
+                        addr = m_server;
+                }
+
+                msg_hdr *hdr;
+
+                hdr = (msg_hdr*)pbuf->prepend(sizeof(*hdr));
+                if (hdr == NULL)
+                        return;
+
+                addr.id = id;
+
+                send_msg(m_udp, hdr, pbuf->get_len(), type, addr, m_id);
+        }
+
+        void
         proxy::forward_msg(msg_dgram *data, int size, sockaddr *from)
         {
                 boost::unordered_map<_id, _addr>::iterator it;

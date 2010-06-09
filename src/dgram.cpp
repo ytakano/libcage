@@ -70,9 +70,9 @@ namespace libcage {
         }
 
         void
-        dgram::send_dgram(packetbuf_ptr pbuf, id_ptr id)
+        dgram::send_dgram(packetbuf_ptr pbuf, id_ptr id, uint8_t type)
         {
-                push2queue(id, pbuf, m_id);
+                push2queue(id, pbuf, m_id, type);
 
                 request(id);
         }
@@ -129,7 +129,8 @@ namespace libcage {
         }
 
         dgram::dgram(const uint160_t &id, peers &p, udphandler &udp,
-                     dtun &dt, dht &dh, proxy &pr, advertise &adv) :
+                     dtun &dt, dht &dh, proxy &pr, advertise &adv,
+                     rdp &r) :
                 m_id(id),
                 m_peers(p),
                 m_udp(udp),
@@ -137,6 +138,7 @@ namespace libcage {
                 m_dht(dh),
                 m_proxy(pr),
                 m_advertise(adv),
+                m_rdp(r),
                 m_is_callback(false)
         {
 
@@ -188,7 +190,8 @@ namespace libcage {
         }
 
         void
-        dgram::push2queue(id_ptr id, packetbuf_ptr pbuf, const uint160_t &src)
+        dgram::push2queue(id_ptr id, packetbuf_ptr pbuf, const uint160_t &src,
+                          uint8_t type)
         {
                 boost::unordered_map<_id, data_pool_ptr>::iterator it;
                 send_data *data;
@@ -206,6 +209,7 @@ namespace libcage {
                 data->pbuf = pbuf;
                 data->len  = pbuf->get_len();
                 data->src  = src;
+                data->type = type;
 
                 m_queue[i].push(data);
         }
@@ -227,7 +231,7 @@ namespace libcage {
 
                 dgram->hdr.magic = htons(MAGIC_NUMBER);
                 dgram->hdr.ver   = CAGE_VERSION;
-                dgram->hdr.type  = type_dgram;
+                dgram->hdr.type  = data->type;
                 dgram->hdr.len   = htons(size);
                 
                 data->src.to_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
@@ -254,18 +258,18 @@ namespace libcage {
         }
 
         void
-        dgram::recv_dgram(void *msg, int len, sockaddr *from)
+        dgram::recv_dgram(packetbuf_ptr pbuf, sockaddr *from)
         {
                 msg_dgram *dgram;
                 uint160_t  dst;
-                uint160_t  src;
+                id_ptr     src(new uint160_t);
                 int        size;
 
-                dgram = (msg_dgram*)msg;
+                dgram = (msg_dgram*)pbuf->get_data();
 
                 size = ntohs(dgram->hdr.len);
 
-                if (size != len)
+                if (size != pbuf->get_len())
                         return;
 
                 size -= sizeof(msg_hdr);
@@ -278,26 +282,30 @@ namespace libcage {
                         return;
                 }
 
-                src.from_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+                src->from_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
 
 
                 // send advertise
                 if (from->sa_family == PF_INET) {
                         sockaddr_in *in = (sockaddr_in*)from;
 
-                        m_advertise.advertise_to(src, domain_inet,
+                        m_advertise.advertise_to(*src, domain_inet,
                                                  in->sin_port,
                                                  &in->sin_addr.s_addr);
                 } else if (from->sa_family == PF_INET6) {
                         sockaddr_in6 *in6 = (sockaddr_in6*)from;
 
-                        m_advertise.advertise_to(src, domain_inet6,
+                        m_advertise.advertise_to(*src, domain_inet6,
                                                  in6->sin6_port,
                                                  in6->sin6_addr.s6_addr);
                 }
 
 
-                if (m_is_callback)
+                if (dgram->hdr.type == type_dgram && m_is_callback) {
                         m_callback(dgram->data, size, (uint8_t*)dgram->hdr.src);
+                } else if (dgram->hdr.type == type_rdp) {
+                        pbuf->rm_head(sizeof(dgram->hdr));
+                        m_rdp.input_dgram(src, pbuf);
+                }
         }
 }

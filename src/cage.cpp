@@ -176,9 +176,10 @@ namespace libcage {
                                                                    from);
                         }
                         break;
+                case type_rdp:
                 case type_dgram:
                         if (len >= (int)sizeof(msg_hdr)) {
-                                m_cage.m_dgram.recv_dgram(buf, len, from);
+                                m_cage.m_dgram.recv_dgram(pbuf, from);
                         }
                         break;
                 case type_proxy_register:
@@ -240,8 +241,9 @@ namespace libcage {
                        m_nat(m_udp, m_timer, m_id, m_peers, m_proxy),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp, m_proxy),
                        m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
+                       m_rdp(m_timer),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,
-                               m_advertise),
+                               m_advertise, m_rdp),
                        m_proxy(m_id, m_udp, m_timer, m_nat, m_peers, m_dtun,
                                m_dht, m_dgram, m_advertise),
                        m_advertise(m_id, m_timer, m_udp, m_peers, m_dtun)
@@ -250,6 +252,10 @@ namespace libcage {
 
                 RAND_pseudo_bytes(buf, sizeof(buf));
                 m_id.from_binary(buf, sizeof(buf));
+
+
+                m_rdp.set_callback_dgram_out(rdp_output(*this));
+                
 
                 if (! m_is_srand) {
                         m_is_srand = true;
@@ -447,6 +453,23 @@ namespace libcage {
         cage::get_id(void *addr) const
         {
                 m_id.to_binary(addr, CAGE_ID_LEN);
+        }
+
+        void
+        cage::rdp_output::operator() (id_ptr id_dst, packetbuf_ptr pbuf)
+        {
+                msg_hdr *hdr;
+
+                hdr = (msg_hdr*)pbuf->prepend(sizeof(*hdr));
+                memset(hdr, 0, sizeof(*hdr));
+
+
+                if (m_cage.m_nat.get_state() == node_symmetric) {
+                        m_cage.m_proxy.send_dgram(pbuf->get_data(),
+                                                  pbuf->get_len(), id_dst);
+                } else {
+                        m_cage.m_dgram.send_dgram(pbuf, id_dst, type_rdp);
+                }
         }
 
 #ifdef DEBUG_NAT

@@ -40,6 +40,7 @@
 #include "dtun.hpp"
 #include "packetbuf.hpp"
 #include "peers.hpp"
+#include "rdp.hpp"
 #include "udphandler.hpp"
 
 #include <queue>
@@ -60,11 +61,13 @@ namespace libcage {
 
 
                 dgram(const uint160_t &id, peers &p, udphandler &udp,
-                      dtun &dt, dht &dh, proxy &pr, advertise &adv);
+                      dtun &dt, dht &dh, proxy &pr, advertise &adv,
+                      rdp &r);
 
-                void            recv_dgram(void *msg, int len, sockaddr *from);
+                void            recv_dgram(packetbuf_ptr pbuf, sockaddr *from);
 
-                void            send_dgram(packetbuf_ptr pbuf, id_ptr id);
+                void            send_dgram(packetbuf_ptr pbuf, id_ptr id,
+                                           uint8_t type = type_dgram);
                 void            send_dgram(const void *msg, int len, id_ptr id);
                 void            send_dgram(const void *msg, int len, id_ptr id,
                                            const uint160_t &src);
@@ -92,13 +95,15 @@ namespace libcage {
                         packetbuf_ptr   pbuf;
                         uint160_t       src;
                         int             len;
+                        uint8_t         type;
                 };
 
                 void            send_queue(id_ptr id);
                 void            push2queue(id_ptr id, const void *msg, int len,
                                            const uint160_t &src);
                 void            push2queue(id_ptr id, packetbuf_ptr pbuf,
-                                           const uint160_t &src);
+                                           const uint160_t &src,
+                                           uint8_t type = type_dgram);
 
                 void            request(id_ptr id);
 
@@ -119,6 +124,7 @@ namespace libcage {
                 dht                    &m_dht;
                 proxy                  &m_proxy;
                 advertise              &m_advertise;
+                rdp                    &m_rdp;
                 callback                m_callback;
                 bool                    m_is_callback;
         };
