@@ -92,6 +92,7 @@ namespace libcage {
                                         if (it->second->is_pasv) {
                                                 // delete connection
                                                 m_rdp.m_desc_set.erase(it->first);
+                                                m_rdp.m_desc2event.erase(it->first);
                                                 m_rdp.m_addr2conn.erase(it->second->addr);
                                                 m_rdp.m_desc2conn.erase(it++);
                                                 break;
@@ -101,7 +102,8 @@ namespace libcage {
                                                 rdp_addr addr = it->second->addr;
                                                 int desc      = it->first;
 
-                                                m_rdp.m_event_func(desc, addr,
+                                                m_rdp.invoke_event(desc, 0,
+                                                                   addr,
                                                                    FAILED);
                                         }
                                 } else if (diff > it->second->syn_tout) {
@@ -122,6 +124,7 @@ namespace libcage {
                                         if (it->second->is_closed) {
                                                 // deallocate
                                                 m_rdp.m_desc_set.erase(it->first);
+                                                m_rdp.m_desc2event.erase(it->first);
                                                 m_rdp.m_addr2conn.erase(it->second->addr);
                                                 m_rdp.m_desc2conn.erase(it++);
                                                 break;
@@ -220,6 +223,28 @@ namespace libcage {
                 *len = total;
         }
 
+        void
+        rdp::invoke_event(int desc1, int desc2, rdp_addr addr, rdp_event event)
+        {
+                boost::unordered_map<int, callback_rdp_event>::iterator it;
+
+                it = m_desc2event.find(desc1);
+                if (it == m_desc2event.end())
+                        return;
+
+                if (desc2 > 0) {
+                        it->second(desc2, addr, event);
+                        boost::unordered_map<int, callback_rdp_event>::iterator it2;
+
+                        it2 = m_desc2event.find(desc2);
+
+                        if (event == ACCEPTED && it2 == m_desc2event.end())
+                                m_desc2event[desc2] = it->second;
+                } else {
+                        it->second(desc1, addr, event);
+                }
+        }
+
         int
         rdp::send(int desc, const void *buf, int len)
         {
@@ -312,6 +337,7 @@ namespace libcage {
                 case CLOSED:
                 {
                         m_desc_set.erase(it->first);
+                        m_desc2event.erase(it->first);
                         m_addr2conn.erase(it->second->addr);
                         m_desc2conn.erase(it);
                         break;
@@ -338,6 +364,7 @@ namespace libcage {
                         m_output_func(it->second->addr.did, pbuf);
 
                         m_desc_set.erase(it->first);
+                        m_desc2event.erase(it->first);
                         m_addr2conn.erase(it->second->addr);
                         m_desc2conn.erase(it);
 
@@ -362,13 +389,14 @@ namespace libcage {
 
         // passive open
         int
-        rdp::listen(uint16_t sport)
+        rdp::listen(uint16_t sport, callback_rdp_event func)
         {
                 if (m_listening.left.find(sport) == m_listening.left.end()) {
                         int desc = generate_desc();
 
                         m_desc_set.insert(desc);
                         m_listening.insert(listening_val(sport, desc));
+                        m_desc2event[desc] = func;
 
                         return desc;
                 }
@@ -378,7 +406,8 @@ namespace libcage {
 
         // active open
         int
-        rdp::connect(uint16_t sport, id_ptr did, uint16_t dport)
+        rdp::connect(uint16_t sport, id_ptr did, uint16_t dport,
+                     callback_rdp_event func)
         {
                 // If remote port not specified
                 //   Return "Error - remote port not specified"
@@ -426,7 +455,6 @@ namespace libcage {
                 p_con->is_closed = false;
 
                 p_con->set_output_func(m_output_func);
-                p_con->set_event_func(m_event_func);
 
 
                 // create syn packet
@@ -458,8 +486,9 @@ namespace libcage {
                 p_con->desc = desc;
 
                 m_desc_set.insert(desc);
-                m_addr2conn[addr] = p_con;
-                m_desc2conn[desc] = p_con;
+                m_addr2conn[addr]  = p_con;
+                m_desc2conn[desc]  = p_con;
+                m_desc2event[desc] = func;
 
 
                 // send syn
@@ -488,12 +517,15 @@ namespace libcage {
                 addr.dport = dport;
                 addr.sport = sport;
 
+                boost::unordered_map<rdp_addr, rdp_con_ptr>::iterator it;
+                it = m_addr2conn.find(addr);
+
 #ifdef DEBUG
                 std::cout << "input: src = " << addr.dport
                           << ", dst = " << addr.sport
                           << ", seq = " << ntohl(head->seqnum)
                           << ", ack = " << ntohl(head->acknum)
-                          << ", flags = ";
+                          << "\n       flags = ";
 
                 if (head->flags & flag_syn) {
                         std::cout << "syn, ";
@@ -514,13 +546,37 @@ namespace libcage {
                 if (head->flags & flag_fin) {
                         std::cout << "fin, ";
                 }
-#endif // DEBUG
+
+
+                if (it != m_addr2conn.end()) {
+                        rdp_con_ptr con = it->second;
+
+                        switch (con->state) {
+                        case CLOSE_WAIT_PASV:
+                                std::cout << "state = CLOSE-WAIT-PASV";
+                                break;
+                        case CLOSE_WAIT_ACTIVE:
+                                std::cout << "state = CLOSE-WAIT-ACTIVE";
+                                break;
+                        case SYN_SENT:
+                                std::cout << "state = SYN-SENT";
+                                break;
+                        case SYN_RCVD:
+                                std::cout << "state = SYN-RCVD";
+                                break;
+                        case OPEN:
+                                std::cout << "state = OPEN";
+                                break;
+                        case CLOSED:
+                                std::cout << "state = CLOSED";
+                                break;
+                        default:
+                                break;
+                        }
+                }
 
                 std::cout << std::endl;
-
-
-                boost::unordered_map<rdp_addr, rdp_con_ptr>::iterator it;
-                it = m_addr2conn.find(addr);
+#endif // DEBUG
 
                 if (it != m_addr2conn.end()) {
                         rdp_con_ptr con = it->second;
@@ -747,7 +803,6 @@ namespace libcage {
                         }
 
                         p_con->set_output_func(m_output_func);
-                        p_con->set_event_func(m_event_func);
 
                         p_con->init_swnd();
                         p_con->init_rwnd();
@@ -856,7 +911,7 @@ namespace libcage {
                                 p_con->state = CLOSED;
 
                                 // invoke the signal of "Connection Refused"
-                                m_event_func(p_con->desc, addr, REFUSED);
+                                invoke_event(p_con->desc, 0, addr, REFUSED);
                         }
                         return;
                 }
@@ -933,7 +988,7 @@ namespace libcage {
                                 p_con->syn_pbuf.reset();
 
                                 // invoke the signal of "Connection Established"
-                                m_event_func(p_con->desc, addr, CONNECTED);
+                                invoke_event(p_con->desc, 0, addr, CONNECTED);
 
                                 m_output_func(addr.did, pbuf_ack);
                         } else {
@@ -1033,13 +1088,14 @@ namespace libcage {
 
                         if (p_con->is_pasv) {
                                 m_desc_set.erase(p_con->desc);
+                                m_desc2event.erase(p_con->desc);
                                 m_addr2conn.erase(p_con->addr);
                                 m_desc2conn.erase(p_con->desc);
                         } else {
                                 p_con->state = CLOSED;
 
                                 // invoke the signal of "Connection Refused"
-                                m_event_func(p_con->desc, addr, REFUSED);
+                                invoke_event(p_con->desc, 0, addr, REFUSED);
                         }
                 } else if (head->flags & flag_syn) {
                         // If SYN set
@@ -1069,13 +1125,14 @@ namespace libcage {
 
                         if (p_con->is_pasv) {
                                 m_desc_set.erase(p_con->desc);
+                                m_desc2event.erase(p_con->desc);
                                 m_addr2conn.erase(p_con->addr);
                                 m_desc2conn.erase(p_con->desc);
                         } else {
                                 p_con->state = CLOSED;
 
                                 // invoke the signal of "Connection Reset"
-                                m_event_func(p_con->desc, addr, RESET);
+                                invoke_event(p_con->desc, 0, addr, RESET);
                         }
 
                         m_output_func(addr.did, pbuf_rst);
@@ -1128,8 +1185,19 @@ namespace libcage {
                                 if (p_con->is_pasv) {
                                         // invoke the signal of "Connection
                                         // Established"
-                                        m_event_func(p_con->desc, addr,
-                                                     ACCEPTED);
+                                        listening_t::left_iterator it;
+
+                                        it = m_listening.left.find(addr.sport);
+
+                                        if (it != m_listening.left.end()) {
+                                                std::cout << "invoke" << std::endl;
+                                                invoke_event(it->second,
+                                                             p_con->desc, addr,
+                                                             ACCEPTED);
+                                        } else {
+                                                std::cout << "not inoke" << std::endl;
+                                                close(p_con->desc);
+                                        }
                                 }
                                 // If Data in segment or NUL set
                                 //   If the received segment is in sequence
@@ -1166,8 +1234,8 @@ namespace libcage {
                                         if (p_con->rqueue.size() > 0) {
                                                 // invoke the signal of
                                                 // "Ready to Read"
-                                                m_event_func(p_con->desc, addr,
-                                                             READY2READ);
+                                                invoke_event(p_con->desc, 0,
+                                                             addr, READY2READ);
                                         }
                                 }
                         } else {
@@ -1250,7 +1318,7 @@ namespace libcage {
                         p_con->state = CLOSE_WAIT_PASV;
 
                         // invoke the signal of "Connection Reset"
-                        m_event_func(p_con->desc, addr, RESET);
+                        invoke_event(p_con->desc, 0, addr, RESET);
 
 
                         // send rst | fin
@@ -1322,7 +1390,7 @@ namespace libcage {
                         p_con->state = CLOSED;
 
                         // invoke the signal of "Connetion Reset"
-                        m_event_func(p_con->desc, addr, RESET);
+                        invoke_event(p_con->desc, 0, addr, RESET);
 
                         return;
                 }
@@ -1376,7 +1444,7 @@ namespace libcage {
 
                         if (p_con->rqueue.size() > 0) {
                                 // invoke the signal of "Ready to Read"
-                                m_event_func(p_con->desc, addr, READY2READ);
+                                invoke_event(p_con->desc, 0, addr, READY2READ);
                         }
                 }
         }
@@ -1388,9 +1456,12 @@ namespace libcage {
         }
 
         void
-        rdp::set_callback_rdp_event(callback_rdp_event func)
+        rdp::set_callback_rdp_event(int desc, callback_rdp_event func)
         {
-                m_event_func = func;
+                if  (m_desc_set.find(desc) == m_desc_set.end())
+                        return;
+
+                m_desc2event[desc] = func;
         }
 
         void
@@ -1408,12 +1479,6 @@ namespace libcage {
         rdp_con::set_output_func(callback_dgram_out func)
         {
                 m_output_func = func;
-        }
-
-        void
-        rdp_con::set_event_func(callback_rdp_event func)
-        {
-                m_event_func = func;
         }
 
         void
@@ -1456,7 +1521,7 @@ namespace libcage {
                         if (diff > rdp::max_retrans) {
                                 // broken pipe
                                 state = CLOSED;
-                                m_event_func(desc, addr, BROKEN);
+                                ref_rdp.invoke_event(desc, 0, addr, BROKEN);
 
                                 return;
                         } else if (diff > p_wnd->rt_sec) {

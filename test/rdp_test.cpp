@@ -6,27 +6,77 @@
 
 int desc1, desc2;
 
+class server_callback {
+public:
+        libcage::rdp   &m_rdp;
 
-class event_callback {
+        server_callback(libcage::rdp &r) : m_rdp(r) { }
+
+        void operator() (int desc, libcage::rdp_addr addr,
+                         libcage::rdp_event event)
+        {
+                switch (event) {
+                case libcage::ACCEPTED:
+                        std::cout << "accepted: src = "
+                                  << addr.sport
+                                  << ", dest = "
+                                  << addr.dport << std::endl;
+                        break;
+                case libcage::READY2READ:
+                {
+                        uint16_t num;
+                        int      len;
+
+                        for (;;) {
+                                len = sizeof(num);
+                                m_rdp.receive(desc, &num, &len);
+
+                                if (len <= 0)
+                                        break;
+
+                                std::cout << "receive: num = " << num
+                                          << std::endl;
+                        }
+
+                        break;
+
+                }
+                case libcage::BROKEN:
+                        std::cout << "broken connection" << std::endl;
+                        m_rdp.close(desc);
+                        break;
+                case libcage::RESET:
+                        std::cout << "reset by peer" << std::endl;
+                        m_rdp.close(desc);
+                        break;
+                default:
+                        ;
+                }
+        }
+};
+
+class client_callback {
 public:
         class sender : public libcage::timer::callback {
         public:
-                libcage::rdp   *p_rdp;
-                uint16_t num;
-                int      desc;
+                client_callback &m_func;
+                uint16_t      m_num;
+                int           m_desc;
+
+                sender(client_callback &func) : m_func(func) { m_num = 0; }
 
                 virtual void operator() () {
-                        std::cout << "send: num = " << num << std::endl;
-                        if (p_rdp->send(desc, &num, sizeof(num)) < 0) {
-                                std::cout << "failed to send " << num
+                        std::cout << "send: num = " << m_num << std::endl;
+                        if (m_func.m_rdp.send(m_desc, &m_num, sizeof(m_num)) < 0) {
+                                std::cout << "failed to send " << m_num
                                           << std::endl;
                                 return;
                         }
-                        num++;
+                        m_num++;
 
-                        if (num > 10) {
+                        if (m_num > 10) {
                                 std::cout << "close connection" << std::endl;
-                                p_rdp->close(desc);
+                                m_func.m_rdp.close(m_desc);
                                 return;
                         }
 
@@ -39,62 +89,46 @@ public:
                 }
         };
 
-        libcage::id_ptr id;
-        libcage::rdp    *p_rdp;
-        libcage::timer  *p_timer;
-        sender           sender;
+
+        libcage::rdp   &m_rdp;
+        libcage::timer &m_timer;
+        sender          m_sender;
+
+        client_callback(libcage::rdp &r, libcage::timer &tm)
+                : m_rdp(r), m_timer(tm), m_sender(*this) { }
 
         void operator() (int desc, libcage::rdp_addr addr,
                          libcage::rdp_event event)
         {
                 switch (event) {
-                case libcage::ACCEPTED:
-                        std::cout << "accepted: src = "
-                                  << addr.sport
-                                  << ", dest = "
-                                  << addr.dport << std::endl;
-                        break;
                 case libcage::CONNECTED:
+                {
                         std::cout << "conneced: src = "
                                   << addr.sport
                                   << ", dest = "
                                   << addr.dport << std::endl;
 
-                        sender.p_rdp = p_rdp;
-                        sender.desc  = desc;
-                        sender.num   = 0;
-
+                        m_sender.m_desc = desc;
 
                         timeval tval;
 
                         tval.tv_sec  = 0;
                         tval.tv_usec = 500 * 1000;
 
-                        p_timer->set_timer(&sender, &tval);
+                        m_timer.set_timer(&m_sender, &tval);
                         break;
-                case libcage::READY2READ:
-                        uint16_t num;
-                        int      len;
-
-                        for (;;) {
-                                len = sizeof(num);
-                                p_rdp->receive(desc, &num, &len);
-
-                                if (len <= 0)
-                                        break;
-
-                                std::cout << "receive: num = " << num
-                                          << std::endl;
-                        }
-
+                }
+                case libcage::BROKEN:
+                        std::cout << "broken connection" << std::endl;
+                        m_rdp.close(desc);
                         break;
                 case libcage::RESET:
                         std::cout << "reset by peer" << std::endl;
-                        p_rdp->close(desc);
+                        m_rdp.close(desc);
                         break;
                 case libcage::FAILED:
                         std::cout << "failed to connect" << std::endl;
-                        p_rdp->close(desc);
+                        m_rdp.close(desc);
                         break;
                 default:
                         ;
@@ -104,8 +138,8 @@ public:
 
 class output_callback {
 public:
-        libcage::id_ptr  id;
-        libcage::rdp    *p_rdp;
+        libcage::id_ptr  m_id;
+        libcage::rdp    &m_rdp;
 
         void operator() (libcage::id_ptr id_dst, libcage::packetbuf_ptr pbuf)
         {
@@ -125,7 +159,7 @@ public:
                         memcpy(pbuf2->get_data(), pbuf->get_data(),
                                pbuf->get_len());
 
-                        p_rdp->input_dgram(id, pbuf2);
+                        m_rdp.input_dgram(m_id, pbuf2);
 
                         if (n > 0) {
                                 std::cout << "duplicated!: n = " << n
@@ -135,6 +169,9 @@ public:
                         n++;
                 } while (rand() % 3 == 0);
         }
+
+        output_callback(libcage::id_ptr id, libcage::rdp &r)
+                : m_id(id), m_rdp(r) { }
 };
 
 int
@@ -143,30 +180,24 @@ main(int argc, char *argv[])
         srand(time(NULL));
         event_init();
 
-        libcage::timer my_timer;
-        libcage::rdp   my_rdp(my_timer);
-        libcage::id_ptr id(new libcage::uint160_t);
-        event_callback  ev_func;
-        output_callback out_func;
+        libcage::timer  my_timer;
+        libcage::rdp    my_rdp(my_timer);
+        libcage::id_ptr my_id(new libcage::uint160_t);
+        output_callback out_func(my_id, my_rdp);
+        server_callback server_func(my_rdp);
+        client_callback client_func(my_rdp, my_timer);
 
-        *id = 1;
-
-        ev_func.id      = id;
-        ev_func.p_rdp   = &my_rdp;
-        ev_func.p_timer = &my_timer;
-        out_func.id     = id;
-        out_func.p_rdp  = &my_rdp;
-
-        my_rdp.set_callback_rdp_event(ev_func);
         my_rdp.set_callback_dgram_out(out_func);
 
-        desc1 = my_rdp.listen(100);
+        *my_id = 1;
+
+        desc1 = my_rdp.listen(100, server_func);
         if (desc1 < 0) {
                 std::cerr << "failed to listen" << std::endl;
                 return -1;
         }
 
-        desc2 = my_rdp.connect(101, id, 100);
+        desc2 = my_rdp.connect(101, my_id, 100, client_func);
 
         event_dispatch();
 

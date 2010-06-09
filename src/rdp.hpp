@@ -59,6 +59,7 @@
 #include <boost/unordered_set.hpp>
 
 #define RDP_VER 3
+//#define DEBUG
 
 namespace libcage {
         enum rdp_event {
@@ -146,15 +147,18 @@ namespace libcage {
                 rdp(timer &tm);
                 virtual ~rdp();
 
-                int             listen(uint16_t sport); // passive open
+                int             listen(uint16_t sport,
+                                       callback_rdp_event func); // passive open
                 int             connect(uint16_t sport, id_ptr did,
-                                        uint16_t dport); // active open
+                                        uint16_t dport,
+                                        callback_rdp_event func); // active open
                 void            close(int desc);
                 int             send(int desc, const void *buf, int len);
                 void            receive(int desc, void *buf, int *len);
                 rdp_state       status(int desc);
 
-                void            set_callback_rdp_event(callback_rdp_event func);
+                void            set_callback_rdp_event(int desc,
+                                                       callback_rdp_event func);
                 void            set_callback_dgram_out(callback_dgram_out func);
                 void            input_dgram(id_ptr src, packetbuf_ptr pbuf);
 
@@ -180,9 +184,9 @@ namespace libcage {
                 
                 boost::unordered_map<rdp_addr, rdp_con_ptr>     m_addr2conn;
                 boost::unordered_map<int, rdp_con_ptr>          m_desc2conn;
+                boost::unordered_map<int, callback_rdp_event>   m_desc2event;
 
                 callback_dgram_out         m_output_func;
-                callback_rdp_event         m_event_func;
 
                 timer                     &m_timer;
                 timer_rdp                  m_timer_rdp;
@@ -190,6 +194,8 @@ namespace libcage {
                 void            set_syn_option_seq(uint16_t &options,
                                                    bool sequenced);
                 int             generate_desc();
+                void            invoke_event(int desc1, int desc2,
+                                             rdp_addr addr, rdp_event event);
 
                 void            in_state_closed(rdp_addr addr,
                                                 packetbuf_ptr pbuf);
@@ -326,7 +332,6 @@ namespace libcage {
                 int             m_swnd_ostand; // index of outstanding data
 
                 callback_dgram_out      m_output_func;
-                callback_rdp_event      m_event_func;
 
                 class rwnd {
                 public:

@@ -46,6 +46,7 @@ namespace libcage {
                 public:
                         virtual void    operator() () = 0;
 
+                        callback() {}
                         virtual ~callback() {}
 
                         timer  *get_timer() { return m_timer; }
