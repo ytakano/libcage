@@ -51,7 +51,7 @@ namespace libcage {
 
         proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
                      natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
-                     advertise &adv) :
+                     advertise &adv, rdp &r) :
                 m_id(id),
                 m_udp(udp),
                 m_timer(t),
@@ -61,6 +61,7 @@ namespace libcage {
                 m_dht(dh),
                 m_dgram(dg),
                 m_advertise(adv),
+                m_rdp(r),
                 m_is_registered(false),
                 m_is_registering(false),
                 m_timer_register(*this),
@@ -119,16 +120,16 @@ namespace libcage {
         }
 
         void
-        proxy::recv_dgram(void *msg, int len)
+        proxy::recv_dgram(packetbuf_ptr pbuf)
         {
                 msg_proxy_dgram *data;
                 id_ptr src(new uint160_t);
                 id_ptr dst(new uint160_t);
                 int    size;
 
-                data = (msg_proxy_dgram*)msg;
+                data = (msg_proxy_dgram*)pbuf->get_data();
 
-                size = sizeof(*data) - sizeof(data->data);
+                size = sizeof(data->hdr);
 
                 if (size <= 0)
                         return;
@@ -144,7 +145,7 @@ namespace libcage {
 
                 dst->from_binary(data->hdr.dst, sizeof(data->hdr.dst));
 
-                m_dgram.send_dgram(data->data, size, dst, *src);
+                m_dgram.send_dgram(pbuf, dst, data->hdr.type);
         }
 
         void
@@ -706,33 +707,47 @@ namespace libcage {
 
                 src.from_binary(data->hdr.src, sizeof(data->hdr.src));
 
-                send_msg(m_udp, &forwarded->hdr, len,
-                         type_proxy_dgram_forwarded, it->second.addr, src);
+                if (data->hdr.type == type_dgram) {
+                        send_msg(m_udp, &forwarded->hdr, len,
+                                 type_proxy_dgram_forwarded,
+                                 it->second.addr, src);
+                } else if (data->hdr.type == type_rdp) {
+                        send_msg(m_udp, &forwarded->hdr, len,
+                                 type_proxy_rdp_forwarded,
+                                 it->second.addr, src);
+                }
         }
 
         void
-        proxy::recv_forwarded(void *msg, int len)
+        proxy::recv_forwarded(packetbuf_ptr pbuf)
         {
                 msg_proxy_dgram_forwarded *forwarded;
-                int size;
+                id_ptr src(new uint160_t);
+                int    size;
 
-                forwarded = (msg_proxy_dgram_forwarded*)msg;
+                forwarded = (msg_proxy_dgram_forwarded*)pbuf->get_data();
 
-                size = len - (sizeof(*forwarded) - sizeof(forwarded->data));
+                size = pbuf->get_len() - (sizeof(*forwarded) -
+                                          sizeof(forwarded->data));
 
                 if (size <= 0)
                         return;
 
-                m_dgram_func(forwarded->data, size, forwarded->hdr.src);
+                src->from_binary(forwarded->hdr.src,
+                                 sizeof(forwarded->hdr.src));
+
+                if (forwarded->hdr.type == type_proxy_dgram_forwarded)
+                        m_dgram_func(forwarded->data, size, forwarded->hdr.src);
+                else if (forwarded->hdr.type == type_proxy_rdp_forwarded) {
+                        m_rdp.input_dgram(src, pbuf);
+                }
 
                 // send advertise
-                uint160_t src;
                 uint16_t  domain;
                 
-                src.from_binary(forwarded->hdr.src, sizeof(forwarded->hdr.src));
                 domain = ntohs(forwarded->domain);
 
-                m_advertise.advertise_to(src, domain, forwarded->port,
+                m_advertise.advertise_to(*src, domain, forwarded->port,
                                          forwarded->addr);
         }
 

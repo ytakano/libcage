@@ -210,16 +210,18 @@ namespace libcage {
                                 m_cage.m_proxy.recv_get_reply(buf, len);
                         }
                         break;
+                case type_proxy_rdp:
                 case type_proxy_dgram:
                         if (len >= (int)(sizeof(msg_proxy_dgram) -
                                          sizeof(uint32_t))) {
-                                m_cage.m_proxy.recv_dgram(buf, len);
+                                m_cage.m_proxy.recv_dgram(pbuf);
                         }
                         break;
+                case type_proxy_rdp_forwarded:
                 case type_proxy_dgram_forwarded:
                         if (len >= (int)(sizeof(msg_proxy_get) -
                                          sizeof(uint32_t))) {
-                                m_cage.m_proxy.recv_forwarded(buf, len);
+                                m_cage.m_proxy.recv_forwarded(pbuf);
                         }
                         break;
                 case type_advertise:
@@ -240,12 +242,12 @@ namespace libcage {
                        m_peers(m_timer),
                        m_nat(m_udp, m_timer, m_id, m_peers, m_proxy),
                        m_dtun(m_id, m_timer, m_peers, m_nat, m_udp, m_proxy),
-                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
                        m_rdp(m_timer),
+                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,
                                m_advertise, m_rdp),
                        m_proxy(m_id, m_udp, m_timer, m_nat, m_peers, m_dtun,
-                               m_dht, m_dgram, m_advertise),
+                               m_dht, m_dgram, m_advertise, m_rdp),
                        m_advertise(m_id, m_timer, m_udp, m_peers, m_dtun)
         {
                 unsigned char buf[20];
@@ -266,6 +268,43 @@ namespace libcage {
         cage::~cage()
         {
 
+        }
+
+        int
+        cage::rdp_listen(uint16_t sport, callback_rdp_event func)
+        {
+                return m_rdp.listen(sport, func);
+        }
+
+        int
+        cage::rdp_connect(uint16_t sport, id_ptr did, uint16_t dport,
+                          callback_rdp_event func)
+        {
+                return m_rdp.connect(sport, did, dport, func);
+        }
+
+        void
+        cage::rdp_close(int desc)
+        {
+                m_rdp.close(desc);
+        }
+
+        int
+        cage::rdp_send(int desc, const void *buf, int len)
+        {
+                return m_rdp.send(desc, buf, len);
+        }
+        
+        void
+        cage::rdp_receive(int desc, void *buf, int *len)
+        {
+                m_rdp.receive(desc, buf, len);
+        }
+
+        rdp_state
+        cage::rdp_status(int desc)
+        {
+                return m_rdp.status(desc);
         }
 
         void
@@ -465,8 +504,7 @@ namespace libcage {
 
 
                 if (m_cage.m_nat.get_state() == node_symmetric) {
-                        m_cage.m_proxy.send_dgram(pbuf->get_data(),
-                                                  pbuf->get_len(), id_dst);
+                        m_cage.m_proxy.send_dgram(pbuf, id_dst, type_rdp);
                 } else {
                         m_cage.m_dgram.send_dgram(pbuf, id_dst, type_rdp);
                 }

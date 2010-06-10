@@ -66,6 +66,18 @@ namespace libcage {
                 void            join(std::string host, int port,
                                      callback_join func);
 
+                // for rdp
+                int             rdp_listen(uint16_t sport,
+                                           callback_rdp_event func);
+                int             rdp_connect(uint16_t sport, id_ptr did,
+                                            uint16_t dport,
+                                            callback_rdp_event func);
+                void            rdp_close(int desc);
+                int             rdp_send(int desc, const void *buf, int len);
+                void            rdp_receive(int desc, void *buf, int *len);
+                rdp_state       rdp_status(int desc);
+
+
                 void            send_dgram(const void *buf, int len,
                                            uint8_t *dst);
                 void            set_dgram_callback(dgram::callback func);
@@ -123,9 +135,9 @@ namespace libcage {
                 peers           m_peers;
                 natdetector     m_nat;
                 dtun            m_dtun;
+                rdp             m_rdp;
                 dht             m_dht;
                 bool            m_is_dtun;
-                rdp             m_rdp;
                 dgram           m_dgram;
                 proxy           m_proxy;
                 advertise       m_advertise;

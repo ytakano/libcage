@@ -197,6 +197,27 @@ namespace libcage {
                 m_timer.unset_timer(&m_timer_rdp);
         }
 
+        rdp_state
+        rdp::status(int desc)
+        {
+                if (m_desc_set.find(desc) == m_desc_set.end())
+                        return CLOSED;
+
+                listening_t::right_iterator it_ls;
+
+                it_ls = m_listening.right.find(desc);
+                if (it_ls != m_listening.right.end())
+                        return LISTEN;
+
+
+                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                it = m_desc2conn.find(desc);
+                if (it != m_desc2conn.end())
+                        return it->second->state;
+
+                return CLOSED;
+        }
+
         void
         rdp::receive(int desc, void *buf, int *len)
         {

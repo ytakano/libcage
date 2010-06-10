@@ -63,7 +63,7 @@ namespace libcage {
                 
                 proxy(const uint160_t &id, udphandler &udp, timer &t,
                       natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
-                      advertise &adv);
+                      advertise &adv, rdp &r);
                 virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
@@ -72,8 +72,8 @@ namespace libcage {
                                            sockaddr *from);
                 void            recv_get(void *msg, int len);
                 void            recv_get_reply(void *msg, int len);
-                void            recv_dgram(void *msg, int len);
-                void            recv_forwarded(void *msg, int len);
+                void            recv_dgram(packetbuf_ptr pbuf);
+                void            recv_forwarded(packetbuf_ptr pbuf);
 
                 void            register_node();
 
@@ -215,6 +215,7 @@ namespace libcage {
                 dht            &m_dht;
                 dgram          &m_dgram;
                 advertise      &m_advertise;
+                rdp            &m_rdp;
                 cageaddr        m_server;
                 bool            m_is_registered;
                 bool            m_is_registering;
