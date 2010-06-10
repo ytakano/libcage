@@ -20,8 +20,6 @@ public:
 
 class client_callback {
 public:
-
-
         libcage::rdp   &m_rdp;
         libcage::timer &m_timer;
         sender         &m_sender;

@@ -494,7 +494,7 @@ namespace libcage {
 
                 syn->head.flags  = flag_syn | flag_ver;
                 syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
-                syn->head.sport  = htons(sport);
+                syn->head.sport  = htons(addr.sport);
                 syn->head.dport  = htons(dport);
                 syn->head.seqnum = htonl(p_con->snd_iss);
 
@@ -548,7 +548,7 @@ namespace libcage {
                 boost::unordered_map<rdp_addr, rdp_con_ptr>::iterator it;
                 it = m_addr2conn.find(addr);
 
-#ifdef DEBUG
+#ifdef DEBUG_RDP
                 std::cout << "input: src = " << addr.dport
                           << ", dst = " << addr.sport
                           << ", seq = " << ntohl(head->seqnum)

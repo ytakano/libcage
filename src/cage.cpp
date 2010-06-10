@@ -497,12 +497,6 @@ namespace libcage {
         void
         cage::rdp_output::operator() (id_ptr id_dst, packetbuf_ptr pbuf)
         {
-                msg_hdr *hdr;
-
-                hdr = (msg_hdr*)pbuf->prepend(sizeof(*hdr));
-                memset(hdr, 0, sizeof(*hdr));
-
-
                 if (m_cage.m_nat.get_state() == node_symmetric) {
                         m_cage.m_proxy.send_dgram(pbuf, id_dst, type_rdp);
                 } else {

@@ -248,6 +248,8 @@ namespace libcage {
                         m_udp.sendto(dgram, size, (sockaddr*)in6.get(),
                                      sizeof(sockaddr_in6));
                 }
+
+                data->pbuf->rm_head(sizeof(dgram->hdr));
         }
 
         void

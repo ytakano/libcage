@@ -655,6 +655,8 @@ namespace libcage {
                 addr.id = id;
 
                 send_msg(m_udp, hdr, pbuf->get_len(), type, addr, m_id);
+
+                pbuf->rm_head(sizeof(*hdr));
         }
 
         void
