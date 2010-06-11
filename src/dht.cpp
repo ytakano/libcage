@@ -43,6 +43,7 @@ namespace libcage {
         const int       dht::timer_interval      = 60;
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
+        const uint16_t  dht::dht_rdp_port        = 100;
 
         size_t
         hash_value(const dht::id_key &ik)
@@ -80,7 +81,7 @@ namespace libcage {
         }
 
         dht::dht(const uint160_t &id, timer &t, peers &p,
-                 const natdetector &nat, udphandler &udp, dtun &dt) :
+                 const natdetector &nat, udphandler &udp, dtun &dt, rdp &r) :
                 rttable(id, t, p),
                 m_id(id),
                 m_timer(t),
@@ -88,16 +89,133 @@ namespace libcage {
                 m_nat(nat),
                 m_udp(udp),
                 m_dtun(dt),
+                m_rdp(r),
                 m_is_dtun(true),
                 m_last_restore(0),
                 m_timer_dht(*this),
                 m_join(*this),
                 m_sync(*this)
         {
+                rdp_func func(*this);
 
+                m_rdp_listen = m_rdp.listen(dht_rdp_port, func);
         }
 
         dht::~dht()
+        {
+                m_rdp.close(m_rdp_listen);
+        }
+
+        void
+        dht::rdp_func::operator() (int desc, rdp_addr addr, rdp_event event)
+        {
+                switch (event) {
+                case ACCEPTED:
+                {
+                        if (m_dht.m_rdp_recv_store.find(desc) !=
+                            m_dht.m_rdp_recv_store.end())
+                                return;
+
+                        rdp_recv_store_ptr rs(new rdp_recv_store(&m_dht,
+                                                                 addr.did));
+
+                        m_dht.m_rdp_recv_store[desc] = rs;
+                        break;
+                }
+                case READY2READ:
+                {
+                        boost::unordered_map<int, rdp_recv_store_ptr>::iterator it;
+                        it = m_dht.m_rdp_recv_store.find(desc);
+
+                        if (it == m_dht.m_rdp_recv_store.end())
+                                return;
+
+                        for (;;) {
+                                if (it->second->is_hdr_read) {
+                                        if (it->second->key_len <
+                                            it->second->key_read) {
+                                                int size = it->second->key_len - it->second->key_read;
+
+                                                m_dht.m_rdp.receive(desc,
+                                                                    &it->second->key.get()[it->second->key_read],
+                                                                    &size);
+                                                it->second->key_read  += size;
+                                                it->second->last_time  = time(NULL);
+                                                if (size == 0)
+                                                        break;
+                                        } else {
+                                                int size = it->second->val_len - it->second->val_read;
+                                                m_dht.m_rdp.receive(desc,
+                                                                    &it->second->value.get()[it->second->val_read],
+                                                                    &size);
+
+                                                it->second->val_read  += size;
+                                                it->second->last_time  = time(NULL);
+
+                                                if (it->second->val_len ==
+                                                    it->second->val_read) {
+                                                        it->second->store2local();
+
+                                                        m_dht.m_rdp_recv_store.erase(desc);
+                                                        m_dht.m_rdp.close(desc);
+
+                                                        return;
+                                                }
+
+                                                if (size == 0)
+                                                        break;
+                                        }
+                                } else {
+                                        // read header
+                                        msg_dht_rdp_store msg;
+                                        int size = sizeof(msg);
+
+                                        m_dht.m_rdp.receive(desc, &msg, &size);
+                                        if (size != (int)sizeof(msg)) {
+                                                m_dht.m_rdp_recv_store.erase(desc);
+                                                close(desc);
+                                                return;
+                                        }
+
+                                        it->second->key_len = ntohs(msg.keylen);
+                                        it->second->val_len = ntohs(msg.valuelen);
+                                        if (it->second->key_len == 0 ||
+                                            it->second->val_len == 0) {
+                                                m_dht.m_rdp_recv_store.erase(desc);
+                                                close(desc);
+                                                return;
+                                        }
+
+                                        id_ptr id(new uint160_t);
+
+                                        id->from_binary(msg.id, sizeof(msg.id));
+
+                                        it->second->ttl     = ntohs(msg.ttl);
+                                        it->second->id      = id;
+                                        it->second->last_time   = time(NULL);
+                                        it->second->is_hdr_read = true;
+
+                                        boost::shared_array<char> key(new char[it->second->key_len]);
+                                        boost::shared_array<char> val(new char[it->second->val_len]);
+                                        it->second->key   = key;
+                                        it->second->value = val;
+                                }
+                        }
+
+                        break;
+                }
+                case RESET:
+                case BROKEN:
+                        m_dht.m_rdp_recv_store.erase(desc);
+                        close(desc);
+                        break;
+                default:
+                        ;
+                }
+        }
+
+        void
+        dht::rdp_recv_store::store2local()
         {
 
         }
@@ -146,32 +264,6 @@ namespace libcage {
         {
                 recv_ping_reply_tmpl<msg_dht_ping_reply>(msg, from, fromlen,
                                                          m_id, m_peers, this);
-        }
-
-        void
-        dht::send_msg(msg_hdr *msg, uint16_t len, uint8_t type, cageaddr &dst)
-        {
-                msg->magic = htons(MAGIC_NUMBER);
-                msg->ver   = CAGE_VERSION;
-                msg->type  = type;
-                msg->len   = htons(len);
-
-                dst.id->to_binary(msg->dst, sizeof(msg->dst));
-                m_id.to_binary(msg->src, sizeof(msg->src));
-
-                if (dst.domain == domain_inet) {
-                        in_ptr in;
-                        in = boost::get<in_ptr>(dst.saddr);
-
-                        m_udp.sendto(msg, len, (sockaddr*)in.get(),
-                                     sizeof(sockaddr_in));
-                } else if (dst.domain == domain_inet6) {
-                        in6_ptr in6;
-                        in6 = boost::get<in6_ptr>(dst.saddr);
-
-                        m_udp.sendto(msg, len, (sockaddr*)in6.get(),
-                                     sizeof(sockaddr_in6));
-                }
         }
 
         void
@@ -338,8 +430,8 @@ namespace libcage {
 
                 dst->to_binary(msg.id, sizeof(msg.id));
 
-                p_dht->send_msg(&msg.hdr, sizeof(msg), type_dht_find_node,
-                                addr);
+                send_msg(p_dht->m_udp, &msg.hdr, sizeof(msg),
+                         type_dht_find_node, addr, p_dht->m_id);
         }
 
         void
@@ -358,8 +450,8 @@ namespace libcage {
 
                         q->dst->to_binary(msg.id, sizeof(msg.id));
 
-                        send_msg(&msg.hdr, sizeof(msg), type_dht_find_node,
-                                 dst);
+                        send_msg(m_udp, &msg.hdr, sizeof(msg),
+                                 type_dht_find_node, dst, m_id);
                 } catch (std::out_of_range) {
                         find_node_func func;
 
@@ -467,7 +559,8 @@ namespace libcage {
                         return;
                 }
 
-                send_msg(&reply->hdr, len, type_dht_find_node_reply, addr);
+                send_msg(m_udp, &reply->hdr, len, type_dht_find_node_reply,
+                         addr, m_id);
         }
 
         void
@@ -758,7 +851,8 @@ namespace libcage {
                                 continue;
                         }
 
-                        p_dht->send_msg(&msg->hdr, size, type_dht_store, addr);
+                        send_msg(p_dht->m_udp, &msg->hdr, size,
+                                 type_dht_store, addr, p_dht->m_id);
                 }
 
                 if (nodes.size() >= (uint32_t)num_find_node) {
@@ -944,7 +1038,8 @@ namespace libcage {
 
                 dst->to_binary(msg->id, sizeof(msg->id));
 
-                p_dht->send_msg(&msg->hdr, size, type_dht_find_value, addr);
+                send_msg(p_dht->m_udp, &msg->hdr, size,
+                         type_dht_find_value, addr, p_dht->m_id);
         }
 
         void
@@ -976,8 +1071,8 @@ namespace libcage {
 
                         q->dst->to_binary(msg->id, sizeof(msg->id));
 
-                        send_msg(&msg->hdr, size, type_dht_find_value,
-                                 dst);
+                        send_msg(m_udp, &msg->hdr, size, type_dht_find_value,
+                                 dst, m_id);
                 } catch (std::out_of_range) {
                         find_value_func func;
 
@@ -1070,8 +1165,8 @@ namespace libcage {
                                        it_data->value.get(),
                                        it_data->valuelen);
 
-                                send_msg(&reply->hdr, size,
-                                         type_dht_find_value_reply, addr);
+                                send_msg(m_udp, &reply->hdr, size,
+                                         type_dht_find_value_reply, addr, m_id);
 
                                 i++;
                         }
@@ -1131,8 +1226,8 @@ namespace libcage {
                                 return;
                         }
 
-                        send_msg(&reply->hdr, size, type_dht_find_value_reply,
-                                 addr);
+                        send_msg(m_udp, &reply->hdr, size,
+                                 type_dht_find_value_reply, addr, m_id);
                 }
         }
 
@@ -1463,8 +1558,9 @@ namespace libcage {
                                                 continue;
                                         }
 
-                                        p_dht->send_msg(&msg->hdr, size,
-                                                        type_dht_store, addr);
+                                        send_msg(p_dht->m_udp, &msg->hdr, size,
+                                                 type_dht_store, addr,
+                                                 p_dht->m_id);
                                 }
 
                                 if (! me)

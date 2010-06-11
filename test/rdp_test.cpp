@@ -81,7 +81,6 @@ server_callback::operator() (int desc, libcage::rdp_addr addr,
                 }
 
                 break;
-                
         }
         case libcage::BROKEN:
                 std::cout << "broken pipe" << std::endl;

@@ -319,6 +319,14 @@ namespace libcage {
                 uint32_t        data[1];
         };
 
+        struct msg_dht_rdp_store {
+                uint8_t         id[CAGE_ID_LEN];
+                uint16_t        keylen;
+                uint16_t        valuelen;
+                uint16_t        ttl;
+                uint16_t        reserved;
+        };
+
         struct msg_dgram {
                 msg_hdr         hdr;
                 uint32_t        data[1];

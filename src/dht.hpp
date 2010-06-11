@@ -39,6 +39,7 @@
 #include "timer.hpp"
 #include "peers.hpp"
 #include "rttable.hpp"
+#include "rdp.hpp"
 #include "udphandler.hpp"
 
 #include <set>
@@ -64,6 +65,7 @@ namespace libcage {
                 static const int        timer_interval;
                 static const int        original_put_num;
                 static const int        recvd_value_timeout;
+                static const uint16_t   dht_rdp_port;
 
         public:
                 class value_t {
@@ -97,7 +99,8 @@ namespace libcage {
                                        callback_find_value> callback_func;
 
                 dht(const uint160_t &id, timer &t, peers &p,
-                    const natdetector &nat, udphandler &udp, dtun &dt);
+                    const natdetector &nat, udphandler &udp, dtun &dt,
+                    rdp &r);
                 virtual ~dht();
 
                 void            recv_ping(void *msg, sockaddr *from,
@@ -131,6 +134,41 @@ namespace libcage {
                 void            set_enabled_dtun(bool flag);
 
         private:
+                class rdp_func {
+                public:
+                        dht &m_dht;
+
+                        rdp_func(dht &d) : m_dht(d) { }
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                };
+
+                class rdp_recv_store {
+                public:
+                        boost::shared_array<char>       key;
+                        boost::shared_array<char>       value;
+                        uint16_t        key_len;
+                        uint16_t        val_len;
+                        uint16_t        key_read;
+                        uint16_t        val_read;
+                        uint16_t        ttl;
+                        id_ptr          id;
+                        id_ptr          src;
+                        time_t          last_time;
+                        dht            *p_dht;
+                        bool            is_hdr_read;
+
+                        rdp_recv_store(dht *d, id_ptr from) :
+                                key_len(0), val_len(0), key_read(0),
+                                val_read(0), src(from), last_time(time(NULL)),
+                                p_dht(d), is_hdr_read(false) { }
+
+                        void store2local();
+                };
+
+                typedef boost::shared_ptr<rdp_recv_store> rdp_recv_store_ptr;
+
                 class sync_node {
                 public:
                         sync_node(dht &d) : m_dht(d)
@@ -375,9 +413,6 @@ namespace libcage {
 
                 virtual void    send_ping(cageaddr &dst, uint32_t nonce);
 
-                void            send_msg(msg_hdr *msg, uint16_t len,
-                                         uint8_t type, cageaddr &dst);
-
                 void            find_nv(const uint160_t &dst,
                                         callback_func func, bool is_find_value,
                                         const void *key, int keylen);
@@ -397,14 +432,17 @@ namespace libcage {
                 const natdetector       &m_nat;
                 udphandler              &m_udp;
                 dtun                    &m_dtun;
+                rdp                     &m_rdp;
                 bool                     m_is_dtun;
                 time_t                   m_last_restore;
                 timer_dht                m_timer_dht;
                 dht_join                 m_join;
                 sync_node                m_sync;
+                int                      m_rdp_listen;
 
-                boost::unordered_map<uint32_t, query_ptr>       m_query;
-                boost::unordered_map<id_key, sdata_set>         m_stored;
+                boost::unordered_map<uint32_t, query_ptr>     m_query;
+                boost::unordered_map<id_key, sdata_set>       m_stored;
+                boost::unordered_map<int, rdp_recv_store_ptr> m_rdp_recv_store;
         };
 }
 
