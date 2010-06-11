@@ -82,10 +82,10 @@ public:
                                   << n
                                   << std::endl;
 
-                cage[n].print_state();
+                //cage[n].print_state();
 
                 // put data
-                cage[n].put(&n, sizeof(n), &n, sizeof(n), 300);
+                cage[n].put(&n, sizeof(n), &n, sizeof(n), 30000);
 
                 n++;
 

@@ -48,7 +48,7 @@ namespace libcage {
         const uint32_t rdp::rcv_max_default     = 1024;
         const uint16_t rdp::well_known_port_max = 1024;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
-        const time_t   rdp::max_retrans         = 32;
+        const time_t   rdp::max_retrans         = 64;
         const double   rdp::ack_interval        = 0.3;
         const int      rdp::max_data_size       = 1024; // should be 380?
 
@@ -329,6 +329,8 @@ namespace libcage {
                 switch (it->second->state) {
                 case OPEN:
                 {
+                        it->second->delayed_ack();
+
                         // Send <SEQ=SND.NXT><RST>
                         // Set State = CLOSE-WAIT
 
@@ -410,7 +412,8 @@ namespace libcage {
 
                 do {
                         desc = rand();
-                } while (m_desc_set.find(desc) != m_desc_set.end());
+                } while (m_desc_set.find(desc) != m_desc_set.end() &&
+                         desc <= 0);
 
                 return desc;
         }
@@ -1340,6 +1343,8 @@ namespace libcage {
                         //   Send <SEQ=SND.NXT><FIN><RST>
                         //   Return
                         // Endif
+
+                        p_con->delayed_ack();
 
                         p_con->state = CLOSE_WAIT_PASV;
 

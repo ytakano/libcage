@@ -59,7 +59,7 @@
 #include <boost/unordered_set.hpp>
 
 #define RDP_VER 3
-#define DEBUG_RDP
+//#define DEBUG_RDP
 
 namespace libcage {
         enum rdp_event {

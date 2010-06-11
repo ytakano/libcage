@@ -43,7 +43,7 @@ namespace libcage {
         const int       dht::timer_interval      = 60;
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
-        const uint16_t  dht::dht_rdp_port        = 100;
+        const uint16_t  dht::rdp_store_port      = 100;
 
         size_t
         hash_value(const dht::id_key &ik)
@@ -94,11 +94,12 @@ namespace libcage {
                 m_last_restore(0),
                 m_timer_dht(*this),
                 m_join(*this),
-                m_sync(*this)
+                m_sync(*this),
+                m_is_use_rdp(true)
         {
-                rdp_func func(*this);
+                rdp_recv_store_func func(*this);
 
-                m_rdp_listen = m_rdp.listen(dht_rdp_port, func);
+                m_rdp_listen = m_rdp.listen(rdp_store_port, func);
         }
 
         dht::~dht()
@@ -106,8 +107,90 @@ namespace libcage {
                 m_rdp.close(m_rdp_listen);
         }
 
+        bool
+        dht::rdp_recv_store_func::read_hdr(int desc,
+                                           dht::rdp_recv_store_func::it_rcvs it)
+        {
+                // read header
+                msg_dht_rdp_store msg;
+                int size = sizeof(msg);
+
+                m_dht.m_rdp.receive(desc, &msg, &size);
+                if (size != (int)sizeof(msg)) {
+                        m_dht.m_rdp_recv_store.erase(desc);
+                        close(desc);
+                        return -1;
+                }
+
+                it->second->keylen   = ntohs(msg.keylen);
+                it->second->valuelen = ntohs(msg.valuelen);
+                if (it->second->keylen == 0 ||
+                    it->second->valuelen == 0) {
+                        m_dht.m_rdp_recv_store.erase(desc);
+                        close(desc);
+                        return false;
+                }
+
+                id_ptr id(new uint160_t);
+
+                id->from_binary(msg.id, sizeof(msg.id));
+
+                it->second->ttl     = ntohs(msg.ttl);
+                it->second->id      = id;
+                it->second->last_time   = time(NULL);
+                it->second->is_hdr_read = true;
+
+                boost::shared_array<char> key(new char[it->second->keylen]);
+                boost::shared_array<char> val(new char[it->second->valuelen]);
+                it->second->key   = key;
+                it->second->value = val;
+
+                return true;
+        }
+
+        bool
+        dht::rdp_recv_store_func::read_body(int desc,
+                                            dht::rdp_recv_store_func::it_rcvs it)
+        {
+                if (it->second->key_read < it->second->keylen) {
+                        int size = it->second->keylen - it->second->key_read;
+
+                        char *buf = &it->second->key.get()[it->second->key_read];
+                        m_dht.m_rdp.receive(desc, buf, &size);
+
+                        if (size == 0)
+                                return false;
+
+                        it->second->key_read  += size;
+                        it->second->last_time  = time(NULL);
+                } else {
+                        int size = it->second->valuelen - it->second->val_read;
+                        m_dht.m_rdp.receive(desc,
+                                            &it->second->value.get()[it->second->val_read],
+                                            &size);
+
+                        if (size == 0)
+                                return false;
+
+                        it->second->val_read  += size;
+                        it->second->last_time  = time(NULL);
+
+                        if (it->second->valuelen == it->second->val_read) {
+                                it->second->store2local();
+
+                                m_dht.m_rdp_recv_store.erase(desc);
+                                m_dht.m_rdp.close(desc);
+
+                                return false;
+                        }
+                }
+
+                return true;
+        }
+
         void
-        dht::rdp_func::operator() (int desc, rdp_addr addr, rdp_event event)
+        dht::rdp_recv_store_func::operator() (int desc, rdp_addr addr,
+                                              rdp_event event)
         {
                 switch (event) {
                 case ACCEPTED:
@@ -120,11 +203,19 @@ namespace libcage {
                                                                  addr.did));
 
                         m_dht.m_rdp_recv_store[desc] = rs;
+
+                        std::cout << "accepted:" << std::endl;
+                        std::cout << "   src = " << m_dht.m_id.to_string()
+                                  << std::endl;
+                        std::cout << "   dst = " << addr.did->to_string()
+                                  << std::endl;
+
+
                         break;
                 }
                 case READY2READ:
                 {
-                        boost::unordered_map<int, rdp_recv_store_ptr>::iterator it;
+                        it_rcvs it;
                         it = m_dht.m_rdp_recv_store.find(desc);
 
                         if (it == m_dht.m_rdp_recv_store.end())
@@ -132,73 +223,11 @@ namespace libcage {
 
                         for (;;) {
                                 if (it->second->is_hdr_read) {
-                                        if (it->second->key_len <
-                                            it->second->key_read) {
-                                                int size = it->second->key_len - it->second->key_read;
-
-                                                m_dht.m_rdp.receive(desc,
-                                                                    &it->second->key.get()[it->second->key_read],
-                                                                    &size);
-                                                it->second->key_read  += size;
-                                                it->second->last_time  = time(NULL);
-                                                if (size == 0)
-                                                        break;
-                                        } else {
-                                                int size = it->second->val_len - it->second->val_read;
-                                                m_dht.m_rdp.receive(desc,
-                                                                    &it->second->value.get()[it->second->val_read],
-                                                                    &size);
-
-                                                it->second->val_read  += size;
-                                                it->second->last_time  = time(NULL);
-
-                                                if (it->second->val_len ==
-                                                    it->second->val_read) {
-                                                        it->second->store2local();
-
-                                                        m_dht.m_rdp_recv_store.erase(desc);
-                                                        m_dht.m_rdp.close(desc);
-
-                                                        return;
-                                                }
-
-                                                if (size == 0)
-                                                        break;
-                                        }
+                                        if (! read_body(desc, it))
+                                                return;
                                 } else {
-                                        // read header
-                                        msg_dht_rdp_store msg;
-                                        int size = sizeof(msg);
-
-                                        m_dht.m_rdp.receive(desc, &msg, &size);
-                                        if (size != (int)sizeof(msg)) {
-                                                m_dht.m_rdp_recv_store.erase(desc);
-                                                close(desc);
+                                        if (! read_hdr(desc, it))
                                                 return;
-                                        }
-
-                                        it->second->key_len = ntohs(msg.keylen);
-                                        it->second->val_len = ntohs(msg.valuelen);
-                                        if (it->second->key_len == 0 ||
-                                            it->second->val_len == 0) {
-                                                m_dht.m_rdp_recv_store.erase(desc);
-                                                close(desc);
-                                                return;
-                                        }
-
-                                        id_ptr id(new uint160_t);
-
-                                        id->from_binary(msg.id, sizeof(msg.id));
-
-                                        it->second->ttl     = ntohs(msg.ttl);
-                                        it->second->id      = id;
-                                        it->second->last_time   = time(NULL);
-                                        it->second->is_hdr_read = true;
-
-                                        boost::shared_array<char> key(new char[it->second->key_len]);
-                                        boost::shared_array<char> val(new char[it->second->val_len]);
-                                        it->second->key   = key;
-                                        it->second->value = val;
                                 }
                         }
 
@@ -217,7 +246,125 @@ namespace libcage {
         void
         dht::rdp_recv_store::store2local()
         {
+                id_key ik;
 
+                ik.key    = key;
+                ik.keylen = keylen;
+                ik.id     = id;
+
+                std::cout << "recv store:" << std::endl;
+                std::cout << "    key = " << *(int*)key.get()
+                          << ", keylen = " << keylen << std::endl;
+                std::cout << "    value = " << *(int*)key.get()
+                          << ", valuelen = " << valuelen << std::endl;
+                std::cout << "    id = " << id->to_string() << std::endl;
+                std::cout << "    src = " << src->to_string() << std::endl;
+                std::cout << "    dst = " << p_dht->m_id.to_string()
+                          << std::endl;
+
+                boost::unordered_map<id_key, sdata_set>::iterator it;
+                it = p_dht->m_stored.find(ik);
+
+                stored_data data;
+
+                data.value    = value;
+                data.valuelen = valuelen;
+
+#define SET_DATA() do {                                 \
+                        _id i;                          \
+                                                        \
+                        i.id = src;                     \
+                                                        \
+                        data.key         = key;         \
+                        data.keylen      = keylen;      \
+                        data.ttl         = ttl;         \
+                        data.stored_time = time(NULL);  \
+                        data.id          = id;          \
+                        data.original    = 0;           \
+                                                        \
+                        data.recvd.insert(i);           \
+                } while (0)
+
+                if (it != p_dht->m_stored.end()) {
+                        sdata_set::iterator it_data;
+
+                        it_data = it->second.find(data);
+
+                        if (it_data != it->second.end()) {
+                                // if the TTL is 0, the value is removed
+                                if (ttl == 0) {
+                                        it->second.erase(it_data);
+                                        if (it->second.size() == 0) {
+                                                p_dht->m_stored.erase(it);
+                                        }
+                                } else {
+                                        // if the data have already inserted,
+                                        // update TTL and inserted time
+                                        _id i;
+
+                                        i.id = src;
+
+                                        it_data->ttl         = ttl;
+                                        it_data->stored_time = time(NULL);
+                                        it_data->recvd.insert(i);
+                                }
+                        } else {
+                                // insert new data
+                                SET_DATA();
+                                p_dht->m_stored[ik].insert(data);
+                        }
+                } else {
+                        // insert new data
+                        SET_DATA();
+                        p_dht->m_stored[ik].insert(data);
+                }
+#undef SET_DATA
+        }
+
+        void
+        dht::rdp_store_func::operator() (int desc, rdp_addr addr,
+                                         rdp_event event)
+        {
+                switch (event) {
+                case CONNECTED:
+                {
+                        msg_dht_rdp_store msg;
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        id->to_binary(&msg.id, sizeof(msg.id));
+
+                        msg.keylen   = ntohs(keylen);
+                        msg.valuelen = ntohs(valuelen);
+                        msg.ttl      = ntohs(ttl);
+                        std::cout << "store: " << std::endl;
+                        std::cout << "    key = " << *(int*)key.get()
+                                  << ", keylen = " << keylen << std::endl;
+                        std::cout << "    value = " << *(int*)value.get()
+                                  << ", valuelen = " << valuelen << std::endl;
+                        std::cout << "    id = " << id->to_string()
+                                  << std::endl;
+                        std::cout << "    src = " << p_dht->m_id.to_string()
+                                  << std::endl;
+                        std::cout << "    dst = " << addr.did->to_string()
+                                  << std::endl;
+
+                        p_dht->m_rdp.send(desc, &msg, sizeof(msg));
+                        p_dht->m_rdp.send(desc, key.get(), keylen);
+                        p_dht->m_rdp.send(desc, value.get(), valuelen);
+
+                        break;
+                }
+                case REFUSED:
+                case FAILED:
+                case BROKEN:
+                case RESET:
+                        p_dht->m_rdp_store.erase(desc);
+                        p_dht->m_rdp.close(desc);
+                        break;
+                default:
+                        ;
+                }
         }
 
         void
@@ -769,6 +916,12 @@ namespace libcage {
         }
 
         void
+        dht::set_enabled_rdp(bool flag)
+        {
+                m_is_use_rdp = flag;
+        }
+
+        void
         dht::store(const uint160_t &id, const void *key, uint16_t keylen,
                    const void *value, uint16_t valuelen, uint16_t ttl)
         {
@@ -816,8 +969,8 @@ namespace libcage {
                 }
         }
 
-        void
-        dht::store_func::operator() (std::vector<cageaddr>& nodes)
+        bool
+        dht::store_func::store_by_udp(std::vector<cageaddr>& nodes)
         {
                 msg_dht_store *msg;
                 int            size;
@@ -827,7 +980,7 @@ namespace libcage {
                 size = sizeof(*msg) - sizeof(msg->data) + keylen + valuelen;
 
                 if (size > (int)sizeof(buf))
-                        return;
+                        return false;
 
                 msg = (msg_dht_store*)buf;
 
@@ -853,6 +1006,59 @@ namespace libcage {
 
                         send_msg(p_dht->m_udp, &msg->hdr, size,
                                  type_dht_store, addr, p_dht->m_id);
+                }
+
+                return me;
+        }
+
+        bool
+        dht::store_func::store_by_rdp(std::vector<cageaddr>& nodes)
+        {
+                bool me = false;
+                rdp_store_func func;
+
+                func.key      = key;
+                func.value    = value;
+                func.keylen   = keylen;
+                func.valuelen = valuelen;
+                func.ttl      = ttl;
+                func.id       = id;
+                func.p_dht    = p_dht;
+
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (*addr.id == p_dht->m_id) {
+                                me = true;
+                                continue;
+                        }
+
+                        int desc;
+
+                        std::cout << "connect to:" << std::endl;
+                        std::cout << "   src = " << p_dht->m_id.to_string()
+                                  << std::endl;
+                        std::cout << "   dst = " << addr.id->to_string()
+                                  << std::endl;
+
+                        desc = p_dht->m_rdp.connect(0, addr.id,
+                                                    dht::rdp_store_port,
+                                                    func);
+                        if (desc <= 0)
+                                continue;
+
+                        p_dht->m_rdp_store[desc] = time(NULL);
+                }
+
+                return me;
+        }
+
+        void
+        dht::store_func::operator() (std::vector<cageaddr>& nodes)
+        {
+                bool me;
+                if (p_dht->m_is_use_rdp) {
+                        me = store_by_rdp(nodes);
+                } else {
+                        me = store_by_udp(nodes);
                 }
 
                 if (nodes.size() >= (uint32_t)num_find_node) {
@@ -972,7 +1178,7 @@ namespace libcage {
                                         }
                                 } else {
                                         // if the data have already inserted,
-                                        // its TTL and inserted time is updated
+                                        // update TTL and inserted time
                                         _id i;
 
                                         i.id = addr.id;
@@ -991,6 +1197,7 @@ namespace libcage {
                         SET_DATA();
                         m_stored[ik].insert(data);
                 }
+#undef SET_DATA
         }
 
         void
@@ -1498,6 +1705,8 @@ namespace libcage {
 
                         for (it2 = it1->second.begin();
                              it2 != it1->second.end();) {
+                                // XXX
+                                // use RDP
                                 msg_dht_store *msg;
                                 uint16_t       ttl;
                                 int            size;

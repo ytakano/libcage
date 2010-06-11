@@ -65,7 +65,7 @@ namespace libcage {
                 static const int        timer_interval;
                 static const int        original_put_num;
                 static const int        recvd_value_timeout;
-                static const uint16_t   dht_rdp_port;
+                static const uint16_t   rdp_store_port;
 
         public:
                 class value_t {
@@ -132,24 +132,15 @@ namespace libcage {
                                       uint16_t ttl);
 
                 void            set_enabled_dtun(bool flag);
+                void            set_enabled_rdp(bool flag);
 
         private:
-                class rdp_func {
-                public:
-                        dht &m_dht;
-
-                        rdp_func(dht &d) : m_dht(d) { }
-
-                        void operator() (int desc, rdp_addr addr,
-                                         rdp_event event);
-                };
-
                 class rdp_recv_store {
                 public:
                         boost::shared_array<char>       key;
                         boost::shared_array<char>       value;
-                        uint16_t        key_len;
-                        uint16_t        val_len;
+                        uint16_t        keylen;
+                        uint16_t        valuelen;
                         uint16_t        key_read;
                         uint16_t        val_read;
                         uint16_t        ttl;
@@ -160,7 +151,7 @@ namespace libcage {
                         bool            is_hdr_read;
 
                         rdp_recv_store(dht *d, id_ptr from) :
-                                key_len(0), val_len(0), key_read(0),
+                                keylen(0), valuelen(0), key_read(0),
                                 val_read(0), src(from), last_time(time(NULL)),
                                 p_dht(d), is_hdr_read(false) { }
 
@@ -168,6 +159,34 @@ namespace libcage {
                 };
 
                 typedef boost::shared_ptr<rdp_recv_store> rdp_recv_store_ptr;
+
+                class rdp_recv_store_func {
+                public:
+                        typedef boost::unordered_map<int, rdp_recv_store_ptr>::iterator it_rcvs;
+                        dht &m_dht;
+
+                        rdp_recv_store_func(dht &d) : m_dht(d) { }
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                        
+                        bool read_hdr(int desc, it_rcvs it);
+                        bool read_body(int desc, it_rcvs it);
+                };
+
+                class rdp_store_func {
+                public:
+                        boost::shared_array<char>       key;
+                        boost::shared_array<char>       value;
+                        uint16_t        keylen;
+                        uint16_t        valuelen;
+                        uint16_t        ttl;
+                        id_ptr          id;
+                        dht            *p_dht;
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                };
 
                 class sync_node {
                 public:
@@ -185,6 +204,8 @@ namespace libcage {
                 class store_func {
                 public:
                         void operator() (std::vector<cageaddr>& nodes);
+                        bool store_by_udp(std::vector<cageaddr>& nodes);
+                        bool store_by_rdp(std::vector<cageaddr>& nodes);
 
                         boost::shared_array<char>       key;
                         boost::shared_array<char>       value;
@@ -439,10 +460,12 @@ namespace libcage {
                 dht_join                 m_join;
                 sync_node                m_sync;
                 int                      m_rdp_listen;
+                bool                     m_is_use_rdp;
 
                 boost::unordered_map<uint32_t, query_ptr>     m_query;
                 boost::unordered_map<id_key, sdata_set>       m_stored;
                 boost::unordered_map<int, rdp_recv_store_ptr> m_rdp_recv_store;
+                boost::unordered_map<int, time_t>             m_rdp_store;
         };
 }
 
