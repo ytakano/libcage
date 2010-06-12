@@ -40,7 +40,7 @@ namespace libcage {
         const int       dht::max_query           = 6;
         const int       dht::query_timeout       = 3;
         const int       dht::restore_interval    = 120;
-        const int       dht::timer_interval      = 60;
+        const int       dht::timer_interval      = 1200;
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
@@ -204,13 +204,6 @@ namespace libcage {
 
                         m_dht.m_rdp_recv_store[desc] = rs;
 
-                        std::cout << "accepted:" << std::endl;
-                        std::cout << "   src = " << m_dht.m_id.to_string()
-                                  << std::endl;
-                        std::cout << "   dst = " << addr.did->to_string()
-                                  << std::endl;
-
-
                         break;
                 }
                 case READY2READ:
@@ -251,16 +244,6 @@ namespace libcage {
                 ik.key    = key;
                 ik.keylen = keylen;
                 ik.id     = id;
-
-                std::cout << "recv store:" << std::endl;
-                std::cout << "    key = " << *(int*)key.get()
-                          << ", keylen = " << keylen << std::endl;
-                std::cout << "    value = " << *(int*)key.get()
-                          << ", valuelen = " << valuelen << std::endl;
-                std::cout << "    id = " << id->to_string() << std::endl;
-                std::cout << "    src = " << src->to_string() << std::endl;
-                std::cout << "    dst = " << p_dht->m_id.to_string()
-                          << std::endl;
 
                 boost::unordered_map<id_key, sdata_set>::iterator it;
                 it = p_dht->m_stored.find(ik);
@@ -337,17 +320,6 @@ namespace libcage {
                         msg.keylen   = ntohs(keylen);
                         msg.valuelen = ntohs(valuelen);
                         msg.ttl      = ntohs(ttl);
-                        std::cout << "store: " << std::endl;
-                        std::cout << "    key = " << *(int*)key.get()
-                                  << ", keylen = " << keylen << std::endl;
-                        std::cout << "    value = " << *(int*)value.get()
-                                  << ", valuelen = " << valuelen << std::endl;
-                        std::cout << "    id = " << id->to_string()
-                                  << std::endl;
-                        std::cout << "    src = " << p_dht->m_id.to_string()
-                                  << std::endl;
-                        std::cout << "    dst = " << addr.did->to_string()
-                                  << std::endl;
 
                         p_dht->m_rdp.send(desc, &msg, sizeof(msg));
                         p_dht->m_rdp.send(desc, key.get(), keylen);
@@ -1032,13 +1004,6 @@ namespace libcage {
                         }
 
                         int desc;
-
-                        std::cout << "connect to:" << std::endl;
-                        std::cout << "   src = " << p_dht->m_id.to_string()
-                                  << std::endl;
-                        std::cout << "   dst = " << addr.id->to_string()
-                                  << std::endl;
-
                         desc = p_dht->m_rdp.connect(0, addr.id,
                                                     dht::rdp_store_port,
                                                     func);
@@ -1072,7 +1037,6 @@ namespace libcage {
                         sdata.value    = value;
                         sdata.valuelen = valuelen;
 
-                        
                         boost::unordered_map<id_key, sdata_set>::iterator it_stored;
                         sdata_set::iterator it_sdata;
 
@@ -1686,13 +1650,121 @@ namespace libcage {
                 }
         }
 
+        bool
+        dht::restore_func::restore_by_udp(std::vector<cageaddr> &nodes,
+                                          sdata_set::iterator &it)
+        {
+                msg_dht_store *msg;
+                uint16_t       ttl;
+                int            size;
+                char           buf[1024 * 4];
+                char          *p_key, *p_value;
+                bool           me = false;
+                time_t         now = time(NULL);
+                time_t         diff;
+
+                if (it->original > 0) {
+                        return false;
+                }
+                        
+
+                size = sizeof(*msg) - sizeof(msg->data) +
+                        it->keylen + it->valuelen;
+
+                if (size > (int)sizeof(buf)) {
+                        return false;
+                }
+
+                msg = (msg_dht_store*)buf;
+
+                diff = now - it->stored_time;
+                if (diff >= it->ttl) {
+                        return false;
+                }
+
+                ttl = it->ttl - diff;
+
+                msg->keylen   = htons(it->keylen);
+                msg->valuelen = htons(it->valuelen);
+                msg->ttl      = htons(ttl);
+
+                it->id->to_binary(msg->id, sizeof(msg->id));
+
+                p_key   = (char*)msg->data;
+                p_value = p_key + it->keylen;
+
+                memcpy(p_key, it->key.get(), it->keylen);
+                memcpy(p_value, it->value.get(), it->valuelen);
+
+
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (p_dht->m_id == *addr.id) {
+                                me = true;
+                                continue;
+                        }
+
+                        _id    i;
+
+                        i.id = addr.id;
+                        if (it->recvd.find(i) != it->recvd.end()) {
+                                continue;
+                        }
+
+                        send_msg(p_dht->m_udp, &msg->hdr, size, type_dht_store,
+                                 addr, p_dht->m_id);
+                }
+
+                return me;
+        }
+
+        bool
+        dht::restore_func::restore_by_rdp(std::vector<cageaddr> &nodes,
+                                          sdata_set::iterator &it)
+        {
+                bool me = false;
+                rdp_store_func func;
+
+                func.key      = it->key;
+                func.value    = it->value;
+                func.keylen   = it->keylen;
+                func.valuelen = it->valuelen;
+                func.ttl      = it->ttl;
+                func.id       = it->id;
+                func.p_dht    = p_dht;
+
+                BOOST_FOREACH(cageaddr &addr, nodes) {
+                        if (*addr.id == p_dht->m_id) {
+                                me = true;
+                                continue;
+                        }
+
+                        _id    i;
+
+                        i.id = addr.id;
+                        if (it->recvd.find(i) != it->recvd.end()) {
+                                continue;
+                        }
+
+
+                        int desc;
+                        desc = p_dht->m_rdp.connect(0, addr.id,
+                                                    dht::rdp_store_port,
+                                                    func);
+                        if (desc <= 0)
+                                continue;
+
+                        p_dht->m_rdp_store[desc] = time(NULL);
+                }
+
+                return me;
+        }
+
         void
         dht::restore_func::operator() (std::vector<cageaddr> &n)
         {
                 boost::unordered_map<id_key, sdata_set>::iterator it1;
                 sdata_set::iterator   it2;
                 std::vector<cageaddr> nodes;
-                time_t now = time(NULL);
 
                 for(it1 = p_dht->m_stored.begin();
                     it1 != p_dht->m_stored.end();) {
@@ -1705,71 +1777,12 @@ namespace libcage {
 
                         for (it2 = it1->second.begin();
                              it2 != it1->second.end();) {
-                                // XXX
-                                // use RDP
-                                msg_dht_store *msg;
-                                uint16_t       ttl;
-                                int            size;
-                                char           buf[1024 * 4];
-                                char          *p_key, *p_value;
-                                bool           me = false;
-                                time_t         diff;
+                                bool me;
 
-                                if (it2->original > 0) {
-                                        ++it2;
-                                        continue;
-                                }
-                        
-
-                                size = sizeof(*msg) - sizeof(msg->data) +
-                                        it2->keylen + it2->valuelen;
-
-                                if (size > (int)sizeof(buf)) {
-                                        ++it2;
-                                        continue;
-                                }
-
-                                msg = (msg_dht_store*)buf;
-
-                                diff = now - it2->stored_time;
-                                if (diff >= it2->ttl) {
-                                        ++it2;
-                                        continue;
-                                }
-
-                                ttl = it2->ttl - diff;
-
-                                msg->keylen   = htons(it2->keylen);
-                                msg->valuelen = htons(it2->valuelen);
-                                msg->ttl      = htons(ttl);
-
-                                it2->id->to_binary(msg->id, sizeof(msg->id));
-
-                                p_key   = (char*)msg->data;
-                                p_value = p_key + it2->keylen;
-
-                                memcpy(p_key, it2->key.get(), it2->keylen);
-                                memcpy(p_value, it2->value.get(),
-                                       it2->valuelen);
-
-
-                                BOOST_FOREACH(cageaddr &addr, nodes) {
-                                        if (p_dht->m_id == *addr.id) {
-                                                me = true;
-                                                continue;
-                                        }
-
-                                        _id    i;
-
-                                        i.id = addr.id;
-                                        if (it2->recvd.find(i) !=
-                                            it2->recvd.end()) {
-                                                continue;
-                                        }
-
-                                        send_msg(p_dht->m_udp, &msg->hdr, size,
-                                                 type_dht_store, addr,
-                                                 p_dht->m_id);
+                                if (p_dht->m_is_use_rdp) {
+                                        me = restore_by_rdp(nodes, it2);
+                                } else {
+                                        me = restore_by_udp(nodes, it2);
                                 }
 
                                 if (! me)

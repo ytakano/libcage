@@ -366,6 +366,11 @@ namespace libcage {
                 public:
                         void operator() (std::vector<cageaddr> &n);
 
+                        bool restore_by_udp(std::vector<cageaddr> &nodes,
+                                            sdata_set::iterator &it);
+                        bool restore_by_rdp(std::vector<cageaddr> &nodes,
+                                            sdata_set::iterator &it);
+
                         dht    *p_dht;
                 };
 
@@ -380,7 +385,7 @@ namespace libcage {
                                 timeval tval;
 
                                 tval.tv_sec  = (long)((double)dht::timer_interval * drand48());
-                                tval.tv_sec += dht::timer_interval;
+                                tval.tv_sec += dht::restore_interval;
 
                                 tval.tv_usec = 0;
 
@@ -392,7 +397,7 @@ namespace libcage {
                                 timeval tval;
 
                                 tval.tv_sec  = (long)((double)dht::timer_interval * drand48());
-                                tval.tv_sec += dht::timer_interval;
+                                tval.tv_sec += dht::restore_interval;
 
                                 tval.tv_usec = 0;
 
