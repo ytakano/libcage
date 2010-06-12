@@ -42,10 +42,10 @@ namespace libcage {
         const uint8_t rdp::flag_fin = 0x04;
         const uint8_t rdp::flag_ver = 0;
 
-        const uint32_t rdp::rbuf_max_default    = 1024;
+        const uint32_t rdp::rbuf_max_default    = 1012 - 128;
         const uint32_t rdp::rcv_max_default     = 4096;
         const uint16_t rdp::well_known_port_max = 1024;
-        const uint16_t rdp::sbuf_limit          = 1024 * 2;
+        const uint16_t rdp::sbuf_limit          = 1012 - 128;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
         const time_t   rdp::max_retrans         = 64;
         const double   rdp::ack_interval        = 0.3;

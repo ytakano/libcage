@@ -50,15 +50,14 @@ namespace libcage {
         class packetbuf {
         public:
                 packetbuf();
-                virtual ~packetbuf();
 
-                void*           append(int len);
-                void*           prepend(int len);
+                void*           append(int32_t len);
+                void*           prepend(int32_t len);
                 void*           get_data();
-                int             get_len();
-                void            set_len(int len);
+                int32_t         get_len();
+                void            set_len(int32_t len);
                 void            use_whole();
-                void            rm_head(int len);
+                void            rm_head(int32_t len);
 
                 static packetbuf_ptr    construct();
 
@@ -66,10 +65,12 @@ namespace libcage {
                 friend void     intrusive_ptr_release(packetbuf *pbuf);
 
         private:
-                uint8_t         m_buf[1024 * 2];
+                static const int buf_max;
+
+                uint8_t         m_buf[1012];
                 uint8_t        *m_head;
-                int             m_len;
-                int             m_refc;
+                int32_t         m_len;
+                int32_t         m_refc;
 
                 static boost::object_pool<packetbuf>    pbuf_pool;
         };

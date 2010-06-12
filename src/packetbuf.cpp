@@ -41,13 +41,8 @@ namespace libcage {
                 m_head = &m_buf[128];
         }
 
-        packetbuf::~packetbuf()
-        {
-
-        }
-
         void*
-        packetbuf::append(int len)
+        packetbuf::append(int32_t len)
         {
                 if (m_head + m_len + len > &m_buf[sizeof(m_buf)]) {
                         return NULL;
@@ -59,7 +54,7 @@ namespace libcage {
         }
 
         void*
-        packetbuf::prepend(int len)
+        packetbuf::prepend(int32_t len)
         {
                 if (m_head - len < m_buf) {
                         return NULL;
@@ -76,14 +71,14 @@ namespace libcage {
                 return m_head;
         }
 
-        int
+        int32_t
         packetbuf::get_len()
         {
                 return m_len;
         }
 
         void
-        packetbuf::set_len(int len)
+        packetbuf::set_len(int32_t len)
         {
                 m_len = len;
         }
@@ -103,7 +98,7 @@ namespace libcage {
         }
 
         void
-        packetbuf::rm_head(int len)
+        packetbuf::rm_head(int32_t len)
         {
                 if (len > m_len)
                         return;

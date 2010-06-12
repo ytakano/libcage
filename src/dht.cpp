@@ -40,7 +40,7 @@ namespace libcage {
         const int       dht::max_query           = 6;
         const int       dht::query_timeout       = 3;
         const int       dht::restore_interval    = 120;
-        const int       dht::timer_interval      = 1200;
+        const int       dht::timer_interval      = 600;
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
