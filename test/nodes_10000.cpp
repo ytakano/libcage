@@ -36,7 +36,7 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
 
         timeval tval;
 
-        tval.tv_sec  = mrand48() % proc_num + 1;
+        tval.tv_sec  = abs(mrand48()) % proc_num + 1;
         tval.tv_usec = 0;
 
         evtimer_add(ev, &tval);
