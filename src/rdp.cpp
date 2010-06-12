@@ -40,17 +40,15 @@ namespace libcage {
         const uint8_t rdp::flag_rst = 0x10;
         const uint8_t rdp::flag_nul = 0x08;
         const uint8_t rdp::flag_fin = 0x04;
-        const uint8_t rdp::flag_ver = 2;
+        const uint8_t rdp::flag_ver = 0;
 
-        const uint16_t rdp::syn_opt_in_seq = 0x8000;
-
-        const uint32_t rdp::rbuf_max_default    = 1500;
-        const uint32_t rdp::rcv_max_default     = 1024;
+        const uint32_t rdp::rbuf_max_default    = 1024;
+        const uint32_t rdp::rcv_max_default     = 4096;
         const uint16_t rdp::well_known_port_max = 1024;
+        const uint16_t rdp::sbuf_limit          = 1024 * 2;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
         const time_t   rdp::max_retrans         = 64;
         const double   rdp::ack_interval        = 0.3;
-        const int      rdp::max_data_size       = 1024; // should be 380?
 
         size_t
         hash_value(const rdp_addr &addr)
@@ -288,7 +286,8 @@ namespace libcage {
 
                 for (;;) {
                         packetbuf_ptr pbuf = packetbuf::construct();
-                        int   size = (len < max_data_size) ? len : max_data_size;
+                        int   dmax = it->second->sbuf_max - sizeof(rdp_head);
+                        int   size = (len < dmax) ? len : dmax;
                         void *data;
 
                         data = pbuf->append(size);
@@ -503,8 +502,6 @@ namespace libcage {
 
                 syn->out_segs_max = htons(p_con->rcv_max);
                 syn->seg_size_max = htons(p_con->rbuf_max);
-
-                set_syn_option_seq(syn->options, true);
 
                 p_con->syn_pbuf = pbuf;
                 p_con->syn_time = time(NULL);
@@ -806,11 +803,8 @@ namespace libcage {
                         // create connection
                         rdp_con_ptr  p_con(new rdp_con(*this));
                         rdp_syn     *syn_in;
-                        uint16_t     opts;
 
                         syn_in = (rdp_syn*)head;
-
-                        opts = ntohs(syn_in->options);
 
                         p_con->addr      = addr;
                         p_con->is_pasv   = true;
@@ -827,11 +821,8 @@ namespace libcage {
                         p_con->sbuf_max  = ntohs(syn_in->seg_size_max);
                         p_con->is_closed = false;
 
-                        if (opts & syn_opt_in_seq) {
-                                p_con->is_in_seq = true;
-                        } else {
-                                p_con->is_in_seq = false;
-                        }
+                        if (p_con->sbuf_max > sbuf_limit)
+                                p_con->sbuf_max = sbuf_limit;
 
                         p_con->set_output_func(m_output_func);
 
@@ -857,8 +848,6 @@ namespace libcage {
 
                         syn_out->out_segs_max = htons(p_con->rcv_max);
                         syn_out->seg_size_max = htons(p_con->rbuf_max);
-
-                        set_syn_option_seq(syn_out->options, true);
 
                         p_con->syn_pbuf = pbuf_syn;
                         p_con->syn_time = time(NULL);
@@ -970,15 +959,15 @@ namespace libcage {
                                 return;
 
                         rdp_syn *syn = (rdp_syn*)head;
-                        uint16_t opts;
-
-                        opts = ntohs(syn->options);
 
                         p_con->rcv_cur  = ntohl(syn->head.seqnum);
                         p_con->rcv_irs  = p_con->rcv_cur;
                         p_con->rcv_ack  = p_con->rcv_cur;
                         p_con->snd_max  = ntohs(syn->out_segs_max);
                         p_con->sbuf_max = ntohs(syn->seg_size_max);
+
+                        if (p_con->sbuf_max > sbuf_limit)
+                                p_con->sbuf_max = sbuf_limit;
 
                         p_con->init_swnd();
                         p_con->init_rwnd();
@@ -989,13 +978,6 @@ namespace libcage {
                         // XXX
                         // for Windows
 #endif
-
-                        if (opts & syn_opt_in_seq) {
-                                p_con->is_in_seq = true;
-                        } else {
-                                p_con->is_in_seq = false;
-                        }
-
 
                         if (syn->head.flags & flag_ack) {
                                 p_con->snd_una = ntohl(syn->head.acknum);
@@ -1493,17 +1475,6 @@ namespace libcage {
                         return;
 
                 m_desc2event[desc] = func;
-        }
-
-        void
-        rdp::set_syn_option_seq(uint16_t &options, bool sequenced)
-        {
-                if (sequenced)
-                        options |= syn_opt_in_seq;
-                else
-                        options &= ~syn_opt_in_seq;
-
-                options = htons(options);
         }
 
         void

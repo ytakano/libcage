@@ -58,7 +58,6 @@
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 
-#define RDP_VER 3
 //#define DEBUG_RDP
 
 namespace libcage {
@@ -90,15 +89,13 @@ namespace libcage {
                 uint16_t dlen;
                 uint32_t seqnum;   // SEG.SEQ
                 uint32_t acknum;   // SEG.ACK
-                uint32_t checksum;
+                uint32_t reserved;
         };
 
         struct rdp_syn {
                 rdp_head head;
                 uint16_t out_segs_max; // SEG.MAX
                 uint16_t seg_size_max; // SEG.BMAX
-                uint16_t options;
-                uint16_t padding;
         };
 
         class rdp_con;
@@ -133,15 +130,13 @@ namespace libcage {
                 static const uint8_t   flag_fin;
                 static const uint8_t   flag_ver;
 
-                static const uint16_t  syn_opt_in_seq;
-
                 static const uint32_t  rbuf_max_default;
                 static const uint32_t  rcv_max_default;
                 static const uint16_t  well_known_port_max;
+                static const uint16_t  sbuf_limit;
                 static const uint32_t  timer_rdp_usec;
                 static const time_t    max_retrans;
                 static const double    ack_interval;
-                static const int       max_data_size;
 
         public:
                 rdp(timer &tm);
@@ -191,8 +186,6 @@ namespace libcage {
                 timer                     &m_timer;
                 timer_rdp                  m_timer_rdp;
 
-                void            set_syn_option_seq(uint16_t &options,
-                                                   bool sequenced);
                 int             generate_desc();
                 void            invoke_event(int desc1, int desc2,
                                              rdp_addr addr, rdp_event event);
@@ -225,7 +218,6 @@ namespace libcage {
                 int             desc;
                 bool            is_pasv;
                 bool            is_closed;
-                bool            is_in_seq;
 
                 rdp_state       state;     // The current state of the
                                            // connection.

@@ -188,6 +188,16 @@ namespace libcage {
                                          rdp_event event);
                 };
 
+                class rdp_recv_get_func {
+                public:
+                        dht            *p_dht;
+
+                        rdp_recv_get_func(dht *d) : p_dht(d) { }
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                };
+
                 class sync_node {
                 public:
                         sync_node(dht &d) : m_dht(d)

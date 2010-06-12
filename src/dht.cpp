@@ -107,6 +107,13 @@ namespace libcage {
                 m_rdp.close(m_rdp_listen);
         }
 
+        void
+        dht::rdp_recv_get_func::operator() (int desc, rdp_addr addr,
+                                            rdp_event event)
+        {
+
+        }
+
         bool
         dht::rdp_recv_store_func::read_hdr(int desc,
                                            dht::rdp_recv_store_func::it_rcvs it)
@@ -226,13 +233,10 @@ namespace libcage {
 
                         break;
                 }
-                case RESET:
-                case BROKEN:
+                default:
                         m_dht.m_rdp_recv_store.erase(desc);
                         close(desc);
                         break;
-                default:
-                        ;
                 }
         }
 
@@ -327,15 +331,10 @@ namespace libcage {
 
                         break;
                 }
-                case REFUSED:
-                case FAILED:
-                case BROKEN:
-                case RESET:
+                default:
                         p_dht->m_rdp_store.erase(desc);
                         p_dht->m_rdp.close(desc);
                         break;
-                default:
-                        ;
                 }
         }
 
