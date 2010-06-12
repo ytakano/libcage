@@ -42,10 +42,9 @@
 #include "peers.hpp"
 #include "timer.hpp"
 
+#include <map>
 #include <set>
 #include <vector>
-
-#include <boost/unordered_map.hpp>
 
 namespace libcage {
         class advertise;
@@ -223,8 +222,8 @@ namespace libcage {
                 timer_register  m_timer_register;
                 timer_proxy     m_timer_proxy;
                 dgram::callback m_dgram_func;
-                boost::unordered_map<_id, _addr>        m_registered;
-                boost::unordered_map<uint32_t, gd_ptr>  m_getdata;
+                std::map<_id, _addr>            m_registered;
+                std::map<uint32_t, gd_ptr>      m_getdata;
         };
 }
 

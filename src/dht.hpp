@@ -42,6 +42,7 @@
 #include "rdp.hpp"
 #include "udphandler.hpp"
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -66,6 +67,8 @@ namespace libcage {
                 static const int        original_put_num;
                 static const int        recvd_value_timeout;
                 static const uint16_t   rdp_store_port;
+                static const uint16_t   rdp_get_port;
+                static const time_t     rdp_timeout;
 
         public:
                 class value_t {
@@ -74,21 +77,21 @@ namespace libcage {
                         int len;
 
                 public:
-                        bool operator== (const value_t &rhs) const {
-                                if (len != rhs.len) {
-                                        return false;
-                                } else if (memcmp(value.get(), rhs.value.get(),
-                                                  len) != 0) {
-                                        return false;
-                                }
+                        bool operator< (const value_t &rhs) const {
+                                int n = (len < rhs.len) ? len : rhs.len;
+                                int val = memcmp(value.get(),
+                                                 rhs.value.get(), n);
 
-                                return true;
+                                if (val < 0)
+                                        return true;
+                                else if (val == 0 && len < rhs.len)
+                                        return true;
+
+                                return false;
                         }
                 };
 
-                friend size_t hash_value(const value_t &value);
-
-                typedef boost::unordered_set<value_t> value_set;
+                typedef std::set<value_t>             value_set;
                 typedef boost::shared_ptr<value_set>  value_set_ptr;
 
 
@@ -162,7 +165,7 @@ namespace libcage {
 
                 class rdp_recv_store_func {
                 public:
-                        typedef boost::unordered_map<int, rdp_recv_store_ptr>::iterator it_rcvs;
+                        typedef std::map<int, rdp_recv_store_ptr>::iterator it_rcvs;
                         dht &m_dht;
 
                         rdp_recv_store_func(dht &d) : m_dht(d) { }
@@ -190,9 +193,9 @@ namespace libcage {
 
                 class rdp_recv_get_func {
                 public:
-                        dht            *p_dht;
+                        dht            &m_dht;
 
-                        rdp_recv_get_func(dht *d) : p_dht(d) { }
+                        rdp_recv_get_func(dht &d) : m_dht(d) { }
 
                         void operator() (int desc, rdp_addr addr,
                                          rdp_event event);
@@ -257,7 +260,7 @@ namespace libcage {
                         uint16_t        valuelen;
                         id_ptr          id;
 
-                        mutable boost::unordered_set<_id>       recvd;
+                        mutable std::set<_id>   recvd;
                         mutable time_t          stored_time;
                         mutable int             original;
                         mutable uint16_t        ttl;
@@ -329,8 +332,8 @@ namespace libcage {
                 class query {
                 public:
                         std::vector<cageaddr>           nodes;
-                        boost::unordered_map<_id, timer_query_ptr>      timers;
-                        boost::unordered_set<_id>       sent;
+                        std::map<_id, timer_query_ptr>  timers;
+                        std::set<_id>       sent;
                         id_ptr          dst;
                         uint32_t        nonce;
                         int             num_query;
@@ -339,9 +342,9 @@ namespace libcage {
                         boost::shared_array<char>       key;
                         int             keylen;
 
-                        boost::unordered_map<_id, value_set> values;
-                        boost::unordered_map<_id, int>       num_value;
-                        boost::unordered_map<_id, std::set<int> >       indeces;
+                        std::map<_id, value_set> values;
+                        std::map<_id, int>       num_value;
+                        std::map<_id, std::set<int> >       indeces;
                         value_set_ptr   vset;
 
                         timer_recvd_ptr       timer_recvd;
@@ -390,6 +393,7 @@ namespace libcage {
                         {
                                 m_dht.refresh();
                                 m_dht.restore();
+                                m_dht.sweep_rdp();
 
                                 // reschedule
                                 timeval tval;
@@ -458,6 +462,7 @@ namespace libcage {
 
                 void            refresh();
                 void            restore();
+                void            sweep_rdp();
 
                 void            recvd_value(query_ptr q);
 
@@ -474,13 +479,14 @@ namespace libcage {
                 timer_dht                m_timer_dht;
                 dht_join                 m_join;
                 sync_node                m_sync;
-                int                      m_rdp_listen;
+                int                      m_rdp_recv_listen;
+                int                      m_rdp_get_listen;
                 bool                     m_is_use_rdp;
 
-                boost::unordered_map<uint32_t, query_ptr>     m_query;
-                boost::unordered_map<id_key, sdata_set>       m_stored;
-                boost::unordered_map<int, rdp_recv_store_ptr> m_rdp_recv_store;
-                boost::unordered_map<int, time_t>             m_rdp_store;
+                boost::unordered_map<id_key, sdata_set> m_stored;
+                std::map<uint32_t, query_ptr>           m_query;
+                std::map<int, rdp_recv_store_ptr>       m_rdp_recv_store;
+                std::map<int, time_t>                   m_rdp_store;
         };
 }
 

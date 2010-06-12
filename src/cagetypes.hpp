@@ -60,6 +60,11 @@ namespace libcage {
                 {
                         return *id == *rhs.id;
                 }
+
+                bool operator< (const _id &rhs) const
+                {
+                        return *id < *rhs.id;
+                }
         };
 
         size_t hash_value(const _id &i);

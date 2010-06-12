@@ -177,7 +177,7 @@ namespace libcage {
         rttable::lookup(const uint160_t &id, int num,
                         std::vector<cageaddr> &ret)
         {
-                boost::unordered_set<int> is;
+                std::set<int> is;
                 int n;
 
                 n = id2i4lookup(id, num, is);
@@ -297,7 +297,7 @@ namespace libcage {
 
         int
         rttable::id2i4lookup(const uint160_t &id, int max,
-                             boost::unordered_set<int> &ret)
+                             std::set<int> &ret)
         {
                 uint160_t id0 = id;
                 uint160_t id1 = 1;
@@ -328,7 +328,7 @@ namespace libcage {
 
         int
         rttable::id2i4lookupR(const uint160_t &id, int max,
-                              boost::unordered_set<int> &ret)
+                              std::set<int> &ret)
         {
                 std::map<int, std::list<cageaddr> >::iterator it;
                 uint160_t id0 = ~(m_id ^ id);

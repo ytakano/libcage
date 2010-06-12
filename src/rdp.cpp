@@ -76,7 +76,7 @@ namespace libcage {
                 if (m_rdp.m_desc2conn.size() == 0)
                         return;
                 
-                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                std::map<int, rdp_con_ptr>::iterator it;
                 
                 for (it = m_rdp.m_desc2conn.begin();
                      it != m_rdp.m_desc2conn.end();) {
@@ -208,7 +208,7 @@ namespace libcage {
                         return LISTEN;
 
 
-                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                std::map<int, rdp_con_ptr>::iterator it;
                 it = m_desc2conn.find(desc);
                 if (it != m_desc2conn.end())
                         return it->second->state;
@@ -219,7 +219,7 @@ namespace libcage {
         void
         rdp::receive(int desc, void *buf, int *len)
         {
-                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                std::map<int, rdp_con_ptr>::iterator it;
 
                 it = m_desc2conn.find(desc);
                 if (it == m_desc2conn.end()) {
@@ -251,7 +251,7 @@ namespace libcage {
         void
         rdp::invoke_event(int desc1, int desc2, rdp_addr addr, rdp_event event)
         {
-                boost::unordered_map<int, callback_rdp_event>::iterator it;
+                std::map<int, callback_rdp_event>::iterator it;
 
                 it = m_desc2event.find(desc1);
                 if (it == m_desc2event.end())
@@ -259,7 +259,7 @@ namespace libcage {
 
                 if (desc2 > 0) {
                         it->second(desc2, addr, event);
-                        boost::unordered_map<int, callback_rdp_event>::iterator it2;
+                        std::map<int, callback_rdp_event>::iterator it2;
 
                         it2 = m_desc2event.find(desc2);
 
@@ -273,7 +273,7 @@ namespace libcage {
         int
         rdp::send(int desc, const void *buf, int len)
         {
-                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                std::map<int, rdp_con_ptr>::iterator it;
 
                 it = m_desc2conn.find(desc);
                 if (it == m_desc2conn.end() || it->second->state != OPEN)
@@ -319,7 +319,7 @@ namespace libcage {
                 }
 
 
-                boost::unordered_map<int, rdp_con_ptr>::iterator it;
+                std::map<int, rdp_con_ptr>::iterator it;
 
                 it = m_desc2conn.find(desc);
                 if (it == m_desc2conn.end())

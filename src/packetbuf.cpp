@@ -122,7 +122,8 @@ namespace libcage {
         intrusive_ptr_release(packetbuf *pbuf)
         {
                 pbuf->m_refc--;
-                if (pbuf->m_refc == 0)
+                if (pbuf->m_refc == 0) {
                         packetbuf::pbuf_pool.destroy(pbuf);
+                }
         }
 }

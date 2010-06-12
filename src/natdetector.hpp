@@ -39,8 +39,7 @@
 #include "peers.hpp"
 #include "udphandler.hpp"
 
-#include <boost/unordered_map.hpp>
-
+#include <map>
 #include <string>
 
 namespace libcage {
@@ -144,9 +143,9 @@ namespace libcage {
                 uint8_t                 m_global_addr[16];
                 timer_nat               m_timer_nat;
 
-                boost::unordered_map<uint32_t, callback_ptr>    m_timers;
-                boost::unordered_map<uint32_t, udp_ptr>         m_udps;
-                boost::unordered_map<uint32_t, uint16_t>        m_reply;
+                std::map<uint32_t, callback_ptr>        m_timers;
+                std::map<uint32_t, udp_ptr>             m_udps;
+                std::map<uint32_t, uint16_t>            m_reply;
 
                 void            recv_echo_reply_wait1(void *msg, sockaddr *from,
                                                       int fromlen);

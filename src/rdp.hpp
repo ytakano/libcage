@@ -48,15 +48,16 @@
 #endif
 
 #include <functional>
+#include <map>
+#include <set>
 #include <vector>
 #include <queue>
 
 #include <boost/bimap/bimap.hpp>
-#include <boost/bimap/unordered_set_of.hpp>
+#include <boost/bimap/set_of.hpp>
 #include <boost/function.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
-#include <boost/unordered_set.hpp>
 
 //#define DEBUG_RDP
 
@@ -167,19 +168,19 @@ namespace libcage {
                         rdp    &m_rdp;
                 };
 
-                typedef boost::bimaps::unordered_set_of<uint16_t> _uint16_set;
-                typedef boost::bimaps::unordered_set_of<int>      _int_set;
+                typedef boost::bimaps::set_of<uint16_t> _uint16_set;
+                typedef boost::bimaps::set_of<int>      _int_set;
                 typedef boost::bimaps::bimap<_uint16_set,
                                              _int_set>            listening_t;
                 typedef boost::bimaps::bimap<_uint16_set,
                                              _int_set>::value_type listening_val;
 
-                boost::unordered_set<int>       m_desc_set;
-                listening_t                     m_listening; // <port, desc>
+                std::set<int>              m_desc_set;
+                listening_t                m_listening; // <port, desc>
                 
                 boost::unordered_map<rdp_addr, rdp_con_ptr>     m_addr2conn;
-                boost::unordered_map<int, rdp_con_ptr>          m_desc2conn;
-                boost::unordered_map<int, callback_rdp_event>   m_desc2event;
+                std::map<int, rdp_con_ptr>          m_desc2conn;
+                std::map<int, callback_rdp_event>   m_desc2event;
 
                 callback_dgram_out         m_output_func;
 

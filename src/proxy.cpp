@@ -73,7 +73,7 @@ namespace libcage {
 
         proxy::~proxy()
         {
-                boost::unordered_map<uint32_t, gd_ptr>::iterator it;
+                std::map<uint32_t, gd_ptr>::iterator it;
 
                 for (it = m_getdata.begin(); it != m_getdata.end(); ++it) {
                         m_timer.unset_timer(&it->second->timeout);
@@ -196,7 +196,7 @@ namespace libcage {
                 addr = new_cageaddr(&reg->hdr, from);
 
 
-                boost::unordered_map<_id, _addr>::iterator it;
+                std::map<_id, _addr>::iterator it;
                 _id i;
 
                 i.id = addr.id;
@@ -331,7 +331,7 @@ namespace libcage {
                 size = sizeof(*reply) - sizeof(reply->data);
 
                 if (result) {
-                        boost::unordered_map<_id, _addr>::iterator it;
+                        std::map<_id, _addr>::iterator it;
                         _id i;
 
                         i.id = src;
@@ -376,7 +376,7 @@ namespace libcage {
                         id->to_binary(reply->id, sizeof(reply->id));
 
 
-                        boost::unordered_map<_id, _addr>::iterator it;
+                        std::map<_id, _addr>::iterator it;
                         _id i;
 
                         i.id = src;
@@ -432,7 +432,7 @@ namespace libcage {
         void
         proxy::timer_get::operator() ()
         {
-                boost::unordered_map<uint32_t, gd_ptr>::iterator it;
+                std::map<uint32_t, gd_ptr>::iterator it;
 
                 it = p_proxy->m_getdata.find(nonce);
 
@@ -542,7 +542,7 @@ namespace libcage {
                 nonce = ntohl(reply->nonce);
 
                 
-                boost::unordered_map<uint32_t, gd_ptr>::iterator it;
+                std::map<uint32_t, gd_ptr>::iterator it;
 
                 it = m_getdata.find(nonce);
                 if (it == m_getdata.end())
@@ -662,7 +662,7 @@ namespace libcage {
         void
         proxy::forward_msg(msg_dgram *data, int size, sockaddr *from)
         {
-                boost::unordered_map<_id, _addr>::iterator it;
+                std::map<_id, _addr>::iterator it;
                 msg_proxy_dgram_forwarded *forwarded;
                 uint160_t src;
                 char      buf[1024 * 4];
@@ -762,7 +762,7 @@ namespace libcage {
         void
         proxy::refresh()
         {
-                boost::unordered_map<_id, _addr>::iterator it;
+                std::map<_id, _addr>::iterator it;
                 time_t now;
 
                 now = time(NULL);

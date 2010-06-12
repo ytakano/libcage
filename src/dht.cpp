@@ -44,6 +44,8 @@ namespace libcage {
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
+        const uint16_t  dht::rdp_get_port        = 101;
+        const time_t    dht::rdp_timeout         = 120;
 
         size_t
         hash_value(const dht::id_key &ik)
@@ -69,17 +71,6 @@ namespace libcage {
                 return h;
         }
 
-        size_t
-        hash_value(const dht::value_t &value)
-        {
-                size_t h = 0;
-
-                for (int i = 0; i < value.len; i++)
-                        boost::hash_combine(h, value.value[i]);
-
-                return h;
-        }
-
         dht::dht(const uint160_t &id, timer &t, peers &p,
                  const natdetector &nat, udphandler &udp, dtun &dt, rdp &r) :
                 rttable(id, t, p),
@@ -97,21 +88,41 @@ namespace libcage {
                 m_sync(*this),
                 m_is_use_rdp(true)
         {
-                rdp_recv_store_func func(*this);
+                rdp_recv_store_func func_recv(*this);
+                rdp_recv_get_func   func_get(*this);
 
-                m_rdp_listen = m_rdp.listen(rdp_store_port, func);
+
+                m_rdp_recv_listen = m_rdp.listen(rdp_store_port, func_recv);
+                m_rdp_get_listen  = m_rdp.listen(rdp_get_port, func_get);
         }
 
         dht::~dht()
         {
-                m_rdp.close(m_rdp_listen);
+                boost::unordered_map<int, rdp_recv_store_ptr>::iterator it1;
+                boost::unordered_map<int, time_t>::iterator it2;
+
+
+
+                m_rdp.close(m_rdp_recv_listen);
+                m_rdp.close(m_rdp_get_listen);
         }
 
         void
         dht::rdp_recv_get_func::operator() (int desc, rdp_addr addr,
                                             rdp_event event)
         {
-
+                switch (event) {
+                case ACCEPTED:
+                {
+                        break;
+                }
+                case READY2READ:
+                {
+                        break;
+                }
+                default:
+                        close(desc);
+                }
         }
 
         bool
@@ -518,7 +529,7 @@ namespace libcage {
                         }
 
                         // stop all timers
-                        boost::unordered_map<_id, timer_query_ptr>::iterator it;
+                        std::map<_id, timer_query_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
@@ -1404,7 +1415,7 @@ namespace libcage {
         void
         dht::recv_find_value_reply(void *msg, int len, sockaddr *from)
         {
-                boost::unordered_map<uint32_t, query_ptr>::iterator it;
+                std::map<uint32_t, query_ptr>::iterator it;
                 msg_dht_find_value_reply *reply;
                 timer_query_ptr t;
                 cageaddr  addr;
@@ -1492,7 +1503,7 @@ namespace libcage {
                         total = ntohs(reply->total);
 
 
-                        boost::unordered_map<_id, int>::iterator it_num;
+                        std::map<_id, int>::iterator it_num;
 
                         it_num = q->num_value.find(i);
                         if (it_num == q->num_value.end()) {
@@ -1609,7 +1620,7 @@ namespace libcage {
                 func(true, q->vset);
 
                 // stop all timer
-                boost::unordered_map<_id, timer_query_ptr>::iterator it_tm;
+                std::map<_id, timer_query_ptr>::iterator it_tm;
                 for (it_tm = q->timers.begin();
                      it_tm != q->timers.end(); ++it_tm) {
                         m_timer.unset_timer(it_tm->second.get());
@@ -1808,6 +1819,36 @@ namespace libcage {
         no_action(std::vector<cageaddr> &nodes)
         {
 
+        }
+
+        void
+        dht::sweep_rdp()
+        {
+                time_t now = time(NULL);
+                time_t diff;
+
+                std::map<int, rdp_recv_store_ptr>::iterator it1;
+                for (it1 = m_rdp_recv_store.begin();
+                     it1 != m_rdp_recv_store.end(); ) {
+                        diff = now - it1->second->last_time;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it1->first);
+                                m_rdp_recv_store.erase(it1++);
+                        } else {
+                                ++it1;
+                        }
+                }
+
+                std::map<int, time_t>::iterator it2;
+                for (it2 = m_rdp_store.begin(); it2 != m_rdp_store.end(); ) {
+                        diff = now - it2->second;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it2->first);
+                                m_rdp_store.erase(it2++);
+                        } else {
+                                ++it2;
+                        }
+                }
         }
 
         void

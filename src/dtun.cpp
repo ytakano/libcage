@@ -333,7 +333,7 @@ namespace libcage {
                         }
 
                         // stop all timers
-                        boost::unordered_map<_id, timer_ptr>::iterator it;
+                        std::map<_id, timer_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
@@ -745,7 +745,7 @@ namespace libcage {
                 i.id = r.addr.id;
 
 
-                boost::unordered_map<_id, registered>::iterator it;
+                std::map<_id, registered>::iterator it;
                 it = m_registered_nodes.find(i);
 
                 if (it == m_registered_nodes.end()) {
@@ -1006,7 +1006,7 @@ namespace libcage {
                 // finish find value
                 if (reply->flag == 1 && nodes.size() > 0) {
                         // stop all timer
-                        boost::unordered_map<_id, timer_ptr>::iterator it;
+                        std::map<_id, timer_ptr>::iterator it;
                         for (it = q->timers.begin(); it != q->timers.end();
                              ++it) {
                                 m_timer.unset_timer(it->second.get());
@@ -1416,7 +1416,7 @@ namespace libcage {
         void
         dtun::refresh()
         {
-                boost::unordered_map<_id, registered>::iterator it;
+                std::map<_id, registered>::iterator it;
                 time_t now = time(NULL);
 
                 for (it = m_registered_nodes.begin();

@@ -38,9 +38,8 @@
 
 #include <list>
 #include <map>
+#include <set>
 #include <vector>
-
-#include <boost/unordered_set.hpp> 
 
 #include "bn.hpp"
 #include "cagetypes.hpp"
@@ -109,8 +108,8 @@ namespace libcage {
 
                 std::map<int, std::list<cageaddr> >  m_table;
                 std::map<uint32_t, timer_ptr>        m_ping_wait;
-                boost::unordered_set<int>            m_ping_send;
-                boost::unordered_set<uint160_t>      m_nodes;
+                std::set<int>           m_ping_send;
+                std::set<uint160_t>     m_nodes;
 
                 const uint160_t        &m_id;
                 timer                  &m_timer;
@@ -118,9 +117,9 @@ namespace libcage {
 
                 int             id2i(const uint160_t &id);
                 int             id2i4lookup(const uint160_t &id, int max,
-                                            boost::unordered_set<int> &ret);
+                                            std::set<int> &ret);
                 int             id2i4lookupR(const uint160_t &id, int max,
-                                             boost::unordered_set<int> &ret);
+                                             std::set<int> &ret);
 
 #ifdef DEBUG
         public:
