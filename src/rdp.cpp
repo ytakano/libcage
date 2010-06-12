@@ -410,7 +410,7 @@ namespace libcage {
                 int desc;
 
                 do {
-                        desc = rand();
+                        desc = mrand48();
                 } while (m_desc_set.find(desc) != m_desc_set.end() &&
                          desc <= 0);
 
@@ -468,7 +468,7 @@ namespace libcage {
                         }
                 } else {
                         do {
-                                addr.sport = rand() & 0xffff;
+                                addr.sport = mrand48() & 0xffff;
                                 if (addr.sport < well_known_port_max)
                                         continue;
                         } while (m_addr2conn.find(addr) != m_addr2conn.end());
@@ -477,7 +477,7 @@ namespace libcage {
                 p_con->addr      = addr;
                 p_con->is_pasv   = false;
                 p_con->state     = SYN_SENT;
-                p_con->snd_iss   = rand();
+                p_con->snd_iss   = mrand48();
                 p_con->snd_nxt   = p_con->snd_iss + 1;
                 p_con->snd_una   = p_con->snd_iss;
                 p_con->rcv_max   = rcv_max_default;
@@ -809,7 +809,7 @@ namespace libcage {
                         p_con->addr      = addr;
                         p_con->is_pasv   = true;
                         p_con->state     = SYN_RCVD;
-                        p_con->snd_iss   = rand();
+                        p_con->snd_iss   = mrand48();
                         p_con->snd_nxt   = p_con->snd_iss + 1;
                         p_con->snd_una   = p_con->snd_iss;
                         p_con->rcv_max   = rcv_max_default;

@@ -342,6 +342,33 @@ namespace libcage {
 
                         break;
                 }
+                case RESET:
+                {
+                        stored_data sdata;
+                        id_key  ik;
+
+                        ik.key    = key;
+                        ik.keylen = keylen;
+                        ik.id     = id;
+
+                        sdata.value    = value;
+                        sdata.valuelen = valuelen;
+
+                        boost::unordered_map<id_key, sdata_set>::iterator it_stored;
+                        sdata_set::iterator it_sdata;
+
+                        it_stored = p_dht->m_stored.find(ik);
+                        if (it_stored != p_dht->m_stored.end()) {
+                                it_sdata = it_stored->second.find(sdata);
+                                if (it_sdata != it_stored->second.end()) {
+                                        _id i;
+                                        i.id = addr.did;
+
+                                        it_sdata->recvd.insert(i);
+                                }
+                        }
+
+                }
                 default:
                         p_dht->m_rdp_store.erase(desc);
                         p_dht->m_rdp.close(desc);
@@ -1669,28 +1696,25 @@ namespace libcage {
                 int            size;
                 char           buf[1024 * 4];
                 char          *p_key, *p_value;
-                bool           me = false;
                 time_t         now = time(NULL);
                 time_t         diff;
+                bool           top = false;
 
-                if (it->original > 0) {
-                        return false;
-                }
+                if (it->original > 0)
+                        return true;
                         
 
                 size = sizeof(*msg) - sizeof(msg->data) +
                         it->keylen + it->valuelen;
 
-                if (size > (int)sizeof(buf)) {
+                if (size > (int)sizeof(buf))
                         return false;
-                }
 
                 msg = (msg_dht_store*)buf;
 
                 diff = now - it->stored_time;
-                if (diff >= it->ttl) {
+                if (diff >= it->ttl)
                         return false;
-                }
 
                 ttl = it->ttl - diff;
 
@@ -1706,33 +1730,44 @@ namespace libcage {
                 memcpy(p_key, it->key.get(), it->keylen);
                 memcpy(p_value, it->value.get(), it->valuelen);
 
+                if (*nodes[0].id == p_dht->m_id)
+                        top = true;
 
                 BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (p_dht->m_id == *addr.id) {
-                                me = true;
-                                continue;
-                        }
+                        if (! top && p_dht->m_id == *addr.id)
+                                return true;
 
                         _id    i;
 
                         i.id = addr.id;
-                        if (it->recvd.find(i) != it->recvd.end()) {
+                        if (it->recvd.find(i) != it->recvd.end())
                                 continue;
-                        }
+
+                        it->recvd.insert(i);
 
                         send_msg(p_dht->m_udp, &msg->hdr, size, type_dht_store,
                                  addr, p_dht->m_id);
                 }
 
-                return me;
+                return false;
         }
 
         bool
         dht::restore_func::restore_by_rdp(std::vector<cageaddr> &nodes,
                                           sdata_set::iterator &it)
         {
-                bool me = false;
+                bool           top = false;
                 rdp_store_func func;
+                time_t         now = time(NULL);
+                time_t         diff;
+
+                if (it->original > 0)
+                        return true;
+
+
+                diff = now - it->stored_time;
+                if (diff >= it->ttl)
+                        return false;
 
                 func.key      = it->key;
                 func.value    = it->value;
@@ -1742,19 +1777,18 @@ namespace libcage {
                 func.id       = it->id;
                 func.p_dht    = p_dht;
 
+                if (*nodes[0].id == p_dht->m_id)
+                        top = true;
+
                 BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (*addr.id == p_dht->m_id) {
-                                me = true;
-                                continue;
-                        }
+                        if (! top && *addr.id == p_dht->m_id)
+                                return true;
 
                         _id    i;
 
                         i.id = addr.id;
-                        if (it->recvd.find(i) != it->recvd.end()) {
+                        if (it->recvd.find(i) != it->recvd.end())
                                 continue;
-                        }
-
 
                         int desc;
                         desc = p_dht->m_rdp.connect(0, addr.id,
@@ -1766,7 +1800,7 @@ namespace libcage {
                         p_dht->m_rdp_store[desc] = time(NULL);
                 }
 
-                return me;
+                return top;
         }
 
         void

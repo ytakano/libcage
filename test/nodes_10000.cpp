@@ -10,9 +10,9 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 200;
+const int max_node = 100;
 const int port     = 10000;
-const int proc_num = 50;
+const int proc_num = 100;
 
 libcage::cage *cage;
 event *ev;
