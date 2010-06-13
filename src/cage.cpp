@@ -36,6 +36,8 @@
 #include "cagetypes.hpp"
 
 namespace libcage {
+        extern void no_action(std::vector<cageaddr> &nodes);
+
         void
         cage::udp_receiver::operator() (udphandler &udp, packetbuf_ptr pbuf,
                                         sockaddr *from, int fromlen,
@@ -446,12 +448,6 @@ namespace libcage {
                 } else {
                         m_dht.find_value(id, key, keylen, func);
                 }
-        }
-
-        static void
-        no_action(std::vector<cageaddr> &nodes)
-        {
-
         }
 
         void

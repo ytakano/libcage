@@ -39,13 +39,16 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const int       dtun::num_find_node    = 10;
-        const int       dtun::max_query        = 6;
-        const int       dtun::query_timeout    = 2;
-        const int       dtun::request_retry    = 2;
-        const int       dtun::request_timeout  = 2;
-        const int       dtun::registered_ttl   = 300;
-        const int       dtun::timer_interval   = 30;
+        const int       dtun::num_find_node     = 10;
+        const int       dtun::max_query         = 6;
+        const int       dtun::query_timeout     = 2;
+        const int       dtun::request_retry     = 2;
+        const int       dtun::request_timeout   = 2;
+        const int       dtun::registered_ttl    = 300;
+        const int       dtun::timer_interval    = 30;
+        const int       dtun::maintain_interval = 120;
+
+        extern void no_action(std::vector<cageaddr> &nodes);
 
         void
         dtun::timer_query::operator() ()
@@ -97,11 +100,39 @@ namespace libcage {
         {
                 RAND_pseudo_bytes((unsigned char*)&m_register_session,
                                   sizeof(m_register_session));
+
+                m_mask_bit = 1;
+                m_last_maintain = 0;
         }
 
         dtun::~dtun()
         {
 
+        }
+
+        void
+        dtun::maintain()
+        {
+                time_t diff = time(NULL) - m_last_maintain;
+
+                if (diff < maintain_interval)
+                        return;
+
+
+                uint160_t bit = 1;
+                uint160_t mask1, mask2;
+
+                mask1 = ~(bit << (160 - m_mask_bit));
+                mask2 = ~(bit << (160 - m_mask_bit - 1));
+
+                find_node(m_id & mask1, no_action);
+                find_node(m_id & mask2, no_action);
+
+                m_mask_bit += 2;
+                if (m_mask_bit > 20)
+                        m_mask_bit = 1;
+
+                m_last_maintain = time(NULL);
         }
 
         void
@@ -1434,20 +1465,17 @@ namespace libcage {
                 }
         }
 
-        static void
-        no_action(std::vector<cageaddr> &nodes)
-        {
-
-        }
-
         void
         dtun::timer_refresh::operator() ()
         {
+                if (! m_dtun.m_is_enabled)
+                        return;
+
                 m_dtun.refresh();
-
                 m_dtun.register_node();
+                m_dtun.maintain();
 
-                if (m_dtun.is_zero() && m_dtun.m_is_enabled) {
+                if (m_dtun.is_zero()) {
                         try {
                                 cageaddr addr;
 

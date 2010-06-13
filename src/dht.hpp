@@ -395,6 +395,7 @@ namespace libcage {
                                 m_dht.refresh();
                                 m_dht.restore();
                                 m_dht.sweep_rdp();
+                                m_dht.maintain();
 
                                 // reschedule
                                 timeval tval;
@@ -464,6 +465,7 @@ namespace libcage {
                 void            refresh();
                 void            restore();
                 void            sweep_rdp();
+                void            maintain();
 
                 void            recvd_value(query_ptr q);
 
@@ -485,6 +487,7 @@ namespace libcage {
                 int                      m_rdp_recv_listen;
                 int                      m_rdp_get_listen;
                 bool                     m_is_use_rdp;
+                int                      m_mask_bit;
 
                 boost::unordered_map<id_key, sdata_set> m_stored;
                 std::map<uint32_t, query_ptr>           m_query;

@@ -61,7 +61,7 @@ namespace libcage {
                 static const int        request_timeout;
                 static const int        registered_ttl;
                 static const int        timer_interval;
-
+                static const int        maintain_interval;
 
 
                 typedef boost::function<void (std::vector<cageaddr>&)>
@@ -237,6 +237,8 @@ namespace libcage {
                 void            send_find_nv(uint16_t type, cageaddr &dst,
                                              query_ptr q);
 
+                void            maintain();
+
 
                 rand_uint              &m_rnd;
                 rand_real              &m_drnd;
@@ -255,6 +257,8 @@ namespace libcage {
                 std::map<uint32_t, req_ptr>     m_request;
                 timer_refresh           m_timer_refresh;
                 bool                    m_is_enabled;
+                int                     m_mask_bit;
+                time_t                  m_last_maintain;
         };
 }
 

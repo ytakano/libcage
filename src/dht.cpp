@@ -97,6 +97,9 @@ namespace libcage {
 
                 m_rdp_recv_listen = m_rdp.listen(rdp_store_port, func_recv);
                 m_rdp_get_listen  = m_rdp.listen(rdp_get_port, func_get);
+
+
+                m_mask_bit = 1;
         }
 
         dht::~dht()
@@ -117,6 +120,29 @@ namespace libcage {
 
                 m_rdp.close(m_rdp_recv_listen);
                 m_rdp.close(m_rdp_get_listen);
+        }
+
+        void
+        no_action(std::vector<cageaddr>& nodes)
+        {
+
+        }
+
+        void
+        dht::maintain()
+        {
+                uint160_t bit = 1;
+                uint160_t mask1, mask2;
+
+                mask1 = ~(bit << (160 - m_mask_bit));
+                mask2 = ~(bit << (160 - m_mask_bit - 1));
+
+                find_node(m_id & mask1, no_action);
+                find_node(m_id & mask2, no_action);
+
+                m_mask_bit += 2;
+                if (m_mask_bit > 20)
+                        m_mask_bit = 1;
         }
 
         void
@@ -1884,12 +1910,6 @@ namespace libcage {
         {
                 if (! m_dht.has_id(*addr.id))
                         m_dht.add(addr);
-        }
-
-        static void
-        no_action(std::vector<cageaddr> &nodes)
-        {
-
         }
 
         void
