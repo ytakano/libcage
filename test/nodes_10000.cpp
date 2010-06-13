@@ -81,14 +81,18 @@ public:
         void operator() (bool result)
         {
                 // print state
-                if (result)
+                if (result) {
                         std::cout << "join: succeeded, n = "
                                   << n
                                   << std::endl;
-                else
+                } else {
                         std::cout << "join: failed, n = "
                                   << n
                                   << std::endl;
+
+                        cage[idx].join("localhost", port, *this);
+                        return;
+                }
 
                 // put data
                 cage[idx].put(&n, sizeof(n), &n, sizeof(n), 60000);
