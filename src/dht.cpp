@@ -40,7 +40,7 @@ namespace libcage {
         const int       dht::max_query           = 6;
         const int       dht::query_timeout       = 3;
         const int       dht::restore_interval    = 120;
-        const int       dht::timer_interval      = 600;
+        const int       dht::timer_interval      = 300;
         const int       dht::original_put_num    = 5;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
@@ -98,9 +98,18 @@ namespace libcage {
 
         dht::~dht()
         {
-                boost::unordered_map<int, rdp_recv_store_ptr>::iterator it1;
-                boost::unordered_map<int, time_t>::iterator it2;
+                std::map<int, rdp_recv_store_ptr>::iterator it1;
+                std::map<int, time_t>::iterator it2;
 
+                for (it1 = m_rdp_recv_store.begin();
+                     it1 != m_rdp_recv_store.end(); ++it1) {
+                        m_rdp.close(it1->first);
+                }
+
+                for (it2 = m_rdp_store.begin(); it2 != m_rdp_store.end();
+                     ++it2) {
+                        m_rdp.close(it2->first);
+                }
 
 
                 m_rdp.close(m_rdp_recv_listen);
@@ -1698,7 +1707,6 @@ namespace libcage {
                 char          *p_key, *p_value;
                 time_t         now = time(NULL);
                 time_t         diff;
-                bool           top = false;
 
                 if (it->original > 0)
                         return true;
@@ -1730,12 +1738,17 @@ namespace libcage {
                 memcpy(p_key, it->key.get(), it->keylen);
                 memcpy(p_value, it->value.get(), it->valuelen);
 
-                if (*nodes[0].id == p_dht->m_id)
-                        top = true;
-
+                int n = 0;
                 BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (! top && p_dht->m_id == *addr.id)
-                                return true;
+                        if (p_dht->m_id == *addr.id) {
+                                if (n > 3) {
+                                        return true;
+                                } else {
+                                        n++;
+                                        continue;
+                                }
+                        }
+                        n++;
 
                         _id    i;
 
@@ -1756,7 +1769,6 @@ namespace libcage {
         dht::restore_func::restore_by_rdp(std::vector<cageaddr> &nodes,
                                           sdata_set::iterator &it)
         {
-                bool           top = false;
                 rdp_store_func func;
                 time_t         now = time(NULL);
                 time_t         diff;
@@ -1777,12 +1789,17 @@ namespace libcage {
                 func.id       = it->id;
                 func.p_dht    = p_dht;
 
-                if (*nodes[0].id == p_dht->m_id)
-                        top = true;
-
+                int n = 0;
                 BOOST_FOREACH(cageaddr &addr, nodes) {
-                        if (! top && *addr.id == p_dht->m_id)
-                                return true;
+                        if (*addr.id == p_dht->m_id) {
+                                if (n > 3) {
+                                        return true;
+                                } else {
+                                        n++;
+                                        continue;
+                                }
+                        }
+                        n++;
 
                         _id    i;
 
@@ -1800,7 +1817,7 @@ namespace libcage {
                         p_dht->m_rdp_store[desc] = time(NULL);
                 }
 
-                return top;
+                return false;
         }
 
         void

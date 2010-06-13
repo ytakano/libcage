@@ -10,28 +10,37 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 100;
+const int max_node = 125;
 const int port     = 10000;
-const int proc_num = 100;
+const int proc_num = 80;
 
 libcage::cage *cage;
-event *ev;
-int    proc = -1;
+event   *ev;
+int      proc = -1;
+timeval  tval1;
 
 // callback function for get
 void
 get_func(bool result, libcage::dht::value_set_ptr vset)
 {
+        double  diff;
+        timeval tval2;
+        gettimeofday(&tval2, NULL);
+
+        diff  = tval2.tv_sec - tval1.tv_sec;
+        diff += tval2.tv_usec / 1000000.0 - tval1.tv_usec / 1000000.0;
+
         if (result) {
-                printf("successed to get: n =");
+                std::cout << "successed to get: sec = " << diff << "[s], n =";
 
                 libcage::dht::value_set::iterator it;
                 BOOST_FOREACH(const libcage::dht::value_t &val, *vset) {
-                        printf(" %d", *(int*)val.value.get());
+                        std::cout << " " <<  *(int*)val.value.get() << ",";
                 }
-                printf("\n");
+                std::cout << std::endl;
         } else {
-                printf("failed to get:\n");
+                std::cout << "failed to get: sec = " << diff << "[s]"
+                          << std::endl;
         }
 
         timeval tval;
@@ -58,6 +67,7 @@ timer_callback(int fd, short ev, void *arg)
 
         // get at random
         printf("get %d\n", n2);
+        gettimeofday(&tval1, NULL);
         cage[n1].get(&n2, sizeof(n2), get_func);
 }
 
@@ -79,10 +89,8 @@ public:
                                   << n
                                   << std::endl;
 
-                //cage[n].print_state();
-
                 // put data
-                cage[idx].put(&n, sizeof(n), &n, sizeof(n), 30000);
+                cage[idx].put(&n, sizeof(n), &n, sizeof(n), 60000);
 
                 n++;
                 idx++;
