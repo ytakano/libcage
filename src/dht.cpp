@@ -1875,6 +1875,7 @@ namespace libcage {
 
                 for(it1 = p_dht->m_stored.begin();
                     it1 != p_dht->m_stored.end();) {
+                        nodes.clear();
                         p_dht->lookup(*it1->first.id, num_find_node, nodes);
 
                         if (nodes.size() == 0) {
