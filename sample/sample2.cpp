@@ -20,7 +20,7 @@ public:
         {
                 // print state
                 if (result)
-                        std::cout << "join: successed, n = "
+                        std::cout << "join: succeeded, n = "
                                   << n
                                   << std::endl;
                 else

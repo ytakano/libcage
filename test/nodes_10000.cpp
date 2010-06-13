@@ -32,7 +32,7 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
         diff += tval2.tv_usec / 1000000.0 - tval1.tv_usec / 1000000.0;
 
         if (result) {
-                std::cout << "successed to get: sec = " << diff
+                std::cout << "succeeded in getting: sec = " << diff
                           << "[s], key = " << get_key << ", values =";
 
                 libcage::dht::value_set::iterator it;
@@ -82,7 +82,7 @@ public:
         {
                 // print state
                 if (result)
-                        std::cout << "join: successed, n = "
+                        std::cout << "join: succeeded, n = "
                                   << n
                                   << std::endl;
                 else

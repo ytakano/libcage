@@ -27,7 +27,7 @@ void
 get_func(bool result, libcage::dht::value_set_ptr vset)
 {
         if (result) {
-                printf("successed to get: n =");
+                printf("succeeded in getting: n =");
 
                 libcage::dht::value_set::iterator it;
                 BOOST_FOREACH(const libcage::dht::value_t &val, *vset) {
@@ -74,7 +74,7 @@ public:
         {
                 // print state
                 if (result)
-                        std::cout << "join: successed, n = "
+                        std::cout << "join: succeeded, n = "
                                   << n
                                   << std::endl;
                 else

@@ -13,7 +13,7 @@ void
 join_callback(bool result)
 {
         if (result)
-                std::cout << "join: successed" << std::endl;
+                std::cout << "join: succeeded" << std::endl;
         else
                 std::cout << "join: failed" << std::endl;
 

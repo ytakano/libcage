@@ -64,7 +64,7 @@ join_callback::operator() (bool result)
                 return;
         }
 
-        std::cout << "join: successed" << std::endl;
+        std::cout << "join: succeeded" << std::endl;
 
 
         client_callback client_func(*cage2);
