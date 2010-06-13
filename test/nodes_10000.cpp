@@ -18,6 +18,7 @@ libcage::cage *cage;
 event   *ev;
 int      proc = -1;
 timeval  tval1;
+int      get_key;
 
 // callback function for get
 void
@@ -31,7 +32,8 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
         diff += tval2.tv_usec / 1000000.0 - tval1.tv_usec / 1000000.0;
 
         if (result) {
-                std::cout << "successed to get: sec = " << diff << "[s], n =";
+                std::cout << "successed to get: sec = " << diff
+                          << "[s], key = " << get_key << ", values =";
 
                 libcage::dht::value_set::iterator it;
                 BOOST_FOREACH(const libcage::dht::value_t &val, *vset) {
@@ -40,7 +42,7 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
                 std::cout << std::endl;
         } else {
                 std::cout << "failed to get: sec = " << diff << "[s]"
-                          << std::endl;
+                          << ", key = " << get_key << std::endl;
         }
 
         timeval tval;
@@ -55,20 +57,19 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
 void
 timer_callback(int fd, short ev, void *arg)
 {
-        int n1, n2;
+        int n;
 
-        n1 = abs(mrand48()) % max_node;
+        n = abs(mrand48()) % max_node;
 
         for (;;) {
-                n2 = abs(mrand48()) % (max_node * proc_num);
-                if (n2 != 0)
+                get_key = abs(mrand48()) % (max_node * proc_num);
+                if (get_key != 0)
                         break;
         }
 
         // get at random
-        printf("get %d\n", n2);
         gettimeofday(&tval1, NULL);
-        cage[n1].get(&n2, sizeof(n2), get_func);
+        cage[n].get(&get_key, sizeof(get_key), get_func);
 }
 
 class join_callback

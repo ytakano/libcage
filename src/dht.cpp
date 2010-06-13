@@ -41,7 +41,7 @@ namespace libcage {
         const int       dht::query_timeout       = 3;
         const int       dht::restore_interval    = 120;
         const int       dht::timer_interval      = 300;
-        const int       dht::original_put_num    = 5;
+        const int       dht::original_put_num    = 3;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
         const uint16_t  dht::rdp_get_port        = 101;
@@ -298,7 +298,7 @@ namespace libcage {
                         it_data = it->second.find(data);
 
                         if (it_data != it->second.end()) {
-                                // if the TTL is 0, the value is removed
+                                // if the TTL is 0, remove the value
                                 if (ttl == 0) {
                                         it->second.erase(it_data);
                                         if (it->second.size() == 0) {
@@ -1707,6 +1707,7 @@ namespace libcage {
                 char          *p_key, *p_value;
                 time_t         now = time(NULL);
                 time_t         diff;
+                bool           me = false;
 
                 if (it->original > 0)
                         return true;
@@ -1718,14 +1719,29 @@ namespace libcage {
                 if (size > (int)sizeof(buf))
                         return false;
 
-                msg = (msg_dht_store*)buf;
-
                 diff = now - it->stored_time;
                 if (diff >= it->ttl)
                         return false;
 
+                if (it->original > 0) {
+                        store_func sfunc;
+
+                        sfunc.key      = it->key;
+                        sfunc.value    = it->value;
+                        sfunc.id       = it->id;
+                        sfunc.keylen   = it->keylen;
+                        sfunc.valuelen = it->valuelen;
+                        sfunc.ttl      = it->ttl - diff;
+                        sfunc.p_dht    = p_dht;
+
+                        p_dht->find_node(*it->id, sfunc);
+
+                        return true;
+                }
+
                 ttl = it->ttl - diff;
 
+                msg = (msg_dht_store*)buf;
                 msg->keylen   = htons(it->keylen);
                 msg->valuelen = htons(it->valuelen);
                 msg->ttl      = htons(ttl);
@@ -1738,17 +1754,11 @@ namespace libcage {
                 memcpy(p_key, it->key.get(), it->keylen);
                 memcpy(p_value, it->value.get(), it->valuelen);
 
-                int n = 0;
                 BOOST_FOREACH(cageaddr &addr, nodes) {
                         if (p_dht->m_id == *addr.id) {
-                                if (n > 3) {
-                                        return true;
-                                } else {
-                                        n++;
-                                        continue;
-                                }
+                                me = true;
+                                continue;
                         }
-                        n++;
 
                         _id    i;
 
@@ -1762,7 +1772,7 @@ namespace libcage {
                                  addr, p_dht->m_id);
                 }
 
-                return false;
+                return me;
         }
 
         bool
@@ -1772,14 +1782,27 @@ namespace libcage {
                 rdp_store_func func;
                 time_t         now = time(NULL);
                 time_t         diff;
-
-                if (it->original > 0)
-                        return true;
-
+                bool           me = false;
 
                 diff = now - it->stored_time;
                 if (diff >= it->ttl)
                         return false;
+
+                if (it->original > 0) {
+                        store_func sfunc;
+
+                        sfunc.key      = it->key;
+                        sfunc.value    = it->value;
+                        sfunc.id       = it->id;
+                        sfunc.keylen   = it->keylen;
+                        sfunc.valuelen = it->valuelen;
+                        sfunc.ttl      = it->ttl - diff;
+                        sfunc.p_dht    = p_dht;
+
+                        p_dht->find_node(*it->id, sfunc);
+
+                        return true;
+                }
 
                 func.key      = it->key;
                 func.value    = it->value;
@@ -1789,17 +1812,11 @@ namespace libcage {
                 func.id       = it->id;
                 func.p_dht    = p_dht;
 
-                int n = 0;
                 BOOST_FOREACH(cageaddr &addr, nodes) {
                         if (*addr.id == p_dht->m_id) {
-                                if (n > 3) {
-                                        return true;
-                                } else {
-                                        n++;
-                                        continue;
-                                }
+                                me = true;
+                                continue;
                         }
-                        n++;
 
                         _id    i;
 
@@ -1817,7 +1834,7 @@ namespace libcage {
                         p_dht->m_rdp_store[desc] = time(NULL);
                 }
 
-                return false;
+                return me;
         }
 
         void
@@ -1920,48 +1937,6 @@ namespace libcage {
 
                         rfunc.p_dht = this;
                         find_node(m_id, rfunc);
-
-
-                        // store original key-value pair
-                        boost::unordered_map<id_key, sdata_set>::iterator it1;
-                        sdata_set::iterator it2;
-                        for (it1 = m_stored.begin(); it1 != m_stored.end();) {
-                                for (it2 = it1->second.begin();
-                                     it2 != it1->second.end();) {
-                                        if (it2->original == 0) {
-                                                ++it2;
-                                                continue;
-                                        }
-
-                                        time_t diff;
-                                        diff = time(NULL) - it2->stored_time;
-
-                                        if (diff > it2->ttl) {
-                                                it1->second.erase(it2++);
-                                                continue;
-                                        }
-
-
-                                        store_func sfunc;
-
-                                        sfunc.key      = it2->key;
-                                        sfunc.value    = it2->value;
-                                        sfunc.id       = it2->id;
-                                        sfunc.keylen   = it2->keylen;
-                                        sfunc.valuelen = it2->valuelen;
-                                        sfunc.ttl      = it2->ttl - diff;
-                                        sfunc.p_dht    = this;
-
-                                        find_node(*it2->id, sfunc);
-
-                                        ++it2;
-                                }
-
-                                if (it1->second.size() == 0)
-                                        m_stored.erase(it1++);
-                                else
-                                        ++it1;
-                        }
                 }
         }
 
