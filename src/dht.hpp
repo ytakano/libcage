@@ -48,6 +48,7 @@
 #include <vector>
 
 #include <boost/function.hpp>
+#include <boost/random.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
@@ -101,9 +102,9 @@ namespace libcage {
                 typedef boost::variant<callback_find_node,
                                        callback_find_value> callback_func;
 
-                dht(const uint160_t &id, timer &t, peers &p,
-                    const natdetector &nat, udphandler &udp, dtun &dt,
-                    rdp &r);
+                dht(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                    timer &t, peers &p, const natdetector &nat, udphandler &udp,
+                    dtun &dt, rdp &r);
                 virtual ~dht();
 
                 void            recv_ping(void *msg, sockaddr *from,
@@ -398,7 +399,7 @@ namespace libcage {
                                 // reschedule
                                 timeval tval;
 
-                                tval.tv_sec  = (long)((double)dht::timer_interval * drand48());
+                                tval.tv_sec  = (long)((double)dht::timer_interval * m_dht.m_drnd());
                                 tval.tv_sec += dht::restore_interval;
 
                                 tval.tv_usec = 0;
@@ -410,7 +411,7 @@ namespace libcage {
                         {
                                 timeval tval;
 
-                                tval.tv_sec  = (long)((double)dht::timer_interval * drand48());
+                                tval.tv_sec  = (long)((double)dht::timer_interval * m_dht.m_drnd());
                                 tval.tv_sec += dht::restore_interval;
 
                                 tval.tv_usec = 0;
@@ -467,6 +468,8 @@ namespace libcage {
                 void            recvd_value(query_ptr q);
 
 
+                rand_uint               &m_rnd;
+                rand_real               &m_drnd;
                 const uint160_t         &m_id;
                 timer                   &m_timer;
                 peers                   &m_peers;

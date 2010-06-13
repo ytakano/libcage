@@ -31,16 +31,11 @@
 
 #include "cage.hpp"
 
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-
 #include <boost/foreach.hpp>
 
 #include "cagetypes.hpp"
 
 namespace libcage {
-        bool cage::m_is_srand = false;
-
         void
         cage::udp_receiver::operator() (udphandler &udp, packetbuf_ptr pbuf,
                                         sockaddr *from, int fromlen,
@@ -238,32 +233,29 @@ namespace libcage {
                 }
         }
 
-        cage::cage() : m_receiver(*this),
-                       m_peers(m_timer),
-                       m_nat(m_udp, m_timer, m_id, m_peers, m_proxy),
-                       m_dtun(m_id, m_timer, m_peers, m_nat, m_udp, m_proxy),
-                       m_rdp(m_timer),
-                       m_dht(m_id, m_timer, m_peers, m_nat, m_udp, m_dtun,
-                             m_rdp),
+        cage::cage() : m_gen_id(m_id),
+                       m_gen(m_gen_id.seed),
+                       m_dist_int(0, ~0),
+                       m_rnd(m_gen, m_dist_int),
+                       m_dist_real(0, 1),
+                       m_drnd(m_gen, m_dist_real),
+                       m_receiver(*this),
+                       m_peers(m_drnd, m_timer),
+                       m_nat(m_rnd, m_udp, m_timer, m_id, m_peers, m_proxy),
+                       m_dtun(m_rnd, m_drnd, m_id, m_timer, m_peers, m_nat,
+                              m_udp, m_proxy),
+                       m_rdp(m_rnd, m_timer),
+                       m_dht(m_rnd, m_drnd, m_id, m_timer, m_peers, m_nat,
+                             m_udp, m_dtun, m_rdp),
                        m_dgram(m_id, m_peers, m_udp, m_dtun, m_dht, m_proxy,
                                m_advertise, m_rdp),
-                       m_proxy(m_id, m_udp, m_timer, m_nat, m_peers, m_dtun,
-                               m_dht, m_dgram, m_advertise, m_rdp),
-                       m_advertise(m_id, m_timer, m_udp, m_peers, m_dtun)
+                       m_proxy(m_rnd, m_drnd, m_id, m_udp, m_timer, m_nat,
+                               m_peers, m_dtun, m_dht, m_dgram, m_advertise,
+                               m_rdp),
+                       m_advertise(m_rnd, m_drnd, m_id, m_timer, m_udp,
+                                   m_peers, m_dtun)
         {
-                unsigned char buf[20];
-
-                RAND_pseudo_bytes(buf, sizeof(buf));
-                m_id.from_binary(buf, sizeof(buf));
-
-
                 m_rdp.set_callback_dgram_out(rdp_output(*this));
-                
-
-                if (! m_is_srand) {
-                        m_is_srand = true;
-                        srand48(time(NULL));
-                }
         }
 
         cage::~cage()
@@ -378,6 +370,9 @@ namespace libcage {
                         m_dtun.set_enabled(is_dtun);
                         m_dht.set_enabled_dtun(is_dtun);
                         m_is_dtun = is_dtun;
+
+                        if (! m_is_dtun)
+                                m_nat.set_state_global();
                 }
 
                 m_udp.set_callback(&m_receiver);
@@ -478,13 +473,11 @@ namespace libcage {
                 f.func   = func;
                 f.p_cage = this;
 
-                m_nat.detect(host, port);
-
                 if (m_is_dtun) {
+                        m_nat.detect(host, port);
                         m_dtun.find_node(host, port, f);
                         m_dht.find_node(host, port, &no_action);
                 } else {
-                        m_dtun.find_node(host, port, &no_action);
                         m_dht.find_node(host, port, f);
                 }
         }

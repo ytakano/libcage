@@ -37,8 +37,11 @@ namespace libcage {
         const time_t    advertise::refresh_interval  = 100;
 
 
-        advertise::advertise(const uint160_t &id, timer &tm, udphandler &udp,
+        advertise::advertise(rand_uint &rnd, rand_real &drnd,
+                             const uint160_t &id, timer &tm, udphandler &udp,
                              peers &p, dtun &d) :
+                m_rnd(rnd),
+                m_drnd(drnd),
                 m_id(id),
                 m_timer(tm),
                 m_udp(udp),
@@ -82,7 +85,7 @@ namespace libcage {
                 uint32_t  nonce;
 
                 for (;;) {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                         if (m_advertising.find(nonce) == m_advertising.end())
                                 break;
                 }

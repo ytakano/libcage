@@ -60,9 +60,9 @@ namespace libcage {
                 typedef boost::function<void (bool, void *buf, int len)>
                 callback_get;
                 
-                proxy(const uint160_t &id, udphandler &udp, timer &t,
-                      natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
-                      advertise &adv, rdp &r);
+                proxy(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                      udphandler &udp, timer &t, natdetector &nat, peers &p,
+                      dtun &dt, dht &dh, dgram &dg, advertise &adv, rdp &r);
                 virtual ~proxy();
 
                 void            recv_register(void *msg, sockaddr *from);
@@ -174,7 +174,8 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = (time_t)((double)proxy::timer_interval * drand48());
+                                t  = (time_t)((double)proxy::timer_interval *
+                                              m_proxy.m_drnd());
                                 t += proxy::timer_interval;
 
                                 tval.tv_sec  = proxy::timer_interval;
@@ -188,7 +189,8 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = (time_t)((double)proxy::timer_interval * drand48());
+                                t  = (time_t)((double)proxy::timer_interval *
+                                              m_proxy.m_drnd());
                                 t += proxy::timer_interval;
 
                                 tval.tv_sec  = t;
@@ -204,6 +206,9 @@ namespace libcage {
 
                         proxy  &m_proxy;
                 };
+
+                rand_uint      &m_rnd;
+                rand_real      &m_drnd;
 
                 const uint160_t        &m_id;
                 udphandler     &m_udp;

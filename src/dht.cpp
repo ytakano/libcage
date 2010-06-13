@@ -71,9 +71,12 @@ namespace libcage {
                 return h;
         }
 
-        dht::dht(const uint160_t &id, timer &t, peers &p,
-                 const natdetector &nat, udphandler &udp, dtun &dt, rdp &r) :
-                rttable(id, t, p),
+        dht::dht(rand_uint &rnd, rand_real &drnd, const uint160_t &id, timer &t,
+                 peers &p, const natdetector &nat, udphandler &udp, dtun &dt,
+                 rdp &r) :
+                rttable(rnd, id, t, p),
+                m_rnd(rnd),
+                m_drnd(drnd),
                 m_id(id),
                 m_timer(t),
                 m_peers(p),
@@ -484,7 +487,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 do {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                 } while (m_query.find(nonce) != m_query.end());
 
                 q->nonce = nonce;
@@ -881,7 +884,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 do {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                 } while (m_query.find(nonce) != m_query.end());
 
                 q->nonce = nonce;

@@ -56,6 +56,7 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/set_of.hpp>
 #include <boost/function.hpp>
+#include <boost/random.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
 
@@ -140,7 +141,7 @@ namespace libcage {
                 static const double    ack_interval;
 
         public:
-                rdp(timer &tm);
+                rdp(rand_uint &rnd, timer &tm);
                 virtual ~rdp();
 
                 int             listen(uint16_t sport,
@@ -183,6 +184,8 @@ namespace libcage {
                 std::map<int, callback_rdp_event>   m_desc2event;
 
                 callback_dgram_out         m_output_func;
+
+                rand_uint                 &m_rnd;
 
                 timer                     &m_timer;
                 timer_rdp                  m_timer_rdp;

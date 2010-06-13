@@ -52,8 +52,8 @@ namespace libcage {
                 static const time_t     refresh_interval;
 
         public:
-                advertise(const uint160_t &id, timer &tm, udphandler &udp,
-                          peers &p, dtun &d);
+                advertise(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                          timer &tm, udphandler &udp, peers &p, dtun &d);
                 virtual ~advertise();
 
                 void            recv_advertise(void *msg, sockaddr *from);
@@ -84,7 +84,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = (time_t)((double)advertise::refresh_interval * drand48());
+                                t  = (time_t)((double)advertise::refresh_interval * m_advertise.m_drnd());
                                 t += advertise::refresh_interval;
 
                                 tval.tv_sec  = t;
@@ -98,7 +98,7 @@ namespace libcage {
                                 timeval tval;
                                 time_t  t;
 
-                                t  = (time_t)((double)advertise::refresh_interval * drand48());
+                                t  = (time_t)((double)advertise::refresh_interval * m_advertise.m_drnd());
                                 t += advertise::refresh_interval;
 
                                 tval.tv_sec  = t;
@@ -114,6 +114,9 @@ namespace libcage {
 
                         advertise      &m_advertise;
                 };
+
+                rand_uint      &m_rnd;
+                rand_real      &m_drnd;
 
                 const uint160_t        &m_id;
                 timer          &m_timer;

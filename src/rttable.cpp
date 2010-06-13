@@ -59,8 +59,9 @@ namespace libcage {
                 m_rttable->m_ping_wait.erase(m_nonce);
         }
 
-        rttable::rttable(const uint160_t &id, timer &t, peers &p) :
-                m_id(id), m_timer(t), m_peers(p)
+        rttable::rttable(rand_uint &rnd, const uint160_t &id, timer &t,
+                         peers &p) : m_rnd(rnd), m_id(id), m_timer(t),
+                                     m_peers(p)
         {
 
         }
@@ -116,7 +117,7 @@ namespace libcage {
                         } else {
                                 uint32_t nonce;
                                 for (;;) {
-                                        nonce = (uint32_t)mrand48();
+                                        nonce = m_rnd();
                                         if (m_ping_wait.find(nonce) ==
                                             m_ping_wait.end())
                                                 break;

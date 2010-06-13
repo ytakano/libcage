@@ -98,14 +98,14 @@ public:
 
                 if (idx < max_node) {
                         // start nodes recursively
-                        if (! cage[idx].open(PF_INET, port + n)) {
+                        if (! cage[idx].open(PF_INET, port + n, false)) {
                                 std::cerr << "cannot open port: Port = "
-                                          << port + n - 1
+                                          << port + n
                                           << std::endl;
                                 return;
                         } else {
                                 std::cerr << "open port: Port = "
-                                          << port + n - 1
+                                          << port + n
                                           << std::endl;
                         }
 
@@ -146,16 +146,14 @@ main(int argc, char *argv[])
 
                 cage = new libcage::cage;
 
-                srand(t);
                 srand48(t);
 
-                if (! cage->open(PF_INET, port)) {
+                if (! cage->open(PF_INET, port, false)) {
                         std::cerr << "cannot open port: Port = "
                                   << port
                                   << std::endl;
                         return -1;
                 }
-                cage->set_global();
 
                 event_dispatch();
 
@@ -171,7 +169,6 @@ main(int argc, char *argv[])
 
                         cage = new libcage::cage[max_node];
 
-                        srand(t + i + 1);
                         srand48(t + i + 1);
 
                         proc = i;
@@ -181,13 +178,12 @@ main(int argc, char *argv[])
                         func.n   = proc * max_node + 1;
                         func.idx = 0;
 
-                        if (! cage[0].open(PF_INET, port + func.n)) {
+                        if (! cage[0].open(PF_INET, port + func.n, false)) {
                                 std::cerr << "cannot open port: Port = "
                                           << port + func.n
                                           << std::endl;
                                 return -1;
                         }
-                        cage[0].set_global();
                         cage[0].join("localhost", port, func);
 
                         event_dispatch();

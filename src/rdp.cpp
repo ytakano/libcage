@@ -179,7 +179,8 @@ namespace libcage {
                 }
         }
 
-        rdp::rdp(timer &tm) : m_timer(tm), m_timer_rdp(*this)
+        rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_timer(tm),
+                                              m_timer_rdp(*this)
         {
                 timeval   tval;
 
@@ -410,7 +411,7 @@ namespace libcage {
                 int desc;
 
                 do {
-                        desc = mrand48();
+                        desc = m_rnd();
                 } while (m_desc_set.find(desc) != m_desc_set.end() &&
                          desc <= 0);
 
@@ -468,7 +469,7 @@ namespace libcage {
                         }
                 } else {
                         do {
-                                addr.sport = mrand48() & 0xffff;
+                                addr.sport = m_rnd() & 0xffff;
                                 if (addr.sport < well_known_port_max)
                                         continue;
                         } while (m_addr2conn.find(addr) != m_addr2conn.end());
@@ -477,7 +478,7 @@ namespace libcage {
                 p_con->addr      = addr;
                 p_con->is_pasv   = false;
                 p_con->state     = SYN_SENT;
-                p_con->snd_iss   = mrand48();
+                p_con->snd_iss   = m_rnd();
                 p_con->snd_nxt   = p_con->snd_iss + 1;
                 p_con->snd_una   = p_con->snd_iss;
                 p_con->rcv_max   = rcv_max_default;
@@ -809,7 +810,7 @@ namespace libcage {
                         p_con->addr      = addr;
                         p_con->is_pasv   = true;
                         p_con->state     = SYN_RCVD;
-                        p_con->snd_iss   = mrand48();
+                        p_con->snd_iss   = m_rnd();
                         p_con->snd_nxt   = p_con->snd_iss + 1;
                         p_con->snd_una   = p_con->snd_iss;
                         p_con->rcv_max   = rcv_max_default;

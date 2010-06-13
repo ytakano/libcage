@@ -114,7 +114,8 @@ namespace libcage {
                 return false;
         }
 
-        peers::peers(timer &t) :
+        peers::peers(rand_real &drnd, timer &t) :
+                m_drnd(drnd),
                 m_timer(t),
                 m_timer_func(*this),
                 m_is_callback(false)

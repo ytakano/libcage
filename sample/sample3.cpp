@@ -126,10 +126,6 @@ main(int argc, char *argv[])
         // initialize libevent
         event_init();
 
-
-        srand48(time(NULL));
-
-
         cage = new libcage::cage[max_node];
 
         // start bootstrap node

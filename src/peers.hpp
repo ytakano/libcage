@@ -43,6 +43,7 @@
 #include <boost/bimap/multiset_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp> 
 #include <boost/function.hpp>
+#include <boost/random.hpp>
 #include <boost/unordered_set.hpp> 
 
 namespace libcage {
@@ -64,7 +65,7 @@ namespace libcage {
                                 // reschedule
                                 timeval tval;
 
-                                tval.tv_sec = (long)((double)peers::timer_interval * drand48());
+                                tval.tv_sec = (long)((double)peers::timer_interval * m_peers.m_drnd());
                                 tval.tv_sec += peers::timer_interval;
 
                                 tval.tv_usec = 0;
@@ -75,7 +76,7 @@ namespace libcage {
                         {
                                 timeval tval;
 
-                                tval.tv_sec = (long)((double)peers::timer_interval * drand48());
+                                tval.tv_sec = (long)((double)peers::timer_interval * m_peers.m_drnd());
                                 tval.tv_sec += peers::timer_interval;
 
                                 tval.tv_usec = 0;
@@ -122,7 +123,7 @@ namespace libcage {
                 typedef boost::bimaps::bimap<__id_set, _addr_set>       _bimap;
 
         public:
-                peers(timer &t);
+                peers(rand_real &drnd, timer &t);
 
                 // throws std::out_of_range
                 cageaddr        get_addr(id_ptr id);
@@ -146,6 +147,8 @@ namespace libcage {
                 void            set_callback(callback func);
 
         private:
+                rand_real      &m_drnd;
+
                 _bimap          m_map;
                 boost::unordered_set<__id>       m_timeout;
 

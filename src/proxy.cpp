@@ -49,9 +49,11 @@ namespace libcage {
 
         }
 
-        proxy::proxy(const uint160_t &id, udphandler &udp, timer &t,
-                     natdetector &nat, peers &p, dtun &dt, dht &dh, dgram &dg,
-                     advertise &adv, rdp &r) :
+        proxy::proxy(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                     udphandler &udp, timer &t, natdetector &nat, peers &p,
+                     dtun &dt, dht &dh, dgram &dg, advertise &adv, rdp &r) :
+                m_rnd(rnd),
+                m_drnd(drnd),
                 m_id(id),
                 m_udp(udp),
                 m_timer(t),
@@ -97,7 +99,7 @@ namespace libcage {
 
                         memset(&reg, 0, sizeof(reg));
 
-                        p_proxy->m_nonce = mrand48();
+                        p_proxy->m_nonce = p_proxy->m_rnd();
 
                         reg.session = htonl(p_proxy->m_dtun.get_session());
                         reg.nonce   = htonl(p_proxy->m_nonce);
@@ -481,7 +483,7 @@ namespace libcage {
                 }
 
                 for (;;) {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                         if (m_getdata.find(nonce) == m_getdata.end())
                                 break;
                 }

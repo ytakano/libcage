@@ -50,7 +50,8 @@
 namespace libcage {
         class rttable {
         public:
-                rttable(const uint160_t &id, timer &t, peers &p);
+                rttable(rand_uint &rnd, const uint160_t &id, timer &t,
+                        peers &p);
                 virtual ~rttable();
 
                 void            add(const cageaddr &addr);
@@ -111,6 +112,7 @@ namespace libcage {
                 std::set<int>           m_ping_send;
                 std::set<uint160_t>     m_nodes;
 
+                rand_uint              &m_rnd;
                 const uint160_t        &m_id;
                 timer                  &m_timer;
                 peers                  &m_peers;

@@ -47,6 +47,9 @@
 #include "timer.hpp"
 #include "udphandler.hpp"
 
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+
 namespace libcage {
         class cage {
         public:
@@ -126,7 +129,29 @@ namespace libcage {
                         void operator() (id_ptr id_dst, packetbuf_ptr pbuf);
                 };
 
-                static bool     m_is_srand;
+                class gen_id {
+                public:
+                        gen_id(uint160_t &id)
+                        {
+                                unsigned char buf[20];
+
+                                RAND_pseudo_bytes(buf, sizeof(buf));
+                                id.from_binary(buf, sizeof(buf));
+
+                                seed = *(uint32_t*)buf + time(NULL);
+                        }
+
+                        uint32_t seed;
+                };
+
+                gen_id          m_gen_id;
+                boost::mt19937  m_gen;
+
+                uint_dist       m_dist_int;
+                rand_uint       m_rnd;
+
+                real_dist       m_dist_real;
+                rand_real       m_drnd;
 
                 udphandler      m_udp;
                 timer           m_timer;

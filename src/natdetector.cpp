@@ -95,8 +95,9 @@ namespace libcage {
                 }
         }
 
-        natdetector::natdetector(udphandler &udp, timer &t,
+        natdetector::natdetector(rand_uint &rnd, udphandler &udp, timer &t,
                                  const uint160_t &id, peers &p, proxy &pr) :
+                m_rnd(rnd),
                 m_state(undefined),
                 m_timer(t),
                 m_udp(udp),
@@ -158,7 +159,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 for (;;) {
-                        nonce = (uint32_t)mrand48();
+                        nonce = m_rnd();
                         if (m_timers.find(nonce) == m_timers.end())
                                 break;
                 }
@@ -241,7 +242,7 @@ namespace libcage {
                 uint32_t      nonce2;
 
                 for (;;) {
-                        nonce2 = (uint32_t)mrand48();
+                        nonce2 = m_rnd();
                         if (m_udps.find(nonce2) == m_udps.end())
                                 break;
                 }
@@ -413,7 +414,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 for (;;) {
-                        nonce = (uint32_t)mrand48();
+                        nonce = m_rnd();
                         if (m_timers.find(nonce) == m_timers.end())
                                 break;
                 }

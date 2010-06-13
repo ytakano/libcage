@@ -42,6 +42,8 @@
 #include <map>
 #include <string>
 
+#include <boost/random.hpp>
+
 namespace libcage {
         class proxy;
 
@@ -50,8 +52,8 @@ namespace libcage {
                 static const time_t     timer_interval;
 
         public:
-                natdetector(udphandler &udp, timer &t, const uint160_t &id,
-                            peers &p, proxy &pr);
+                natdetector(rand_uint &rnd, udphandler &udp, timer &t,
+                            const uint160_t &id, peers &p, proxy &pr);
                 virtual ~natdetector();
 
                 void            detect(std::string host, int port);
@@ -132,6 +134,7 @@ namespace libcage {
 
                 static const time_t     echo_timeout;
 
+                rand_uint              &m_rnd;
                 state                   m_state;
                 timer                  &m_timer;
                 udphandler             &m_udp;

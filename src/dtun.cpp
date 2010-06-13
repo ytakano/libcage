@@ -78,9 +78,12 @@ namespace libcage {
                 p_dtun->send_find(q);
         }
 
-        dtun::dtun(const uint160_t &id, timer &t, peers &p,
-                   const natdetector &nat, udphandler &udp, proxy &pr) :
-                rttable(id, t, p),
+        dtun::dtun(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                   timer &t, peers &p, const natdetector &nat, udphandler &udp,
+                   proxy &pr) :
+                rttable(rnd, id, t, p),
+                m_rnd(rnd),
+                m_drnd(drnd),
                 m_id(id),
                 m_timer(t),
                 m_peers(p),
@@ -165,7 +168,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 do {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                 } while (m_query.find(nonce) != m_query.end());
 
                 q->nonce = nonce;
@@ -248,7 +251,7 @@ namespace libcage {
 
                 uint32_t nonce;
                 do {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                 } while (m_query.find(nonce) != m_query.end());
 
                 q->nonce = nonce;
@@ -1152,7 +1155,7 @@ namespace libcage {
                 uint32_t nonce;
 
                 do {
-                        nonce = mrand48();
+                        nonce = m_rnd();
                 } while (m_request.find(nonce) != m_request.end());
 
                 q->func   = func;
@@ -1469,7 +1472,8 @@ namespace libcage {
                 // reschedule
                 timeval       tval;
 
-                tval.tv_sec  = (long)((double)dtun::timer_interval * drand48() +
+                tval.tv_sec  = (long)((double)dtun::timer_interval *
+                                      m_dtun.m_drnd() +
                                       (double)dtun::timer_interval);
                 tval.tv_usec = 0;
 

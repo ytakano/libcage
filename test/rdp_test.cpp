@@ -1,6 +1,8 @@
 #include <iostream>
 
 #include <event.h>
+
+#include <libcage/cagetypes.hpp>
 #include <libcage/rdp.hpp>
 
 
@@ -193,11 +195,15 @@ output_callback::operator() (libcage::id_ptr id_dst,
 int
 main(int argc, char *argv[])
 {
-        srand(time(NULL));
         event_init();
 
+        boost::mt19937     gen;
+        libcage::uint_dist dist(0, ~0);
+        libcage::rand_uint rnd(gen, dist);
+
+
         libcage::timer  my_timer;
-        libcage::rdp    my_rdp(my_timer);
+        libcage::rdp    my_rdp(rnd, my_timer);
         libcage::id_ptr my_id(new libcage::uint160_t);
         sender          my_sender(my_rdp);
         output_callback out_func(my_id, my_rdp);

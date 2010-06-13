@@ -74,8 +74,9 @@ namespace libcage {
                                        callback_find_value> callback_func;
 
         public:
-                dtun(const uint160_t &id, timer &t, peers &p,
-                     const natdetector &nat, udphandler &hdp, proxy &pr);
+                dtun(rand_uint &rnd, rand_real &drnd, const uint160_t &id,
+                     timer &t, peers &p, const natdetector &nat,
+                     udphandler &hdp, proxy &pr);
                 virtual ~dtun();
 
                 void            recv_ping(void *msg, sockaddr *from,
@@ -129,7 +130,7 @@ namespace libcage {
                         timer_refresh(dtun &d) : m_dtun(d), n(0)
                         {
                                 timeval       tval;
-                                tval.tv_sec  = (long)((double)dtun::timer_interval * drand48());
+                                tval.tv_sec  = (long)((double)dtun::timer_interval * m_dtun.m_drnd());
                                 tval.tv_sec += dtun::timer_interval;
                                 tval.tv_usec = 0;
 
@@ -236,6 +237,9 @@ namespace libcage {
                 void            send_find_nv(uint16_t type, cageaddr &dst,
                                              query_ptr q);
 
+
+                rand_uint              &m_rnd;
+                rand_real              &m_drnd;
 
                 const uint160_t        &m_id;
                 timer                  &m_timer;
