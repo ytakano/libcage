@@ -60,7 +60,7 @@
 #include <boost/shared_array.hpp>
 #include <boost/unordered_map.hpp>
 
-//#define DEBUG_RDP
+#define DEBUG_RDP
 
 namespace libcage {
         enum rdp_event {

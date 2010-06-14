@@ -255,8 +255,10 @@ namespace libcage {
                 std::map<int, callback_rdp_event>::iterator it;
 
                 it = m_desc2event.find(desc1);
-                if (it == m_desc2event.end())
+                if (it == m_desc2event.end()) {
+                        std::cout << "desc1 = " << desc1 << std::endl;
                         return;
+                }
 
                 if (desc2 > 0) {
                         it->second(desc2, addr, event);
@@ -412,7 +414,7 @@ namespace libcage {
 
                 do {
                         desc = m_rnd();
-                } while (m_desc_set.find(desc) != m_desc_set.end() &&
+                } while (m_desc_set.find(desc) != m_desc_set.end() ||
                          desc <= 0);
 
                 return desc;

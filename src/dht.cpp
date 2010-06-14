@@ -159,7 +159,7 @@ namespace libcage {
                         break;
                 }
                 default:
-                        close(desc);
+                        m_dht.m_rdp.close(desc);
                 }
         }
 
@@ -174,7 +174,7 @@ namespace libcage {
                 m_dht.m_rdp.receive(desc, &msg, &size);
                 if (size != (int)sizeof(msg)) {
                         m_dht.m_rdp_recv_store.erase(desc);
-                        close(desc);
+                        m_dht.m_rdp.close(desc);
                         return -1;
                 }
 
@@ -183,7 +183,7 @@ namespace libcage {
                 if (it->second->keylen == 0 ||
                     it->second->valuelen == 0) {
                         m_dht.m_rdp_recv_store.erase(desc);
-                        close(desc);
+                        m_dht.m_rdp.close(desc);
                         return false;
                 }
 
@@ -191,8 +191,8 @@ namespace libcage {
 
                 id->from_binary(msg.id, sizeof(msg.id));
 
-                it->second->ttl     = ntohs(msg.ttl);
-                it->second->id      = id;
+                it->second->ttl         = ntohs(msg.ttl);
+                it->second->id          = id;
                 it->second->last_time   = time(NULL);
                 it->second->is_hdr_read = true;
 
@@ -251,9 +251,12 @@ namespace libcage {
                 switch (event) {
                 case ACCEPTED:
                 {
-                        if (m_dht.m_rdp_recv_store.find(desc) !=
-                            m_dht.m_rdp_recv_store.end())
-                                return;
+                        std::cout << "accepted:"
+                                  << "\n    from id = "
+                                  << addr.did->to_string()
+                                  << "\n    to   id = "
+                                  << m_dht.m_id.to_string()
+                                  << std::endl;
 
                         rdp_recv_store_ptr rs(new rdp_recv_store(&m_dht,
                                                                  addr.did));
@@ -284,7 +287,7 @@ namespace libcage {
                 }
                 default:
                         m_dht.m_rdp_recv_store.erase(desc);
-                        close(desc);
+                        m_dht.m_rdp.close(desc);
                         break;
                 }
         }
@@ -305,6 +308,14 @@ namespace libcage {
 
                 data.value    = value;
                 data.valuelen = valuelen;
+
+                std::cout << "recv store: "
+                          << "\n    key = "
+                          << *(int*)key.get()
+                          << "\n    id  = "
+                          << p_dht->m_id.to_string()
+                          << std::endl;
+
 
 #define SET_DATA() do {                                 \
                         _id i;                          \
@@ -377,6 +388,19 @@ namespace libcage {
                         p_dht->m_rdp.send(desc, &msg, sizeof(msg));
                         p_dht->m_rdp.send(desc, key.get(), keylen);
                         p_dht->m_rdp.send(desc, value.get(), valuelen);
+
+                        uint160_t dist;
+                        dist = *id ^ *addr.did;
+                        std::cout << "send store:"
+                                  << "\n    key = "
+                                  << *(int*)key.get() << " "
+                                  << "\n    from id = "
+                                  << p_dht->m_id.to_string()
+                                  << "\n    to   id = "
+                                  << addr.did->to_string()
+                                  << "\n    dist    = "
+                                  << dist.to_string()
+                                  << std::endl;
 
                         break;
                 }
