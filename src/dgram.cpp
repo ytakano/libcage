@@ -56,17 +56,21 @@ namespace libcage {
         void
         dgram::find_node_func::operator() (std::vector<cageaddr> &nodes)
         {
-                try {
-                        p_dgram->m_peers.get_addr(dst); // throw std::out_of_range
+                _id i;
 
+                try {
+                        // throw std::out_of_range
+                        p_dgram->m_peers.get_addr(dst);
                         p_dgram->send_queue(dst);
                 } catch (std::out_of_range) {
-                        _id i;
-
                         i.id = dst;
                         p_dgram->m_queue.erase(i);
                         p_dgram->m_data_pool.erase(i);
                 }
+
+                i.id = dst;
+
+                p_dgram->m_requesting.erase(i);
         }
 
         void

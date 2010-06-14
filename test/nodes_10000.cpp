@@ -10,9 +10,9 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 8;
+const int max_node = 125;
 const int port     = 10000;
-const int proc_num = 5;
+const int proc_num = 80;
 
 libcage::cage *cage;
 event   *ev;
@@ -139,8 +139,8 @@ main(int argc, char *argv[])
         WSAStartup(MAKEWORD(2,0), &wsaData);
 #endif // WIN32
 
-        time_t t = time(NULL);
-        int   i;
+        time_t t = time(NULL) - 1;
+        int   i = 0;
         pid_t pid;
 
         pid = fork();
@@ -165,7 +165,7 @@ main(int argc, char *argv[])
         }
 
         sleep(1);
-
+                
         for (i = 0; i < proc_num; i++) {
                 pid = fork();
                 if (pid == 0) {

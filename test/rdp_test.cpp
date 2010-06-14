@@ -114,7 +114,7 @@ client_callback::operator() (int desc, libcage::rdp_addr addr,
                 timeval tval;
 
                 tval.tv_sec  = 0;
-                tval.tv_usec = 500 * 1000;
+                tval.tv_usec = 50 * 1000;
 
                 m_timer.set_timer(&m_sender, &tval);
                 break;
@@ -147,7 +147,7 @@ sender::operator() ()
         }
         m_num++;
 
-        if (m_num > 1000) {
+        if (m_num > 100000) {
                 std::cout << "close connection" << std::endl;
                 m_rdp.close(m_desc);
                 return;
@@ -156,7 +156,7 @@ sender::operator() ()
         timeval tval;
 
         tval.tv_sec  = 0;
-        tval.tv_usec = 500 * 1000;
+        tval.tv_usec = 50 * 1000;
 
         get_timer()->set_timer(this, &tval);
 }

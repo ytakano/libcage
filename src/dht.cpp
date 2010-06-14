@@ -252,6 +252,8 @@ namespace libcage {
                 case ACCEPTED:
                 {
                         std::cout << "accepted:"
+                                  << "\n    from port = " << addr.dport
+                                  << "\n    dst  port = " << addr.sport
                                   << "\n    from id = "
                                   << addr.did->to_string()
                                   << "\n    to   id = "
@@ -286,6 +288,16 @@ namespace libcage {
                         break;
                 }
                 default:
+                        std::cout << "error receiver:"
+                                  << "\n    event = " << event
+                                  << "\n    from port = " << addr.sport
+                                  << "\n    dst  port = " << addr.dport
+                                  << "\n    from id = "
+                                  << addr.did->to_string()
+                                  << "\n    to   id = "
+                                  << m_dht.m_id.to_string()
+                                  << std::endl;
+
                         m_dht.m_rdp_recv_store.erase(desc);
                         m_dht.m_rdp.close(desc);
                         break;
@@ -312,7 +324,11 @@ namespace libcage {
                 std::cout << "recv store: "
                           << "\n    key = "
                           << *(int*)key.get()
-                          << "\n    id  = "
+                          << "\n    id      = "
+                          << id->to_string()
+                          << "\n    from id = "
+                          << src->to_string()
+                          << "\n    to   id = "
                           << p_dht->m_id.to_string()
                           << std::endl;
 
@@ -392,14 +408,18 @@ namespace libcage {
                         uint160_t dist;
                         dist = *id ^ *addr.did;
                         std::cout << "send store:"
+                                  << "\n    from port = " << addr.sport
+                                  << "\n    dst  port = " << addr.dport
                                   << "\n    key = "
                                   << *(int*)key.get() << " "
+                                  << "\n    id      = "
+                                  << id->to_string()
+                                  << "\n    dist    = "
+                                  << dist.to_string()
                                   << "\n    from id = "
                                   << p_dht->m_id.to_string()
                                   << "\n    to   id = "
                                   << addr.did->to_string()
-                                  << "\n    dist    = "
-                                  << dist.to_string()
                                   << std::endl;
 
                         break;
@@ -430,8 +450,25 @@ namespace libcage {
                                 }
                         }
 
+                        p_dht->m_rdp_store.erase(desc);
+                        p_dht->m_rdp.close(desc);
+                        break;
+
                 }
                 default:
+                        std::cout << "error sender:"
+                                  << "\n    event = " << event
+                                  << "\n    from port = " << addr.sport
+                                  << "\n    dst  port = " << addr.dport
+                                  << "\n    key = "
+                                  << *(int*)key.get() << " "
+                                  << "\n    id      = "
+                                  << id->to_string()
+                                  << "\n    from id = "
+                                  << p_dht->m_id.to_string()
+                                  << "\n    to   id = "
+                                  << addr.did->to_string()
+                                  << std::endl;
                         p_dht->m_rdp_store.erase(desc);
                         p_dht->m_rdp.close(desc);
                         break;

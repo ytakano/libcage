@@ -74,7 +74,7 @@ join_callback::operator() (bool result)
         cage1->get_id(addr);
         id->from_binary(addr, CAGE_ID_LEN);
 
-        cage2->rdp_connect(0, id, 100, client_func);
+        cage2->rdp_connect(0, id, 200, client_func);
 }
 
 void
@@ -189,7 +189,7 @@ main(int argc, char *argv)
                 return -1;
         }
         cage1->set_global();
-        cage1->rdp_listen(100, server_func);
+        cage1->rdp_listen(200, server_func);
 
 
         join_callback func;

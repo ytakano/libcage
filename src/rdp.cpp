@@ -80,64 +80,125 @@ namespace libcage {
                 
                 for (it = m_rdp.m_desc2conn.begin();
                      it != m_rdp.m_desc2conn.end();) {
+                        time_t now = time(NULL);
                         time_t diff;
                         switch (it->second->state) {
                         case SYN_SENT:
                         case SYN_RCVD:
                         {
-                                diff = time(NULL) - it->second->syn_time;
-                                if (diff > max_retrans) {
+                                if (it->second->syn_tout > max_retrans) {
                                         if (it->second->is_pasv) {
                                                 // delete connection
                                                 m_rdp.m_desc_set.erase(it->first);
                                                 m_rdp.m_desc2event.erase(it->first);
                                                 m_rdp.m_addr2conn.erase(it->second->addr);
                                                 m_rdp.m_desc2conn.erase(it++);
-                                                break;
                                         } else {
                                                 // invoke the signal of
                                                 // "Connection Failed"
                                                 rdp_addr addr = it->second->addr;
                                                 int desc      = it->first;
 
+                                                it->second->state = CLOSED;
+
                                                 ++it;
                                                 m_rdp.invoke_event(desc, 0,
                                                                    addr,
                                                                    FAILED);
-                                                break;
                                         }
-                                } else if (diff > it->second->syn_tout) {
-                                        // retry sending syn
-                                        m_rdp.m_output_func(it->second->addr.did,
-                                                            it->second->syn_pbuf);
-                                        it->second->syn_tout *= 2;
-                                        it->second->syn_time  = time(NULL);
+                                        break;
                                 }
+
+                                diff = now - it->second->syn_time;
+                                if (diff > it->second->syn_tout) {
+                                        std::cout << "retry send syn:"
+                                                  << "\n    from port = "
+                                                  << it->second->addr.sport
+                                                  << "\n    dst  port = "
+                                                  << it->second->addr.dport
+                                                  << "\n      to id = "
+                                                  << it->second->addr.did
+                                                  << std::endl;
+
+                                        packetbuf_ptr  pbuf = packetbuf::construct();
+                                        rdp_syn       *syn;
+                
+                                        syn = (rdp_syn*)pbuf->append(sizeof(*syn));
+                                        memset(syn, 0, sizeof(*syn));
+
+                                        syn->head.flags  = flag_syn | flag_ver;
+                                        syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
+                                        syn->head.sport  = htons(it->second->addr.sport);
+                                        syn->head.dport  = htons(it->second->addr.dport);
+                                        syn->head.seqnum = htonl(it->second->snd_iss);
+
+                                        syn->out_segs_max = htons(it->second->rcv_max);
+                                        syn->seg_size_max = htons(it->second->rbuf_max);
+
+                                        if (it->second->state == SYN_RCVD) {
+                                                syn->head.flags |= flag_ack;
+                                                syn->head.acknum = htonl(it->second->rcv_cur);
+                                        }
+                                        
+                                        // retry sending syn
+                                        m_rdp.output(it->second->addr.did,
+                                                     pbuf);
+
+                                        it->second->syn_tout *= 2;
+                                        it->second->syn_time  = now;
+                                }
+
                                 ++it;
                                 break;
                         }
                         case CLOSE_WAIT_ACTIVE:
                         case CLOSE_WAIT_PASV:
                         {
-                                diff = time(NULL) - it->second->rst_time;
-                                if (diff > max_retrans) {
+                                if (it->second->rst_tout > max_retrans) {
                                         if (it->second->is_closed) {
                                                 // deallocate
                                                 m_rdp.m_desc_set.erase(it->first);
                                                 m_rdp.m_desc2event.erase(it->first);
                                                 m_rdp.m_addr2conn.erase(it->second->addr);
                                                 m_rdp.m_desc2conn.erase(it++);
-                                                break;
                                         } else {
                                                 it->second->state = CLOSED;
+                                                ++it;
                                         }
-                                } else if (diff > it->second->rst_tout) {
+                                        break;
+                                }
+
+                                diff = now - it->second->rst_time;
+                                if (diff > it->second->rst_tout) {
                                         it->second->rst_tout *= 2;
-                                        it->second->rst_time  = time(NULL);
+                                        it->second->rst_time  = now;
 
                                         if (it->second->is_retry_rst) {
-                                                m_rdp.m_output_func(it->second->addr.did,
-                                                                    it->second->rst_pbuf);
+                                                packetbuf_ptr  pbuf;
+                                                rdp_head      *rst;
+
+                                                pbuf = packetbuf::construct();
+
+                                                rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                                                memset(rst, 0, sizeof(*rst));
+
+                                                rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                                                rst->sport  = htons(it->second->addr.sport);
+                                                rst->dport  = htons(it->second->addr.dport);
+                                                rst->seqnum = htonl(it->second->snd_nxt);
+                                                if (it->second->state ==
+                                                    CLOSE_WAIT_ACTIVE) {
+                                                        rst->flags = flag_rst |
+                                                                flag_ver;
+                                                } else {
+                                                        rst->flags = flag_rst |
+                                                                flag_fin |
+                                                                flag_ver;
+                                                }
+
+                                                m_rdp.output(it->second->addr.did,
+                                                             pbuf);
                                         }
                                 }
                                 ++it;
@@ -194,6 +255,47 @@ namespace libcage {
         rdp::~rdp()
         {
                 m_timer.unset_timer(&m_timer_rdp);
+        }
+
+        void
+        rdp::output(id_ptr id, packetbuf_ptr pbuf)
+        {
+#ifdef DEBUG_RDP
+                rdp_head *head;
+
+                head = (rdp_head*)pbuf->get_data();
+
+                std::cout << "output: src = " << ntohs(head->sport)
+                          << ", dst = " << ntohs(head->dport)
+                          << ", seq = " << ntohl(head->seqnum)
+                          << ", ack = " << ntohl(head->acknum)
+                          << "\n        flags = ";
+
+                if (head->flags & flag_syn) {
+                        std::cout << "syn, ";
+                }
+
+                if (head->flags & flag_ack) {
+                        std::cout << "ack, ";
+                }
+
+                if (head->flags & flag_rst) {
+                        std::cout << "rst, ";
+                }
+
+                if (head->flags & flag_nul) {
+                        std::cout << "nul, ";
+                }
+
+                if (head->flags & flag_fin) {
+                        std::cout << "fin, ";
+                }
+
+                std::cout << "\n        to id = " << id->to_string()
+                          << std::endl;
+#endif
+
+                m_output_func(id, pbuf);
         }
 
         rdp_state
@@ -255,11 +357,9 @@ namespace libcage {
                 std::map<int, callback_rdp_event>::iterator it;
 
                 it = m_desc2event.find(desc1);
-                if (it == m_desc2event.end()) {
-                        std::cout << "desc1 = " << desc1 << std::endl;
+                if (it == m_desc2event.end())
                         return;
-                }
-
+ 
                 if (desc2 > 0) {
                         it->second(desc2, addr, event);
                         std::map<int, callback_rdp_event>::iterator it2;
@@ -352,12 +452,11 @@ namespace libcage {
                         rst->dport  = htons(it->second->addr.dport);
                         rst->seqnum = htonl(it->second->snd_nxt);
 
-                        it->second->rst_pbuf     = pbuf;
                         it->second->rst_time     = time(NULL);
                         it->second->rst_tout     = 1;
                         it->second->is_retry_rst = true;
 
-                        m_output_func(it->second->addr.did, pbuf);
+                        output(it->second->addr.did, pbuf);
                         break;
                 }
                 case CLOSE_WAIT_PASV:
@@ -393,7 +492,7 @@ namespace libcage {
                         rst->dport  = htons(it->second->addr.dport);
                         rst->seqnum = htonl(it->second->snd_nxt);
 
-                        m_output_func(it->second->addr.did, pbuf);
+                        output(it->second->addr.did, pbuf);
 
                         m_desc_set.erase(it->first);
                         m_desc2event.erase(it->first);
@@ -487,8 +586,6 @@ namespace libcage {
                 p_con->rbuf_max  = rbuf_max_default;
                 p_con->is_closed = false;
 
-                p_con->set_output_func(m_output_func);
-
 
                 // create syn packet
                 packetbuf_ptr  pbuf = packetbuf::construct();
@@ -506,7 +603,6 @@ namespace libcage {
                 syn->out_segs_max = htons(p_con->rcv_max);
                 syn->seg_size_max = htons(p_con->rbuf_max);
 
-                p_con->syn_pbuf = pbuf;
                 p_con->syn_time = time(NULL);
                 p_con->syn_tout = 1;
 
@@ -523,7 +619,7 @@ namespace libcage {
 
 
                 // send syn
-                m_output_func(addr.did, pbuf);
+                output(addr.did, pbuf);
 
                 return desc;
         }
@@ -552,11 +648,11 @@ namespace libcage {
                 it = m_addr2conn.find(addr);
 
 #ifdef DEBUG_RDP
-                std::cout << "input: src = " << addr.dport
+                std::cout << "input:  src = " << addr.dport
                           << ", dst = " << addr.sport
                           << ", seq = " << ntohl(head->seqnum)
                           << ", ack = " << ntohl(head->acknum)
-                          << "\n       flags = ";
+                          << "\n        flags = ";
 
                 if (head->flags & flag_syn) {
                         std::cout << "syn, ";
@@ -606,7 +702,8 @@ namespace libcage {
                         }
                 }
 
-                std::cout << std::endl;
+                std::cout << "\n        from id = " << src->to_string()
+                          << std::endl;
 #endif // DEBUG
 
                 if (it != m_addr2conn.end()) {
@@ -650,6 +747,7 @@ namespace libcage {
         {
                 // If RST, FIN set
                 //   Send <SEQ=SND.NXT><FIN>
+                //   Return
                 // Endif
 
                 rdp_head *head = (rdp_head*)pbuf->get_data();
@@ -669,7 +767,28 @@ namespace libcage {
                         fin->dport  = htons(addr.dport);
                         fin->seqnum = htonl(p_con->snd_nxt);
   
-                        m_output_func(p_con->addr.did, pbuf_fin);
+                        output(p_con->addr.did, pbuf_fin);
+                } else if (head->flags & flag_ack) {
+                        // If ACK set
+                        //   Send <SEQ=SND.NXT><RST>
+                        //   Return
+                        // Endif
+
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_head      *rst;
+
+                        rst = (rdp_head*)pbuf->append(sizeof(*rst));
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_ver;
+                        rst->hlen   = (uint8_t)sizeof(*rst) / 2;
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(p_con->snd_nxt);
+
+                        p_con->rst_time = time(NULL);
+                        output(addr.did, pbuf);
                 }
         }
 
@@ -691,8 +810,21 @@ namespace libcage {
                 if (head->flags & flag_fin) {
                         p_con->is_retry_rst = false;
                 } else if (head->flags & flag_rst) {
+                        packetbuf_ptr  pbuf_rst = packetbuf::construct();
+                        rdp_head      *rst;
+
+                        rst = (rdp_head*)pbuf_rst->append(sizeof(*rst));
+
+                        memset(rst, 0, sizeof(*rst));
+
+                        rst->flags  = flag_rst | flag_fin | flag_ver;
+                        rst->hlen   = (uint8_t)(sizeof(*rst) / 2);
+                        rst->sport  = htons(addr.sport);
+                        rst->dport  = htons(addr.dport);
+                        rst->seqnum = htonl(p_con->snd_nxt);
+
                         p_con->rst_time = time(NULL);
-                        m_output_func(p_con->addr.did, p_con->rst_pbuf);
+                        output(p_con->addr.did, pbuf_rst);
                 }
         }
 
@@ -728,7 +860,7 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(seg_ack + 1);
 
-                        m_output_func(addr.did, pbuf_rst);
+                        output(addr.did, pbuf_rst);
                 } else {
                         // else
                         //   Send <SEQ=0><RST><ACK=SEG.SEQ><ACK>
@@ -749,7 +881,7 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->acknum = head->seqnum;
                         
-                        m_output_func(addr.did, pbuf_rst);
+                        output(addr.did, pbuf_rst);
                 }
         }
 
@@ -786,7 +918,7 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(seg_ack + 1);
 
-                        m_output_func(addr.did, pbuf_rst);
+                        output(addr.did, pbuf_rst);
                 } else if (head->flags & flag_syn) {
                         // If SYN set
                         //   Set RCV.CUR = SEG.SEQ
@@ -827,8 +959,6 @@ namespace libcage {
                         if (p_con->sbuf_max > sbuf_limit)
                                 p_con->sbuf_max = sbuf_limit;
 
-                        p_con->set_output_func(m_output_func);
-
                         p_con->init_swnd();
                         p_con->init_rwnd();
 
@@ -852,7 +982,6 @@ namespace libcage {
                         syn_out->out_segs_max = htons(p_con->rcv_max);
                         syn_out->seg_size_max = htons(p_con->rbuf_max);
 
-                        p_con->syn_pbuf = pbuf_syn;
                         p_con->syn_time = time(NULL);
                         p_con->syn_tout = 1;
 
@@ -874,7 +1003,7 @@ namespace libcage {
 
 
                         // send syn ack
-                        m_output_func(addr.did, pbuf_syn);
+                        output(addr.did, pbuf_syn);
                 }
 
                 // If anything else (should never get here)
@@ -914,7 +1043,7 @@ namespace libcage {
                                 rst->dport  = htons(addr.dport);
                                 rst->seqnum = htonl(ack + 1);
 
-                                m_output_func(addr.did, pbuf_rst);
+                                output(addr.did, pbuf_rst);
                                 return;
                         }
                 } 
@@ -1001,12 +1130,10 @@ namespace libcage {
                                 ack->seqnum = htonl(p_con->snd_nxt);
                                 ack->acknum = htonl(p_con->rcv_cur);
 
-                                p_con->syn_pbuf.reset();
+                                output(addr.did, pbuf_ack);
 
                                 // invoke the signal of "Connection Established"
                                 invoke_event(p_con->desc, 0, addr, CONNECTED);
-
-                                m_output_func(addr.did, pbuf_ack);
                         } else {
                                 p_con->state = SYN_RCVD;
 
@@ -1028,11 +1155,10 @@ namespace libcage {
                                 syn_out->out_segs_max = htons(p_con->rcv_max);
                                 syn_out->seg_size_max = htons(p_con->rbuf_max);
 
-                                p_con->syn_pbuf = pbuf_syn;
                                 p_con->syn_time = time(NULL);
                                 p_con->syn_tout = 1;
 
-                                m_output_func(addr.did, pbuf_syn);
+                                output(addr.did, pbuf_syn);
                         }
                 }
 
@@ -1055,6 +1181,35 @@ namespace libcage {
 
                 rcv_max2  = p_con->rcv_cur + (p_con->rcv_max * 2);
                 rcv_max2 -= p_con->rcv_irs;
+
+                if (head->flags & flag_syn && seq == p_con->rcv_cur) {
+                        // If SYN set and SEG.SEQ = RCV_CUR
+                        //   Send <SEQ=SND.ISS><ACK=RCV.CUR><MAX=RCV.MAX>
+                        //        <BUFMAX=RBUF.MAX><ACK><SYN>
+                        //   Return
+                        // Endif
+                        packetbuf_ptr  pbuf = packetbuf::construct();
+                        rdp_syn       *syn;
+                
+                        syn = (rdp_syn*)pbuf->append(sizeof(*syn));
+                        memset(syn, 0, sizeof(*syn));
+
+                        syn->head.flags  = flag_ack | flag_syn | flag_ver;
+                        syn->head.hlen   = (uint8_t)(sizeof(*syn) / 2);
+                        syn->head.sport  = htons(addr.sport);
+                        syn->head.dport  = htons(addr.dport);
+                        syn->head.seqnum = htonl(p_con->snd_iss);
+
+                        syn->out_segs_max = htons(p_con->rcv_max);
+                        syn->seg_size_max = htons(p_con->rbuf_max);
+
+
+                        p_con->syn_time = time(NULL);
+
+                        output(addr.did, pbuf);
+
+                        return;
+                }
 
                 if (! (0 < seq_irs && seq_irs <= rcv_max2) ) {
                         // If RCV.IRS < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
@@ -1088,7 +1243,7 @@ namespace libcage {
                         // for Windows
 #endif
 
-                        m_output_func(addr.did, pbuf_ack);
+                        output(addr.did, pbuf_ack);
                 } else if (head->flags & flag_rst) {
                         // If RST set
                         //   If passive Open
@@ -1151,7 +1306,7 @@ namespace libcage {
                                 invoke_event(p_con->desc, 0, addr, RESET);
                         }
 
-                        m_output_func(addr.did, pbuf_rst);
+                        output(addr.did, pbuf_rst);
                 } else if (head->flags & flag_eak) {
                         // If EACK set
                         //   Send <SEQ=SEG.ACK + 1><RST>
@@ -1175,7 +1330,7 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(acknum + 1);
 
-                        m_output_func(addr.did, pbuf_rst);
+                        output(addr.did, pbuf_rst);
                 } else if (head->flags & flag_ack) {
                         // If ACK set
                         //   If SEG.ACK = SND.ISS
@@ -1196,7 +1351,6 @@ namespace libcage {
 
                         if (acknum == p_con->snd_iss) {
                                 p_con->state = OPEN;
-                                p_con->syn_pbuf.reset();
 
                                 if (p_con->is_pasv) {
                                         // invoke the signal of "Connection
@@ -1210,7 +1364,8 @@ namespace libcage {
                                                              p_con->desc, addr,
                                                              ACCEPTED);
                                         } else {
-                                                close(p_con->desc);
+                                                this->close(p_con->desc);
+                                                return;
                                         }
                                 }
                                 // If Data in segment or NUL set
@@ -1266,7 +1421,7 @@ namespace libcage {
                                 rst->dport  = htons(addr.dport);
                                 rst->seqnum = htonl(acknum + 1);
 
-                                m_output_func(addr.did, pbuf_rst);
+                                output(addr.did, pbuf_rst);
                         }
                 }
         }
@@ -1277,15 +1432,8 @@ namespace libcage {
         {
                 rdp_head *head = (rdp_head*)pbuf->get_data();
                 uint32_t  seq = ntohl(head->seqnum);
-                uint32_t  seq_irs;
-                uint32_t  rcv_max2;
 
-                seq_irs = seq - p_con->rcv_irs;
-
-                rcv_max2  = p_con->rcv_cur + (p_con->rcv_max * 2);
-                rcv_max2 -= p_con->rcv_irs;
-
-                if (! (0 < seq_irs && seq_irs <= rcv_max2) ) {
+                if (seq - p_con->rcv_cur - 1 >= p_con->rcv_max * 2) {
                         // If RCV.CUR < SEG.SEQ =< RCV.CUR + (RCV.MAX * 2)
                         //   Segment sequence number acceptable
                         // else
@@ -1307,7 +1455,7 @@ namespace libcage {
                         ack->seqnum = htonl(p_con->snd_nxt);
                         ack->acknum = htonl(p_con->rcv_cur);
 
-                        m_output_func(addr.did, pbuf_ack);
+                        output(addr.did, pbuf_ack);
 
                         p_con->rcv_ack = p_con->rcv_cur;
 
@@ -1347,16 +1495,15 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(p_con->snd_nxt);
 
-                        p_con->rst_pbuf     = pbuf_rst;
                         p_con->rst_time     = time(NULL);
                         p_con->rst_tout     = 1;
                         p_con->is_retry_rst = true;
 
 
+                        output(addr.did, pbuf_rst);
+
                         // invoke the signal of "Connection Reset"
                         invoke_event(p_con->desc, 0, addr, RESET);
-
-                        m_output_func(addr.did, pbuf_rst);
                         
                         return;
                 } else if (head->flags & flag_nul) {
@@ -1401,7 +1548,7 @@ namespace libcage {
                         rst->dport  = htons(addr.dport);
                         rst->seqnum = htonl(acknum + 1);
 
-                        m_output_func(addr.did, pbuf);
+                        output(addr.did, pbuf);
 
                         p_con->state = CLOSED;
 
@@ -1481,12 +1628,6 @@ namespace libcage {
         }
 
         void
-        rdp_con::set_output_func(callback_dgram_out func)
-        {
-                m_output_func = func;
-        }
-
-        void
         rdp_con::init_rwnd()
         {
                 m_rwnd_len  = rcv_max * 2;
@@ -1514,8 +1655,7 @@ namespace libcage {
                         return true;
 
                 for (int i = m_swnd_head;; i++) {
-                        swnd   *p_wnd = &m_swnd[i];
-                        time_t  diff  = time(NULL) - p_wnd->sent_time;
+                        swnd *p_wnd = &m_swnd[i];
 
                         if (! p_wnd->is_sent)
                                 break;
@@ -1523,22 +1663,27 @@ namespace libcage {
                         if (p_wnd->is_acked)
                                 continue;
 
-                        if (diff > rdp::max_retrans) {
+                        if (p_wnd->rt_sec > rdp::max_retrans) {
                                 // broken pipe
                                 state = CLOSED;
                                 ref_rdp.invoke_event(desc, 0, addr, BROKEN);
 
                                 return false;
-                        } else if (diff > p_wnd->rt_sec) {
+                        }
+
+                        time_t now  = time(NULL);
+                        time_t diff = now - p_wnd->sent_time;
+
+                        if (diff > p_wnd->rt_sec) {
                                 // retransmit
                                 rdp_head *head = (rdp_head*)p_wnd->pbuf->get_data();
 
                                 head->acknum = htonl(rcv_cur);
 
-                                p_wnd->sent_time  = time(NULL);
+                                p_wnd->sent_time  = now;
                                 p_wnd->rt_sec    *= 2;
 
-                                m_output_func(addr.did, p_wnd->pbuf);
+                                ref_rdp.output(addr.did, p_wnd->pbuf);
                         }
                 }
 
@@ -1599,7 +1744,7 @@ namespace libcage {
                                 head->seqnum = htonl(snd_nxt);
                                 head->acknum = htonl(rcv_cur);
 
-                                m_output_func(addr.did, p_wnd->pbuf);
+                                ref_rdp.output(addr.did, p_wnd->pbuf);
 
 
                                 snd_nxt++;
@@ -1795,7 +1940,7 @@ namespace libcage {
                 }
 
 
-                m_output_func(addr.did, pbuf_ack);
+                ref_rdp.output(addr.did, pbuf_ack);
 
                 rcv_ack = rcv_cur;
 

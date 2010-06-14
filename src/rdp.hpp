@@ -183,6 +183,7 @@ namespace libcage {
                 std::map<int, rdp_con_ptr>          m_desc2conn;
                 std::map<int, callback_rdp_event>   m_desc2event;
 
+                
                 callback_dgram_out         m_output_func;
 
                 rand_uint                 &m_rnd;
@@ -190,6 +191,7 @@ namespace libcage {
                 timer                     &m_timer;
                 timer_rdp                  m_timer_rdp;
 
+                void            output(id_ptr id, packetbuf_ptr pbuf);
                 int             generate_desc();
                 void            invoke_event(int desc1, int desc2,
                                              rdp_addr addr, rdp_event event);
@@ -278,11 +280,9 @@ namespace libcage {
                                                    // acknowledged out of
                                                    // sequence.
 
-                packetbuf_ptr   syn_pbuf;
                 time_t          syn_time;
                 time_t          syn_tout;
 
-                packetbuf_ptr   rst_pbuf;
                 time_t          rst_time;
                 time_t          rst_tout;
                 bool            is_retry_rst;
@@ -326,8 +326,6 @@ namespace libcage {
                 int             m_swnd_head;
                 int             m_swnd_used;
                 int             m_swnd_ostand; // index of outstanding data
-
-                callback_dgram_out      m_output_func;
 
                 class rwnd {
                 public:
