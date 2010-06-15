@@ -147,7 +147,7 @@ sender::operator() ()
         }
         m_num++;
 
-        if (m_num > 100000) {
+        if (m_num > 30000u) {
                 std::cout << "close connection" << std::endl;
                 m_rdp.close(m_desc);
                 return;

@@ -11,7 +11,7 @@
 #include <libcage/cage.hpp>
 
 const int max_node = 125;
-const int port     = 10000;
+const int port     = 20000;
 const int proc_num = 80;
 
 libcage::cage *cage;

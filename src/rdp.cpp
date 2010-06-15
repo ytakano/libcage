@@ -111,15 +111,6 @@ namespace libcage {
 
                                 diff = now - it->second->syn_time;
                                 if (diff > it->second->syn_tout) {
-                                        std::cout << "retry send syn:"
-                                                  << "\n    from port = "
-                                                  << it->second->addr.sport
-                                                  << "\n    dst  port = "
-                                                  << it->second->addr.dport
-                                                  << "\n      to id = "
-                                                  << it->second->addr.did
-                                                  << std::endl;
-
                                         packetbuf_ptr  pbuf = packetbuf::construct();
                                         rdp_syn       *syn;
                 

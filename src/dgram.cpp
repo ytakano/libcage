@@ -266,9 +266,9 @@ namespace libcage {
         void
         dgram::recv_dgram(packetbuf_ptr pbuf, sockaddr *from)
         {
+                cageaddr   addr;
                 msg_dgram *dgram;
                 uint160_t  dst;
-                id_ptr     src(new uint160_t);
                 int        size;
 
                 dgram = (msg_dgram*)pbuf->get_data();
@@ -288,22 +288,25 @@ namespace libcage {
                         return;
                 }
 
-                src->from_binary(dgram->hdr.src, sizeof(dgram->hdr.src));
+                addr = new_cageaddr(&dgram->hdr, from);
 
+                m_peers.add_node(addr);
 
-                // send advertise
-                if (from->sa_family == PF_INET) {
-                        sockaddr_in *in = (sockaddr_in*)from;
+                if (m_dtun.is_enabled()) {
+                        // send advertise
+                        if (from->sa_family == PF_INET) {
+                                sockaddr_in *in = (sockaddr_in*)from;
 
-                        m_advertise.advertise_to(*src, domain_inet,
-                                                 in->sin_port,
-                                                 &in->sin_addr.s_addr);
-                } else if (from->sa_family == PF_INET6) {
-                        sockaddr_in6 *in6 = (sockaddr_in6*)from;
+                                m_advertise.advertise_to(*addr.id, domain_inet,
+                                                         in->sin_port,
+                                                         &in->sin_addr.s_addr);
+                        } else if (from->sa_family == PF_INET6) {
+                                sockaddr_in6 *in6 = (sockaddr_in6*)from;
 
-                        m_advertise.advertise_to(*src, domain_inet6,
-                                                 in6->sin6_port,
-                                                 in6->sin6_addr.s6_addr);
+                                m_advertise.advertise_to(*addr.id, domain_inet6,
+                                                         in6->sin6_port,
+                                                         in6->sin6_addr.s6_addr);
+                        }
                 }
 
 
@@ -311,7 +314,7 @@ namespace libcage {
                         m_callback(dgram->data, size, (uint8_t*)dgram->hdr.src);
                 } else if (dgram->hdr.type == type_rdp) {
                         pbuf->rm_head(sizeof(dgram->hdr));
-                        m_rdp.input_dgram(src, pbuf);
+                        m_rdp.input_dgram(addr.id, pbuf);
                 }
         }
 }
