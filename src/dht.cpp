@@ -48,14 +48,12 @@ namespace libcage {
         const time_t    dht::rdp_timeout         = 120;
 
         size_t
-        hash_value(const dht::id_key &ik)
+        hash_value(const dht::_key &k)
         {
-                size_t h;
+                size_t h = 0;
 
-                h = ik.id->hash_value();
-
-                for (int i = 0; i < ik.keylen; i++)
-                        boost::hash_combine(h, ik.key[i]);
+                for (int i = 0; i < k.keylen; i++)
+                        boost::hash_combine(h, k.key[i]);
 
                 return h;
         }
@@ -126,6 +124,165 @@ namespace libcage {
         no_action(std::vector<cageaddr>& nodes)
         {
 
+        }
+
+        void
+        dht::add_sdata(dht::stored_data &sdata, bool is_origin)
+        {
+                _id  i;
+                _key k;
+
+                i.id     = sdata.id;
+                k.key    = sdata.key;
+                k.keylen = sdata.keylen;
+
+
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+
+                it1 = m_stored.find(i);
+                if (it1 == m_stored.end()) {
+                        m_stored[i][k].insert(sdata);
+                        return;
+                }
+
+
+                sdata_map::iterator it2;
+
+                it2 = it1->second.find(k);
+                if (it2 == it1->second.end()) {
+                        m_stored[i][k].insert(sdata);
+                        return;
+                }
+
+
+                sdata_set::iterator it3;
+
+                it3 = it2->second.find(sdata);
+                if (it3 == it2->second.end()) {
+                        it2->second.insert(sdata);
+                        return;
+                }
+
+                it3->ttl         = sdata.ttl;
+                it3->stored_time = sdata.stored_time;
+
+                if (is_origin)
+                        it3->original    = sdata.original;
+        }
+
+        void
+        dht::erase_sdata(dht::stored_data &sdata)
+        {
+                _id  i;
+                _key k;
+
+                i.id     = sdata.id;
+                k.key    = sdata.key;
+                k.keylen = sdata.keylen;
+
+
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+
+                it1 = m_stored.find(i);
+                if (it1 == m_stored.end())
+                        return;
+
+
+                sdata_map::iterator it2;
+
+                it2 = it1->second.find(k);
+                if (it2 == it1->second.end())
+                        return;
+
+                it2->second.erase(sdata);
+
+                if (it2->second.size() == 0)
+                        it1->second.erase(it2);
+
+                if (it1->second.size() == 0)
+                        m_stored.erase(it1);
+        }
+
+        void
+        dht::insert2recvd_sdata(stored_data &sdata, id_ptr id)
+        {
+                _id  i;
+                _key k;
+
+                i.id     = sdata.id;
+                k.key    = sdata.key;
+                k.keylen = sdata.keylen;
+
+
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+
+                it1 = m_stored.find(i);
+                if (it1 == m_stored.end())
+                        return;
+
+
+                sdata_map::iterator it2;
+
+                it2 = it1->second.find(k);
+                if (it2 == it1->second.end())
+                        return;
+
+
+                sdata_set::iterator it3;
+
+                it3 = it2->second.find(sdata);
+                if (it3 == it2->second.end())
+                        return;
+
+
+                _id src;
+
+                src.id = id;
+
+                it3->recvd.insert(src);
+        }
+
+        int
+        dht::dec_origin_sdata(dht::stored_data &sdata)
+        {
+                _id  i;
+                _key k;
+
+                i.id     = sdata.id;
+                k.key    = sdata.key;
+                k.keylen = sdata.keylen;
+
+
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+
+                it1 = m_stored.find(i);
+                if (it1 == m_stored.end()) {
+                        m_stored[i][k].insert(sdata);
+                        return -1;
+                }
+
+
+                sdata_map::iterator it2;
+
+                it2 = it1->second.find(k);
+                if (it2 == it1->second.end()) {
+                        m_stored[i][k].insert(sdata);
+                        return -1;
+                }
+
+
+                sdata_set::iterator it3;
+
+                it3 = it2->second.find(sdata);
+                if (it3 == it2->second.end()) {
+                        it2->second.insert(sdata);
+                        return -1;
+                }
+
+                if (it3->original > 0)
+                        it3->original--;
+
+                return it3->original;
         }
 
         void
@@ -288,69 +445,24 @@ namespace libcage {
         void
         dht::rdp_recv_store::store2local()
         {
-                id_key ik;
-
-                ik.key    = key;
-                ik.keylen = keylen;
-                ik.id     = id;
-
-                boost::unordered_map<id_key, sdata_set>::iterator it;
-                it = p_dht->m_stored.find(ik);
-
                 stored_data data;
 
-                data.value    = value;
-                data.valuelen = valuelen;
+                data.value       = value;
+                data.valuelen    = valuelen;
+                data.key         = key;
+                data.keylen      = keylen;
+                data.ttl         = ttl;
+                data.stored_time = time(NULL);
+                data.id          = id;
+                data.original    = 0;
 
-#define SET_DATA() do {                                 \
-                        _id i;                          \
-                                                        \
-                        i.id = src;                     \
-                                                        \
-                        data.key         = key;         \
-                        data.keylen      = keylen;      \
-                        data.ttl         = ttl;         \
-                        data.stored_time = time(NULL);  \
-                        data.id          = id;          \
-                        data.original    = 0;           \
-                                                        \
-                        data.recvd.insert(i);           \
-                } while (0)
-
-                if (it != p_dht->m_stored.end()) {
-                        sdata_set::iterator it_data;
-
-                        it_data = it->second.find(data);
-
-                        if (it_data != it->second.end()) {
-                                // if the TTL is 0, remove the value
-                                if (ttl == 0) {
-                                        it->second.erase(it_data);
-                                        if (it->second.size() == 0) {
-                                                p_dht->m_stored.erase(it);
-                                        }
-                                } else {
-                                        // if the data have already inserted,
-                                        // update TTL and inserted time
-                                        _id i;
-
-                                        i.id = src;
-
-                                        it_data->ttl         = ttl;
-                                        it_data->stored_time = time(NULL);
-                                        it_data->recvd.insert(i);
-                                }
-                        } else {
-                                // insert new data
-                                SET_DATA();
-                                p_dht->m_stored[ik].insert(data);
-                        }
-                } else {
-                        // insert new data
-                        SET_DATA();
-                        p_dht->m_stored[ik].insert(data);
+                if (ttl == 0) {
+                        p_dht->erase_sdata(data);
+                        return;
                 }
-#undef SET_DATA
+
+                p_dht->add_sdata(data, false);
+                p_dht->insert2recvd_sdata(data, src);
         }
 
         void
@@ -381,29 +493,14 @@ namespace libcage {
                 case RESET:
                 {
                         stored_data sdata;
-                        id_key  ik;
-
-                        ik.key    = key;
-                        ik.keylen = keylen;
-                        ik.id     = id;
 
                         sdata.value    = value;
                         sdata.valuelen = valuelen;
+                        sdata.key      = key;
+                        sdata.keylen   = keylen;
+                        sdata.id       = id;
 
-                        boost::unordered_map<id_key, sdata_set>::iterator it_stored;
-                        sdata_set::iterator it_sdata;
-
-                        it_stored = p_dht->m_stored.find(ik);
-                        if (it_stored != p_dht->m_stored.end()) {
-                                it_sdata = it_stored->second.find(sdata);
-                                if (it_sdata != it_stored->second.end()) {
-                                        _id i;
-                                        i.id = addr.did;
-
-                                        it_sdata->recvd.insert(i);
-                                }
-                        }
-
+                        p_dht->insert2recvd_sdata(sdata, addr.did);
                         p_dht->m_rdp_store.erase(desc);
                         p_dht->m_rdp.close(desc);
                         break;
@@ -995,7 +1092,6 @@ namespace libcage {
 
                 // store to local
                 stored_data data;
-                id_key ik;
 
                 data.key         = func.key;
                 data.value       = func.value;
@@ -1006,14 +1102,10 @@ namespace libcage {
                 data.id          = func.id;
                 data.original    = original_put_num;
 
-                ik.key    = func.key;
-                ik.keylen = keylen;
-                ik.id     = func.id;
-
                 if (ttl == 0) {
-                        m_stored.erase(ik);
+                        erase_sdata(data);
                 } else {
-                        m_stored[ik].insert(data);
+                        add_sdata(data, true);
                 }
         }
 
@@ -1104,32 +1196,18 @@ namespace libcage {
 
                 if (nodes.size() >= (uint32_t)num_find_node) {
                         stored_data sdata;
-                        id_key  ik;
-
-                        ik.key    = key;
-                        ik.keylen = keylen;
-                        ik.id     = id;
 
                         sdata.value    = value;
                         sdata.valuelen = valuelen;
+                        sdata.key      = key;
+                        sdata.keylen   = keylen;
+                        sdata.id       = id;
 
-                        boost::unordered_map<id_key, sdata_set>::iterator it_stored;
-                        sdata_set::iterator it_sdata;
 
-                        it_stored = p_dht->m_stored.find(ik);
-                        if (it_stored == p_dht->m_stored.end())
-                                return;
+                        int origin = p_dht->dec_origin_sdata(sdata);
 
-                        it_sdata = it_stored->second.find(sdata);
-                        if (it_sdata == it_stored->second.end())
-                                return;
-
-                        if (it_sdata->original > 0) {
-                                it_sdata->original--;
-                        } else {
-                                if (!me) {
-                                        it_stored->second.erase(it_sdata);
-                                }
+                        if (origin == 0 && ! me) {
+                                p_dht->erase_sdata(sdata);
                         }
                 }
         }
@@ -1171,73 +1249,30 @@ namespace libcage {
                 boost::shared_array<char> key(new char[keylen]);
                 boost::shared_array<char> value(new char[valuelen]);
                 id_ptr id(new uint160_t);
-                id_key ik;
 
                 id->from_binary(req->id, sizeof(req->id));
                 memcpy(key.get(), req->data, keylen);
                 memcpy(value.get(), (char*)req->data + keylen, valuelen);
 
-                ik.key    = key;
-                ik.keylen = keylen;
-                ik.id     = id;
-
-                boost::unordered_map<id_key, sdata_set>::iterator it;
-                it = m_stored.find(ik);
 
                 stored_data data;
 
                 data.value       = value;
                 data.valuelen    = valuelen;
+                data.key         = key;
+                data.keylen      = keylen;
+                data.ttl         = ttl;
+                data.stored_time = time(NULL);
+                data.id          = id;
+                data.original    = 0;
 
-#define SET_DATA() do {                                 \
-                        _id i;                          \
-                                                        \
-                        i.id = addr.id;                 \
-                                                        \
-                        data.key         = key;         \
-                        data.keylen      = keylen;      \
-                        data.ttl         = ttl;         \
-                        data.stored_time = time(NULL);  \
-                        data.id          = id;          \
-                        data.original    = 0;           \
-                                                        \
-                        data.recvd.insert(i);           \
-                } while (0)
-
-                if (it != m_stored.end()) {
-                        sdata_set::iterator it_data;
-
-                        it_data = it->second.find(data);
-
-                        if (it_data != it->second.end()) {
-                                // if the TTL is 0, the value is removed
-                                if (ttl == 0) {
-                                        it->second.erase(it_data);
-                                        if (it->second.size() == 0) {
-                                                m_stored.erase(it);
-                                        }
-                                } else {
-                                        // if the data have already inserted,
-                                        // update TTL and inserted time
-                                        _id i;
-
-                                        i.id = addr.id;
-
-                                        it_data->ttl         = ttl;
-                                        it_data->stored_time = time(NULL);
-                                        it_data->recvd.insert(i);
-                                }
-                        } else {
-                                // insert new data
-                                SET_DATA();
-                                m_stored[ik].insert(data);
-                        }
-                } else {
-                        // insert new data
-                        SET_DATA();
-                        m_stored[ik].insert(data);
+                if (ttl == 0) {
+                        erase_sdata(data);
+                        return;
                 }
-#undef SET_DATA
+
+                add_sdata(data, false);
+                insert2recvd_sdata(data, addr.id);
         }
 
         void
@@ -1343,7 +1378,6 @@ namespace libcage {
                 uint160_t dst;
                 uint16_t  size;
                 uint16_t  keylen;
-                id_key    ik;
                 id_ptr    id(new uint160_t);
                 char      buf[1024 * 4];
 
@@ -1371,51 +1405,60 @@ namespace libcage {
 
                 id->from_binary(req->id, sizeof(req->id));
 
-                ik.keylen = keylen;
-                ik.key    = key;
-                ik.id     = id;
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+                _id i;
 
-                boost::unordered_map<id_key, sdata_set>::iterator it;
-                it = m_stored.find(ik);
+                i.id = id;
+                it1 = m_stored.find(i);
 
                 reply = (msg_dht_find_value_reply*)buf;
 
-                if (it != m_stored.end()) {
-                        sdata_set::iterator it_data;
+                if (it1 != m_stored.end()) {
+                        sdata_map::iterator it2;
+                        _key k;
 
-                        uint16_t i = 1;
-                        for (it_data = it->second.begin();
-                             it_data != it->second.end(); ++it_data) {
-                                msg_data *data;
+                        k.key    = key;
+                        k.keylen = keylen;
 
-                                size = sizeof(*reply) - sizeof(reply->data) +
-                                        sizeof(*data) - sizeof(data->data) +
-                                        it_data->keylen + it_data->valuelen;
+                        it2 = it1->second.find(k);
 
-                                memset(reply, 0, size);
+                        if (it2 != it1->second.end()) {
+                                sdata_set::iterator it3;
+                                uint16_t i = 1;
+                                for (it3 = it2->second.begin();
+                                     it3 != it2->second.end(); ++it3) {
+                                        msg_data *data;
 
-                                reply->nonce = req->nonce;
-                                reply->flag  = 1;
-                                reply->index = htons(i);
-                                reply->total = htons((uint16_t)it->second.size());
+                                        size = sizeof(*reply) -
+                                                sizeof(reply->data) +
+                                                sizeof(*data) -
+                                                sizeof(data->data) +
+                                                it3->keylen +
+                                                it3->valuelen;
 
-                                memcpy(reply->id, req->id, sizeof(reply->id));
+                                        memset(reply, 0, size);
 
-                                data = (msg_data*)reply->data;
+                                        reply->nonce = req->nonce;
+                                        reply->flag  = 1;
+                                        reply->index = htons(i);
+                                        reply->total = htons((uint16_t)it2->second.size());
 
-                                data->keylen   = htons(it_data->keylen);
-                                data->valuelen = htons(it_data->valuelen);
+                                        memcpy(reply->id, req->id, sizeof(reply->id));
 
-                                memcpy(data->data, it_data->key.get(),
-                                       it_data->keylen);
-                                memcpy((char*)data->data + it_data->keylen,
-                                       it_data->value.get(),
-                                       it_data->valuelen);
+                                        data = (msg_data*)reply->data;
 
-                                send_msg(m_udp, &reply->hdr, size,
-                                         type_dht_find_value_reply, addr, m_id);
+                                        data->keylen   = htons(it3->keylen);
+                                        data->valuelen = htons(it3->valuelen);
 
-                                i++;
+                                        memcpy(data->data, it3->key.get(),
+                                               it3->keylen);
+                                        memcpy((char*)data->data + it3->keylen,
+                                               it3->value.get(), it3->valuelen);
+
+                                        send_msg(m_udp, &reply->hdr, size,
+                                                 type_dht_find_value_reply,
+                                                 addr, m_id);
+                                }
                         }
                 } else {
                         // reply nodes
@@ -1702,18 +1745,27 @@ namespace libcage {
         void
         dht::refresh()
         {
-                boost::unordered_map<id_key, sdata_set>::iterator it1;
-                sdata_set::iterator it2;
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+                sdata_map::iterator it2;
+                sdata_set::iterator it3;
                 
                 time_t now = time(NULL);
 
                 for(it1 = m_stored.begin(); it1 != m_stored.end();) {
                         for (it2 = it1->second.begin();
                              it2 != it1->second.end();) {
-                                time_t diff;
-                                diff = now - it2->stored_time;
+                                for (it3 = it2->second.begin();
+                                     it3 != it2->second.end();) {
+                                        time_t diff;
+                                        diff = now - it3->stored_time;
 
-                                if (diff > it2->ttl)
+                                        if (diff > it3->ttl)
+                                                it2->second.erase(it3++);
+                                        else
+                                                ++it3;
+                                }
+
+                                if (it2->second.size() == 0)
                                         it1->second.erase(it2++);
                                 else
                                         ++it2;
@@ -1870,8 +1922,9 @@ namespace libcage {
         void
         dht::restore_func::operator() (std::vector<cageaddr> &n)
         {
-                boost::unordered_map<id_key, sdata_set>::iterator it1;
-                sdata_set::iterator   it2;
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+                sdata_map::iterator   it2;
+                sdata_set::iterator   it3;
                 std::vector<cageaddr> nodes;
 
                 for(it1 = p_dht->m_stored.begin();
@@ -1886,15 +1939,23 @@ namespace libcage {
 
                         for (it2 = it1->second.begin();
                              it2 != it1->second.end();) {
-                                bool me;
+                                for (it3 = it2->second.begin();
+                                     it3 != it2->second.end();) {
+                                        bool me;
 
-                                if (p_dht->m_is_use_rdp) {
-                                        me = restore_by_rdp(nodes, it2);
-                                } else {
-                                        me = restore_by_udp(nodes, it2);
+                                        if (p_dht->m_is_use_rdp) {
+                                                me = restore_by_rdp(nodes, it3);
+                                        } else {
+                                                me = restore_by_udp(nodes, it3);
+                                        }
+
+                                        if (! me)
+                                                it2->second.erase(it3++);
+                                        else
+                                                ++it3;
                                 }
 
-                                if (! me)
+                                if (it2->second.size() == 0)
                                         it1->second.erase(it2++);
                                 else
                                         ++it2;

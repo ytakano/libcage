@@ -230,17 +230,14 @@ namespace libcage {
                         dht            *p_dht;
                 };
 
-                class id_key {
+                class _key {
                 public:
                         boost::shared_array<char>       key;
                         uint16_t        keylen;
-                        id_ptr          id;
 
-                        bool operator== (const id_key &rhs) const
+                        bool operator== (const _key &rhs) const
                         {
                                 if (keylen != rhs.keylen) {
-                                        return false;
-                                } else if (*id != *rhs.id) {
                                         return false;
                                 } else if (memcmp(key.get(), rhs.key.get(),
                                                   keylen) != 0) {
@@ -251,7 +248,7 @@ namespace libcage {
                         }
                 };
 
-                friend size_t hash_value(const id_key &ik);
+                friend size_t hash_value(const _key &k);
 
                 class stored_data {
                 public:
@@ -283,6 +280,7 @@ namespace libcage {
                 friend size_t hash_value(const stored_data &sdata);
 
                 typedef boost::unordered_set<stored_data> sdata_set;
+                typedef boost::unordered_map<_key, sdata_set> sdata_map;
 
                 // for ping
                 class ping_func {
@@ -469,6 +467,12 @@ namespace libcage {
 
                 void            recvd_value(query_ptr q);
 
+                void            add_sdata(stored_data &sdata, bool is_origin);
+                void            erase_sdata(stored_data &sdata);
+                void            insert2recvd_sdata(stored_data &sdata,
+                                                   id_ptr id);
+                int             dec_origin_sdata(stored_data &sdata);
+
 
                 rand_uint               &m_rnd;
                 rand_real               &m_drnd;
@@ -489,7 +493,7 @@ namespace libcage {
                 bool                     m_is_use_rdp;
                 int                      m_mask_bit;
 
-                boost::unordered_map<id_key, sdata_set> m_stored;
+                boost::unordered_map<_id, sdata_map>    m_stored;
                 std::map<uint32_t, query_ptr>           m_query;
                 std::map<int, rdp_recv_store_ptr>       m_rdp_recv_store;
                 std::map<int, time_t>                   m_rdp_store;
