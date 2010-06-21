@@ -345,9 +345,7 @@ namespace libcage {
                                 QUERY_HDR,
                                 QUERY_VAL,
                         };
-                        id_ptr          ids[3];
-                        int             num_ids;
-                        int             idx_ids;
+                        std::queue<id_ptr>      ids;
                         bool            is_rdp_con;
                         int             rdp_desc;
                         time_t          rdp_time;

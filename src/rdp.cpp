@@ -1645,8 +1645,14 @@ namespace libcage {
                 if (m_swnd_used == 0)
                         return true;
 
-                for (int i = m_swnd_head;; i++) {
+                int i = m_swnd_head;
+                for (int n = 0; n < m_swnd_used; n++) {
                         swnd *p_wnd = &m_swnd[i];
+
+                        i++;
+                        if (i >= m_swnd_len)
+                                i %= m_swnd_len;
+                        
 
                         if (! p_wnd->is_sent)
                                 break;

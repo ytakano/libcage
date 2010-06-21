@@ -385,15 +385,15 @@ namespace libcage {
                         return;
                 }
 
-                m_query->idx_ids++;
+                if (m_query->ids.size() > 0) {
+                        id_ptr id = m_query->ids.front();
 
-                if (m_query->idx_ids < m_query->num_ids) {
+                        m_query->ids.pop();
                         m_query->rdp_time = time(NULL);
                         m_query->rdp_desc = m_dht.m_rdp.connect(rdp_get_port,
-                                                                m_query->ids[m_query->idx_ids],
-                                                                0, *this);
+                                                                id, 0, *this);
                 } else {
-                        m_dht.remove_query(m_query);
+                        m_dht.send_find(m_query);
                 }
         }
 
@@ -419,8 +419,8 @@ namespace libcage {
                         m_dht.m_rdp.send(desc, m_query->key.get(),
                                          m_query->keylen);
 
-                        uint8_t gn = dht_get_next;
-                        m_dht.m_rdp.send(desc, &gn, sizeof(gn));
+                        uint8_t op = dht_get_next;
+                        m_dht.m_rdp.send(desc, &op, sizeof(op));
 
                         break;
                 }
@@ -437,8 +437,9 @@ namespace libcage {
                                                 return;
                                         break;
                                 }
-                                break;
                         }
+
+                        break;
                 }
                 default:
                         close_rdp(desc);
@@ -479,6 +480,7 @@ namespace libcage {
                                         break;
                                 case rdp_recv_get::RGET_VAL:
                                         read_op(desc, it->second);
+                                        return;
                                 case rdp_recv_get::RGET_END:
                                         m_dht.m_rdp.close(desc);
                                         m_dht.m_rdp_recv_get.erase(desc);
@@ -527,7 +529,7 @@ namespace libcage {
                                 data = rget->m_data.front();
                                 rget->m_data.pop();
 
-                                msg.valuelen = data.valuelen;
+                                msg.valuelen = htons(data.valuelen);
                                 m_dht.m_rdp.send(desc, &msg, sizeof(msg));
                                 m_dht.m_rdp.send(desc, data.value.get(),
                                                  data.valuelen);
@@ -928,7 +930,6 @@ namespace libcage {
                 q->nonce = nonce;
                 m_query[nonce] = q;
 
-
                 send_find(q);
         }
 
@@ -949,6 +950,9 @@ namespace libcage {
         void
         dht::send_find(query_ptr q)
         {
+                if (m_is_use_rdp && q->is_find_value && q->is_rdp_con)
+                        return;
+
                 BOOST_FOREACH(cageaddr &addr, q->nodes) {
                         if (q->num_query >= max_query) {
                                 break;
@@ -1636,6 +1640,7 @@ namespace libcage {
                         msg->flag = get_by_rdp;
                 } else {
                         msg->keylen = htons(keylen);
+                        msg->flag   = get_by_udp;
                         memcpy(msg->key, key.get(), keylen);
                 }
 
@@ -1656,8 +1661,10 @@ namespace libcage {
                         int  size;
                         char buf[1024 * 2];
 
-                        size = sizeof(*msg) - sizeof(msg->key)
-                                + q->keylen;
+                        size = sizeof(*msg) - sizeof(msg->key);
+
+                        if (! m_is_use_rdp)
+                                size += q->keylen;
 
                         if (size > (int)sizeof(buf))
                                 return;
@@ -1668,9 +1675,14 @@ namespace libcage {
 
                         msg->nonce  = htonl(q->nonce);
                         msg->domain = htons(dst.domain);
-                        msg->keylen = htons(q->keylen);
 
-                        memcpy(msg->key, q->key.get(), q->keylen);
+                        if (m_is_use_rdp) {
+                                msg->flag = get_by_rdp;
+                        } else {
+                                msg->keylen = htons(q->keylen);
+                                msg->flag   = get_by_udp;
+                                memcpy(msg->key, q->key.get(), q->keylen);
+                        }
 
                         q->dst->to_binary(msg->id, sizeof(msg->id));
 
@@ -1701,7 +1713,6 @@ namespace libcage {
                 uint16_t  keylen;
                 id_ptr    id(new uint160_t);
                 char      buf[1024 * 2];
-
 
                 req = (msg_dht_find_value*)msg;
 
@@ -1925,23 +1936,17 @@ namespace libcage {
 
 
                 if (reply->flag == data_are_nul && m_is_use_rdp) {
-                        if (q->num_ids < (int)(sizeof(q->ids) /
-                                               sizeof(q->ids[0])))
-                                q->ids[q->num_ids] = addr.id;
-
-                        if (q->is_rdp_con)
+                        if (q->is_rdp_con) {
+                                q->ids.push(addr.id);
                                 return;
+                        }
 
-                        
                         rdp_get_func func(*this, q);
 
-                        q->ids[0]     = addr.id;
-                        q->idx_ids    = 0;
-                        q->num_ids    = 1;
                         q->is_rdp_con = true;
                         q->rdp_time   = time(NULL);
 
-                        q->rdp_desc = m_rdp.connect(rdp_get_port, addr.id, 0,
+                        q->rdp_desc = m_rdp.connect(0, addr.id, rdp_get_port,
                                                     func);
 
                         return;

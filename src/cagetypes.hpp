@@ -134,14 +134,14 @@ namespace libcage {
         static const uint8_t type_proxy_rdp_forwarded     = 0x89;
         static const uint8_t type_rdp                     = 0x90;
 
-        static const uint8_t data_are_nodes  = 0;
-        static const uint8_t data_are_values = 1;
-        static const uint8_t data_are_nul    = 0;
+        static const uint8_t data_are_nodes  = 0xf0;
+        static const uint8_t data_are_values = 0xf1;
+        static const uint8_t data_are_nul    = 0xf2;
 
-        static const uint8_t get_by_udp = 0;
-        static const uint8_t get_by_rdp = 1;
+        static const uint8_t get_by_udp = 0xf0;
+        static const uint8_t get_by_rdp = 0xf1;
 
-        static const uint8_t dht_get_next = 0xf1;
+        static const uint8_t dht_get_next = 0xf0;
 
 
         struct msg_hdr {

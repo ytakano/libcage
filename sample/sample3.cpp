@@ -35,7 +35,7 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
                 }
                 printf("\n");
         } else {
-                printf("failed to get:\n");
+                printf("failed in getting:\n");
         }
 
         timeval tval;
