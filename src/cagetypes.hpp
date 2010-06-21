@@ -134,6 +134,15 @@ namespace libcage {
         static const uint8_t type_proxy_rdp_forwarded     = 0x89;
         static const uint8_t type_rdp                     = 0x90;
 
+        static const uint8_t data_are_nodes  = 0;
+        static const uint8_t data_are_values = 1;
+        static const uint8_t data_are_nul    = 0;
+
+        static const uint8_t get_by_udp = 0;
+        static const uint8_t get_by_rdp = 1;
+
+        static const uint8_t dht_get_next = 0xf1;
+
 
         struct msg_hdr {
                 uint16_t        magic;
@@ -291,6 +300,11 @@ namespace libcage {
                 uint8_t         id[CAGE_ID_LEN];
                 uint16_t        domain;
                 uint16_t        keylen;
+
+                // use RDP when 1
+                uint8_t         flag;
+
+                uint8_t         padding[3];
                 uint32_t        key[1];
         };
 
@@ -315,6 +329,7 @@ namespace libcage {
                 uint16_t        index; // the index of the value in data[]
                 uint16_t        total; // the number of values 
 
+                // data[] is nul when 2
                 // data[] is value when 1
                 // data[] is nodes when 0
                 uint8_t         flag;
@@ -338,6 +353,17 @@ namespace libcage {
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
+                uint16_t        reserved;
+        };
+
+        struct msg_dht_rdp_get {
+                uint8_t         id[CAGE_ID_LEN];
+                uint16_t        keylen;
+                uint16_t        reserved;
+        };
+
+        struct msg_dht_rdp_get_reply {
+                uint16_t        valuelen;
                 uint16_t        reserved;
         };
 
@@ -382,7 +408,7 @@ namespace libcage {
                 uint8_t         id[CAGE_ID_LEN];
 
                 uint16_t        index; // the index of the value in data[]
-                uint16_t        total; // the number of values 
+                uint16_t        total; // the number of values
 
                 // data[] is value when 1
                 // data[] is nodes when 0

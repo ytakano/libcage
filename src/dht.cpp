@@ -50,10 +50,15 @@ namespace libcage {
         size_t
         hash_value(const dht::_key &k)
         {
-                size_t h = 0;
+                size_t    h   = 0;
+                uint32_t *p   = (uint32_t*)k.key.get();
+                int       len = k.keylen / 4;
 
-                for (int i = 0; i < k.keylen; i++)
-                        boost::hash_combine(h, k.key[i]);
+                for (int i = 0; i < len; i++)
+                        boost::hash_combine(h, p[i]);
+
+                for (int j = len * 4; j < k.keylen; j++)
+                        boost::hash_combine(h, k.key[j]);
 
                 return h;
         }
@@ -61,10 +66,15 @@ namespace libcage {
         size_t
         hash_value(const dht::stored_data &sdata)
         {
-                size_t h = 0;
+                size_t    h   = 0;
+                uint32_t *p   = (uint32_t*)sdata.value.get();
+                int       len = sdata.valuelen / 4;
 
-                for (int i = 0; i < sdata.valuelen; i++)
-                        boost::hash_combine(h, sdata.value[i]);
+                for (int i = 0; i < len; i++)
+                        boost::hash_combine(h, p[i]);
+
+                for (int j = len * 4; j < sdata.valuelen; j++)
+                        boost::hash_combine(h, sdata.value[j]);
 
                 return h;
         }
@@ -167,7 +177,7 @@ namespace libcage {
                 it3->stored_time = sdata.stored_time;
 
                 if (is_origin)
-                        it3->original    = sdata.original;
+                        it3->original = sdata.original;
         }
 
         void
@@ -302,6 +312,139 @@ namespace libcage {
                         m_mask_bit = 1;
         }
 
+        bool
+        dht::rdp_get_func::read_hdr(int desc)
+        {
+                msg_dht_rdp_get_reply msg;
+                int size = sizeof(msg);
+
+                m_dht.m_rdp.receive(desc, &msg, &size);
+
+                if (size == 0)
+                        return false;
+
+                if (size != sizeof(msg)) {
+                        close_rdp(desc);
+                        return false;
+                }
+
+                m_query->rdp_state = query::QUERY_VAL;
+                m_query->rdp_time  = time(NULL);
+                m_query->vallen    = ntohs(msg.valuelen);
+                m_query->val_read  = 0;
+
+                if (m_query->vallen == 0) {
+                        close_rdp(desc);
+                        return false;
+                }
+
+                boost::shared_array<char> val(new char[m_query->vallen]);
+                m_query->val = val;
+
+                return true;
+        }
+
+        bool
+        dht::rdp_get_func::read_val(int desc)
+        {
+                int size = m_query->vallen - m_query->val_read;
+
+                m_dht.m_rdp.receive(desc, m_query->val.get(), &size);
+
+                if (size == 0)
+                        return false;
+
+                m_query->val_read += size;
+
+                if (m_query->vallen == m_query->val_read) {
+                        value_t val;
+
+                        val.value = m_query->val;
+                        val.len   = m_query->vallen;
+
+                        m_query->vset->insert(val);
+
+                        m_query->rdp_state = query::QUERY_HDR;
+
+                        uint8_t op = dht_get_next;
+                        m_dht.m_rdp.send(desc, &op, sizeof(op));
+                }
+
+                m_query->rdp_time = time(NULL);
+
+                return true;
+        }
+
+        void
+        dht::rdp_get_func::close_rdp(int desc)
+        {
+                m_dht.m_rdp.close(desc);
+
+                if (m_query->vset->size() > 0) {
+                        m_dht.recvd_value(m_query);
+                        return;
+                }
+
+                m_query->idx_ids++;
+
+                if (m_query->idx_ids < m_query->num_ids) {
+                        m_query->rdp_time = time(NULL);
+                        m_query->rdp_desc = m_dht.m_rdp.connect(rdp_get_port,
+                                                                m_query->ids[m_query->idx_ids],
+                                                                0, *this);
+                } else {
+                        m_dht.remove_query(m_query);
+                }
+        }
+
+        void
+        dht::rdp_get_func::operator() (int desc, rdp_addr addr,
+                                       rdp_event event)
+        {
+                switch (event) {
+                case CONNECTED:
+                {
+                        m_query->is_rdp_con = true;
+                        m_query->rdp_desc   = desc;
+                        m_query->rdp_time   = time(NULL);
+                        m_query->rdp_state  = query::QUERY_HDR;
+
+                        msg_dht_rdp_get get;
+
+                        memset(&get, 0, sizeof(get));
+                        m_query->dst->to_binary(get.id, sizeof(get.id));
+                        get.keylen = htons(m_query->keylen);
+
+                        m_dht.m_rdp.send(desc, &get, sizeof(get));
+                        m_dht.m_rdp.send(desc, m_query->key.get(),
+                                         m_query->keylen);
+
+                        uint8_t gn = dht_get_next;
+                        m_dht.m_rdp.send(desc, &gn, sizeof(gn));
+
+                        break;
+                }
+                case READY2READ:
+                {
+                        for (;;) {
+                                switch (m_query->rdp_state) {
+                                case query::QUERY_HDR:
+                                        if (! read_hdr(desc))
+                                                return;
+                                        break;
+                                case query::QUERY_VAL:
+                                        if (! read_val(desc))
+                                                return;
+                                        break;
+                                }
+                                break;
+                        }
+                }
+                default:
+                        close_rdp(desc);
+                }
+        }
+
         void
         dht::rdp_recv_get_func::operator() (int desc, rdp_addr addr,
                                             rdp_event event)
@@ -309,15 +452,183 @@ namespace libcage {
                 switch (event) {
                 case ACCEPTED:
                 {
+                        rdp_recv_get_ptr rget(new rdp_recv_get(m_dht));
+
+                        m_dht.m_rdp_recv_get[desc] = rget;
+
                         break;
                 }
                 case READY2READ:
                 {
+                        std::map<int, rdp_recv_get_ptr>::iterator it;
+
+                        it = m_dht.m_rdp_recv_get.find(desc);
+                        if (it == m_dht.m_rdp_recv_get.end()) {
+                                m_dht.m_rdp.close(desc);
+                        }
+
+                        for (;;) {
+                                switch (it->second->m_state) {
+                                case rdp_recv_get::RGET_HDR:
+                                        if (! read_hdr(desc, it->second))
+                                                return;
+                                        break;
+                                case rdp_recv_get::RGET_KEY:
+                                        if (! read_key(desc, it->second))
+                                                return;
+                                        break;
+                                case rdp_recv_get::RGET_VAL:
+                                        read_op(desc, it->second);
+                                case rdp_recv_get::RGET_END:
+                                        m_dht.m_rdp.close(desc);
+                                        m_dht.m_rdp_recv_get.erase(desc);
+                                        return;
+                                }
+                        }
+
                         break;
                 }
                 default:
                         m_dht.m_rdp.close(desc);
+                        m_dht.m_rdp_recv_get.erase(desc);
                 }
+        }
+
+        void
+        dht::rdp_recv_get_func::read_op(int desc, rdp_recv_get_ptr rget)
+        {
+                for (;;) {
+                        uint8_t op;
+                        int     size = sizeof(op);
+
+                        m_dht.m_rdp.receive(desc, &op, &size);
+
+                        if (size == 0)
+                                return;
+
+                        if (op != dht_get_next) {
+                                m_dht.m_rdp.close(desc);
+                                m_dht.m_rdp_recv_get.erase(desc);
+                                return;
+                        }
+
+                        rget->m_time = time(NULL);
+
+
+                        msg_dht_rdp_get_reply msg;
+                        stored_data data;
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        if (rget->m_data.size() == 0) {
+                                m_dht.m_rdp.send(desc, &msg, sizeof(msg));
+                                rget->m_state = rdp_recv_get::RGET_END;
+                        } else {
+                                data = rget->m_data.front();
+                                rget->m_data.pop();
+
+                                msg.valuelen = data.valuelen;
+                                m_dht.m_rdp.send(desc, &msg, sizeof(msg));
+                                m_dht.m_rdp.send(desc, data.value.get(),
+                                                 data.valuelen);
+                        }
+
+                }
+        }
+
+        void
+        dht::rdp_recv_get_func::read_val(rdp_recv_get_ptr rget)
+        {
+                boost::unordered_map<_id, sdata_map>::iterator it1;
+                _id i;
+
+                i.id = rget->m_id;
+
+                it1 = m_dht.m_stored.find(i);
+                if (it1 == m_dht.m_stored.end())
+                        return;
+
+                sdata_map::iterator it2;
+                _key k;
+
+                k.key    = rget->m_key;
+                k.keylen = rget->m_keylen;
+                
+                it2 = it1->second.find(k);
+                if (it2 == it1->second.end())
+                        return;
+
+
+                sdata_set::iterator it3;
+                time_t now = time(NULL);
+                for (it3 = it2->second.begin(); it3 != it2->second.end(); ) {
+                        time_t diff = now - it3->stored_time;
+                        if (diff > it3->ttl) {
+                                it2->second.erase(it3++);
+                                continue;
+                        }
+
+                        rget->m_data.push(*it3);
+                        ++it3;
+                }
+
+                if (it2->second.size() == 0)
+                        it1->second.erase(it2);
+
+                if (it1->second.size() == 0)
+                        m_dht.m_stored.erase(it1);
+        }
+
+        bool
+        dht::rdp_recv_get_func::read_key(int desc, rdp_recv_get_ptr rget)
+        {
+                int size;
+
+                for (;;) {
+                        size = rget->m_keylen - rget->m_key_read;
+                        m_dht.m_rdp.receive(desc, rget->m_key.get(), &size);
+
+                        if (size == 0)
+                                return false;
+
+                        rget->m_key_read += size;
+                        if (rget->m_keylen == rget->m_key_read) {
+                                rget->m_state = rdp_recv_get::RGET_VAL;
+                                read_val(rget);
+                                return true;
+                        }
+                }
+
+                return true;
+        }
+
+        bool
+        dht::rdp_recv_get_func::read_hdr(int desc, rdp_recv_get_ptr rget)
+        {
+                msg_dht_rdp_get msg;
+                int size = sizeof(msg);
+
+                m_dht.m_rdp.receive(desc, &msg, &size);
+
+                if (size != sizeof(msg)) {
+                        m_dht.m_rdp.close(desc);
+                        m_dht.m_rdp_recv_get.erase(desc);
+                        return false;
+                }
+
+                id_ptr id(new uint160_t);
+
+                id->from_binary(msg.id, sizeof(msg.id));
+
+                rget->m_time   = time(NULL);
+                rget->m_state  = rdp_recv_get::RGET_KEY;
+                rget->m_id     = id;
+                rget->m_keylen = ntohs(msg.keylen);
+
+                boost::shared_array<char> key(new char[rget->m_keylen]);
+                rget->m_key = key;
+
+                return true;
         }
 
         bool
@@ -691,19 +1002,23 @@ namespace libcage {
                                 func(q->nodes);
                         }
 
-                        // stop all timers
-                        std::map<_id, timer_query_ptr>::iterator it;
-                        for (it = q->timers.begin(); it != q->timers.end();
-                             ++it) {
-                                m_timer.unset_timer(it->second.get());
-                        }
-
-                        if (q->is_timer_recvd_started)
-                                m_timer.unset_timer(q->timer_recvd.get());
-
-                        // remove query
-                        m_query.erase(q->nonce);
+                        remove_query(q);
                 }
+        }
+
+        void
+        dht::remove_query(query_ptr q)
+        {
+                // stop all timers
+                std::map<_id, timer_query_ptr>::iterator it;
+                for (it = q->timers.begin(); it != q->timers.end(); ++it) 
+                        m_timer.unset_timer(it->second.get());
+
+                if (q->is_timer_recvd_started)
+                        m_timer.unset_timer(q->timer_recvd.get());
+
+                // remove query
+                m_query.erase(q->nonce);
         }
 
         void
@@ -1114,7 +1429,7 @@ namespace libcage {
         {
                 msg_dht_store *msg;
                 int            size;
-                char           buf[1024 * 4];
+                char           buf[1024 * 2];
                 char          *p_key, *p_value;
 
                 size = sizeof(*msg) - sizeof(msg->data) + keylen + valuelen;
@@ -1300,10 +1615,12 @@ namespace libcage {
 
                 msg_dht_find_value *msg;
                 int  size;
-                char buf[1024 * 4];
+                char buf[1024 * 2];
 
-                size = sizeof(*msg) - sizeof(msg->key)
-                        + keylen;
+                size = sizeof(*msg) - sizeof(msg->key);
+
+                if (! p_dht->m_is_use_rdp)
+                        size += keylen;
 
                 if (size > (int)sizeof(buf))
                         return;
@@ -1314,9 +1631,13 @@ namespace libcage {
 
                 msg->nonce  = htonl(nonce);
                 msg->domain = htons(addr.domain);
-                msg->keylen = htons(keylen);
 
-                memcpy(msg->key, key.get(), keylen);
+                if (p_dht->m_is_use_rdp) {
+                        msg->flag = get_by_rdp;
+                } else {
+                        msg->keylen = htons(keylen);
+                        memcpy(msg->key, key.get(), keylen);
+                }
 
                 dst->to_binary(msg->id, sizeof(msg->id));
 
@@ -1333,7 +1654,7 @@ namespace libcage {
 
                         msg_dht_find_value *msg;
                         int  size;
-                        char buf[1024 * 4];
+                        char buf[1024 * 2];
 
                         size = sizeof(*msg) - sizeof(msg->key)
                                 + q->keylen;
@@ -1379,7 +1700,7 @@ namespace libcage {
                 uint16_t  size;
                 uint16_t  keylen;
                 id_ptr    id(new uint160_t);
-                char      buf[1024 * 4];
+                char      buf[1024 * 2];
 
 
                 req = (msg_dht_find_value*)msg;
@@ -1399,126 +1720,154 @@ namespace libcage {
                 add(addr);
                 m_peers.add_node(addr);
 
-                // lookup stored data
-                key = boost::shared_array<char>(new char[keylen]);
-                memcpy(key.get(), req->key, keylen);
-
+                reply = (msg_dht_find_value_reply*)buf;
                 id->from_binary(req->id, sizeof(req->id));
 
-                boost::unordered_map<_id, sdata_map>::iterator it1;
-                _id i;
+                if (req->flag == get_by_rdp) {
+                        boost::unordered_map<_id, sdata_map>::iterator it;
+                        _id i;
 
-                i.id = id;
-                it1 = m_stored.find(i);
+                        i.id = id;
+                        it = m_stored.find(i);
 
-                reply = (msg_dht_find_value_reply*)buf;
+                        if (it != m_stored.end()) {
+                                size = sizeof(*reply) - sizeof(reply->data);
 
-                if (it1 != m_stored.end()) {
-                        sdata_map::iterator it2;
-                        _key k;
+                                memset(reply, 0, size);
 
-                        k.key    = key;
-                        k.keylen = keylen;
+                                reply->nonce = req->nonce;
+                                reply->flag  = data_are_nul;
 
-                        it2 = it1->second.find(k);
+                                memcpy(reply->id, req->id, sizeof(reply->id));
 
-                        if (it2 != it1->second.end()) {
-                                sdata_set::iterator it3;
-                                uint16_t i = 1;
-                                for (it3 = it2->second.begin();
-                                     it3 != it2->second.end(); ++it3) {
-                                        msg_data *data;
+                                send_msg(m_udp, &reply->hdr, size,
+                                         type_dht_find_value_reply,
+                                         addr, m_id);
 
-                                        size = sizeof(*reply) -
-                                                sizeof(reply->data) +
-                                                sizeof(*data) -
-                                                sizeof(data->data) +
-                                                it3->keylen +
-                                                it3->valuelen;
+                                return;
+                        }
+                } else if (req->flag == get_by_udp) {
+                        // lookup stored data
+                        key = boost::shared_array<char>(new char[keylen]);
+                        memcpy(key.get(), req->key, keylen);
 
-                                        memset(reply, 0, size);
+                        boost::unordered_map<_id, sdata_map>::iterator it1;
+                        _id i;
 
-                                        reply->nonce = req->nonce;
-                                        reply->flag  = 1;
-                                        reply->index = htons(i);
-                                        reply->total = htons((uint16_t)it2->second.size());
+                        i.id = id;
+                        it1 = m_stored.find(i);
 
-                                        memcpy(reply->id, req->id, sizeof(reply->id));
+                        if (it1 != m_stored.end()) {
+                                sdata_map::iterator it2;
+                                _key k;
 
-                                        data = (msg_data*)reply->data;
+                                k.key    = key;
+                                k.keylen = keylen;
 
-                                        data->keylen   = htons(it3->keylen);
-                                        data->valuelen = htons(it3->valuelen);
+                                it2 = it1->second.find(k);
 
-                                        memcpy(data->data, it3->key.get(),
-                                               it3->keylen);
-                                        memcpy((char*)data->data + it3->keylen,
-                                               it3->value.get(), it3->valuelen);
+                                if (it2 != it1->second.end()) {
+                                        sdata_set::iterator it3;
+                                        uint16_t i = 1;
+                                        for (it3 = it2->second.begin();
+                                             it3 != it2->second.end(); ++it3) {
+                                                msg_data *data;
 
-                                        send_msg(m_udp, &reply->hdr, size,
-                                                 type_dht_find_value_reply,
-                                                 addr, m_id);
+                                                size = sizeof(*reply) -
+                                                        sizeof(reply->data) +
+                                                        sizeof(*data) -
+                                                        sizeof(data->data) +
+                                                        it3->keylen +
+                                                        it3->valuelen;
+
+                                                memset(reply, 0, size);
+
+                                                reply->nonce = req->nonce;
+                                                reply->flag  = data_are_values;
+                                                reply->index = htons(i);
+                                                reply->total = htons((uint16_t)it2->second.size());
+
+                                                memcpy(reply->id, req->id, sizeof(reply->id));
+
+                                                data = (msg_data*)reply->data;
+
+                                                data->keylen   = htons(it3->keylen);
+                                                data->valuelen = htons(it3->valuelen);
+
+                                                memcpy(data->data, it3->key.get(),
+                                                       it3->keylen);
+                                                memcpy((char*)data->data + it3->keylen,
+                                                       it3->value.get(), it3->valuelen);
+
+                                                send_msg(m_udp, &reply->hdr, size,
+                                                         type_dht_find_value_reply,
+                                                         addr, m_id);
+                                        }
+
+                                        return;
                                 }
                         }
                 } else {
-                        // reply nodes
-                        msg_nodes *data;
-                        std::vector<cageaddr>    nodes;
-                        uint16_t domain;
-
-                        lookup(*id, num_find_node, nodes);
-
-                        domain = ntohs(req->domain);
-
-                        if (domain == domain_inet) {
-                                msg_inet *min;
-
-                                size = sizeof(*reply) - sizeof(reply->data) +
-                                        sizeof(*data) - sizeof(data->addrs) +
-                                        sizeof(*min) * nodes.size();
-
-                                memset(reply, 0, size);
-
-                                reply->nonce = req->nonce;
-                                reply->flag  = 0;
-
-                                memcpy(reply->id, req->id, sizeof(reply->id));
-                                
-                                data = (msg_nodes*)reply->data;
-
-                                data->num    = nodes.size();
-                                data->domain = req->domain;
-
-                                min = (msg_inet*)data->addrs;
-                                write_nodes_inet(min, nodes);
-                        } else if (domain == domain_inet6) {
-                                msg_inet6 *min6;
-
-                                size = sizeof(*reply) - sizeof(reply->data) +
-                                        sizeof(*data) - sizeof(data->addrs) +
-                                        sizeof(*min6) * nodes.size();
-
-                                memset(reply, 0, size);
-
-                                reply->nonce = req->nonce;
-                                reply->flag  = 0;
-
-                                memcpy(reply->id, req->id, sizeof(reply->id));
-                                
-                                data = (msg_nodes*)reply->data;
-
-                                data->num    = nodes.size();
-                                data->domain = req->domain;
-
-                                min6 = (msg_inet6*)data->addrs;
-                                write_nodes_inet6(min6, nodes);
-                        } else {
-                                return;
-                        }
-
-                        send_msg(m_udp, &reply->hdr, size,
-                                 type_dht_find_value_reply, addr, m_id);
+                        return;
                 }
+
+                // reply nodes
+                msg_nodes *data;
+                std::vector<cageaddr>    nodes;
+                uint16_t domain;
+
+                lookup(*id, num_find_node, nodes);
+
+                domain = ntohs(req->domain);
+
+                if (domain == domain_inet) {
+                        msg_inet *min;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*data) - sizeof(data->addrs) +
+                                sizeof(*min) * nodes.size();
+
+                        memset(reply, 0, size);
+
+                        reply->nonce = req->nonce;
+                        reply->flag  = data_are_nodes;
+
+                        memcpy(reply->id, req->id, sizeof(reply->id));
+
+                        data = (msg_nodes*)reply->data;
+
+                        data->num    = nodes.size();
+                        data->domain = req->domain;
+
+                        min = (msg_inet*)data->addrs;
+                        write_nodes_inet(min, nodes);
+                } else if (domain == domain_inet6) {
+                        msg_inet6 *min6;
+
+                        size = sizeof(*reply) - sizeof(reply->data) +
+                                sizeof(*data) - sizeof(data->addrs) +
+                                sizeof(*min6) * nodes.size();
+
+                        memset(reply, 0, size);
+
+                        reply->nonce = req->nonce;
+                        reply->flag  = data_are_nodes;
+
+                        memcpy(reply->id, req->id, sizeof(reply->id));
+                                
+                        data = (msg_nodes*)reply->data;
+
+                        data->num    = nodes.size();
+                        data->domain = req->domain;
+
+                        min6 = (msg_inet6*)data->addrs;
+                        write_nodes_inet6(min6, nodes);
+                } else {
+                        return;
+                }
+
+                send_msg(m_udp, &reply->hdr, size,
+                         type_dht_find_value_reply, addr, m_id);
         }
 
         void
@@ -1575,7 +1924,28 @@ namespace libcage {
                 }
 
 
-                if (reply->flag == 1) {
+                if (reply->flag == data_are_nul && m_is_use_rdp) {
+                        if (q->num_ids < (int)(sizeof(q->ids) /
+                                               sizeof(q->ids[0])))
+                                q->ids[q->num_ids] = addr.id;
+
+                        if (q->is_rdp_con)
+                                return;
+
+                        
+                        rdp_get_func func(*this, q);
+
+                        q->ids[0]     = addr.id;
+                        q->idx_ids    = 0;
+                        q->num_ids    = 1;
+                        q->is_rdp_con = true;
+                        q->rdp_time   = time(NULL);
+
+                        q->rdp_desc = m_rdp.connect(rdp_get_port, addr.id, 0,
+                                                    func);
+
+                        return;
+                } else if (reply->flag == data_are_values && ! m_is_use_rdp) {
                         msg_data *data;
                         uint16_t  index;
                         uint16_t  total;
@@ -1612,12 +1982,13 @@ namespace libcage {
                         total = ntohs(reply->total);
 
 
-                        std::map<_id, int>::iterator it_num;
+                        std::map<_id, query::val_info>::iterator it_val;
 
-                        it_num = q->num_value.find(i);
-                        if (it_num == q->num_value.end()) {
-                                q->num_value[i] = total;
-                        } else if (it_num->second != total) {
+                        it_val = q->valinfo.find(i);
+                        if (it_val == q->valinfo.end()) {
+                                q->valinfo[i].num_value = total;
+                                it_val = q->valinfo.find(i);
+                        } else if (it_val->second.num_value != total) {
                                 return;
                         }
 
@@ -1629,9 +2000,9 @@ namespace libcage {
                         v.value = v_ptr;
                         v.len   = valuelen;
 
-                        q->values[i].insert(v);
                         q->vset->insert(v);
-                        q->indeces[i].insert(index);
+                        it_val->second.values.insert(v);
+                        it_val->second.indeces.insert(index);
 
 
                         if (! q->is_timer_recvd_started) {
@@ -1650,16 +2021,16 @@ namespace libcage {
                         }
 
 
-                        for (it_num = q->num_value.begin();
-                             it_num != q->num_value.end(); ++it_num) {
-                                if (it_num->second >
-                                    (int)q->values[it_num->first].size()) {
+                        for (it_val = q->valinfo.begin();
+                             it_val != q->valinfo.end(); ++it_val) {
+                                if (it_val->second.num_value >
+                                    it_val->second.values.size()) {
                                         return;
                                 }
                         }
 
                         recvd_value(q);
-                } else if (reply->flag == 0) {
+                } else if (reply->flag == data_are_nodes) {
                         std::vector<cageaddr> nodes;
                         msg_nodes *addrs;
                         uint16_t   domain;
@@ -1728,18 +2099,7 @@ namespace libcage {
                 func = boost::get<callback_find_value>(q->func);
                 func(true, q->vset);
 
-                // stop all timer
-                std::map<_id, timer_query_ptr>::iterator it_tm;
-                for (it_tm = q->timers.begin();
-                     it_tm != q->timers.end(); ++it_tm) {
-                        m_timer.unset_timer(it_tm->second.get());
-                }
-
-                if (q->is_timer_recvd_started)
-                        m_timer.unset_timer(q->timer_recvd.get());
-
-                // remove query
-                m_query.erase(q->nonce);
+                remove_query(q);
         }
 
         void
@@ -1785,7 +2145,7 @@ namespace libcage {
                 msg_dht_store *msg;
                 uint16_t       ttl;
                 int            size;
-                char           buf[1024 * 4];
+                char           buf[1024 * 2];
                 char          *p_key, *p_value;
                 time_t         now = time(NULL);
                 time_t         diff;

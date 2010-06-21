@@ -192,16 +192,6 @@ namespace libcage {
                                          rdp_event event);
                 };
 
-                class rdp_recv_get_func {
-                public:
-                        dht            &m_dht;
-
-                        rdp_recv_get_func(dht &d) : m_dht(d) { }
-
-                        void operator() (int desc, rdp_addr addr,
-                                         rdp_event event);
-                };
-
                 class sync_node {
                 public:
                         sync_node(dht &d) : m_dht(d)
@@ -332,7 +322,7 @@ namespace libcage {
                 public:
                         std::vector<cageaddr>           nodes;
                         std::map<_id, timer_query_ptr>  timers;
-                        std::set<_id>       sent;
+                        std::set<_id>   sent;
                         id_ptr          dst;
                         uint32_t        nonce;
                         int             num_query;
@@ -340,11 +330,31 @@ namespace libcage {
 
                         boost::shared_array<char>       key;
                         int             keylen;
+                        
+                        struct val_info {
+                                std::set<int> indeces;
+                                value_set     values;
+                                uint16_t      num_value;
+                        };
 
-                        std::map<_id, value_set> values;
-                        std::map<_id, int>       num_value;
-                        std::map<_id, std::set<int> >       indeces;
+                        std::map<_id, val_info>  valinfo;
                         value_set_ptr   vset;
+
+                        // for RDP
+                        enum query_state {
+                                QUERY_HDR,
+                                QUERY_VAL,
+                        };
+                        id_ptr          ids[3];
+                        int             num_ids;
+                        int             idx_ids;
+                        bool            is_rdp_con;
+                        int             rdp_desc;
+                        time_t          rdp_time;
+                        query_state     rdp_state;
+                        uint16_t        vallen;
+                        uint16_t        val_read;
+                        boost::shared_array<char>       val;
 
                         timer_recvd_ptr       timer_recvd;
                         bool                  is_timer_recvd_started;
@@ -352,11 +362,11 @@ namespace libcage {
                         callback_func   func;
 
                         query() : vset(new value_set),
-                                  is_timer_recvd_started(false){ }
+                                  is_rdp_con(false),
+                                  is_timer_recvd_started(false) { } 
                 };
 
                 typedef boost::shared_ptr<query> query_ptr;
-
 
                 class timer_recvd_value : public timer::callback {
                 public:
@@ -365,12 +375,66 @@ namespace libcage {
 
                         timer_recvd_value(dht &d, query_ptr q)
                                 : m_dht(d), m_query(q) { }
-                        virtual ~timer_recvd_value() { }
 
                         virtual void operator() ()
                         {
                                 m_dht.recvd_value(m_query);
                         }
+                };
+
+                class rdp_get_func {
+                public:
+                        dht            &m_dht;
+                        query_ptr       m_query;
+
+                        rdp_get_func(dht &d, query_ptr q) : m_dht(d),
+                                                            m_query(q) { }
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+
+                        bool read_hdr(int desc);
+                        bool read_val(int desc);
+                        void close_rdp(int desc);
+                };
+
+                class rdp_recv_get {
+                public:
+                        enum rget_state {
+                                RGET_HDR,
+                                RGET_KEY,
+                                RGET_VAL,
+                                RGET_END,
+                        };
+                        dht            &m_dht;
+                        time_t          m_time;
+                        rget_state      m_state;
+                        id_ptr          m_id;
+                        uint16_t        m_keylen;
+                        uint16_t        m_key_read;
+                        boost::shared_array<char>      m_key;
+                        std::queue<stored_data>        m_data;
+
+                        rdp_recv_get(dht &d) : m_dht(d), m_time(time(NULL)),
+                                               m_state(RGET_HDR),
+                                               m_key_read(0) { }
+                };
+
+                typedef boost::shared_ptr<rdp_recv_get> rdp_recv_get_ptr;
+
+                class rdp_recv_get_func {
+                public:
+                        dht            &m_dht;
+
+                        rdp_recv_get_func(dht &d) : m_dht(d) { }
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                        bool read_hdr(int desc, rdp_recv_get_ptr rget);
+                        bool read_key(int desc, rdp_recv_get_ptr rget);
+                        void read_val(rdp_recv_get_ptr rget);
+                        void read_op(int desc, rdp_recv_get_ptr rget);
+
                 };
 
                 // for restore
@@ -466,6 +530,7 @@ namespace libcage {
                 void            maintain();
 
                 void            recvd_value(query_ptr q);
+                void            remove_query(query_ptr q);
 
                 void            add_sdata(stored_data &sdata, bool is_origin);
                 void            erase_sdata(stored_data &sdata);
@@ -497,6 +562,7 @@ namespace libcage {
                 std::map<uint32_t, query_ptr>           m_query;
                 std::map<int, rdp_recv_store_ptr>       m_rdp_recv_store;
                 std::map<int, time_t>                   m_rdp_store;
+                std::map<int, rdp_recv_get_ptr>         m_rdp_recv_get;
         };
 }
 
