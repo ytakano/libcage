@@ -393,6 +393,7 @@ namespace libcage {
                         m_query->rdp_desc = m_dht.m_rdp.connect(rdp_get_port,
                                                                 id, 0, *this);
                 } else {
+                        m_query->is_rdp_con = false;
                         m_dht.send_find(m_query);
                 }
         }
