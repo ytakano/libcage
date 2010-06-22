@@ -503,7 +503,7 @@ public:
                         // send result of the fail
                         // format: 406,join,node_name,host,port,comment
                         snprintf(result, sizeof(result),
-                                 "%s,join,%s,%s,%d,failed to join to '%s:%d'\n",
+                                 "%s,join,%s,%s,%d,failed in connecting to '%s:%d'\n",
                                  ERR_JOIN_FAILED, esc_node_name.c_str(),
                                  esc_host.c_str(), port, esc_host.c_str(),
                                  port);

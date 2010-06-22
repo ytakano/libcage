@@ -128,7 +128,7 @@ client_callback::operator() (int desc, libcage::rdp_addr addr,
                 m_rdp.close(desc);
                 break;
         case libcage::FAILED:
-                std::cout << "failed to connect" << std::endl;
+                std::cout << "failed in connecting" << std::endl;
                 m_rdp.close(desc);
                 break;
         default:
@@ -141,7 +141,7 @@ sender::operator() ()
 {
         std::cout << "send: num = " << m_num << std::endl;
         if (m_rdp.send(m_desc, &m_num, sizeof(m_num)) < 0) {
-                std::cout << "failed to send " << m_num
+                std::cout << "failed in sending " << m_num
                           << std::endl;
                 return;
         }
@@ -216,7 +216,7 @@ main(int argc, char *argv[])
 
         desc1 = my_rdp.listen(100, server_func);
         if (desc1 < 0) {
-                std::cerr << "failed to listen" << std::endl;
+                std::cerr << "failed in listening" << std::endl;
                 return -1;
         }
 

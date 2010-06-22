@@ -2369,6 +2369,47 @@ namespace libcage {
                                 ++it2;
                         }
                 }
+
+                std::map<int, rdp_recv_get_ptr>::iterator it3;
+                for (it3 = m_rdp_recv_get.begin();
+                     it3 != m_rdp_recv_get.end(); ) {
+                        diff = now - it3->second->m_time;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it3->first);
+                                m_rdp_recv_get.erase(it3++);
+                        } else {
+                                ++it3;
+                        }
+                }
+
+                std::map<uint32_t, query_ptr>::iterator it4, it4_tmp;
+                for (it4 = m_query.begin(); it4 != m_query.end(); ) {
+                        diff = now - it4->second->rdp_time;
+                        if (it4->second->is_rdp_con && diff > rdp_timeout) {
+                                m_rdp.close(it4->second->rdp_desc);
+
+                                if (it4->second->vset->size() > 0) {
+                                        it4_tmp = it4++;
+                                        recvd_value(it4_tmp->second);
+                                        continue;
+                                }
+
+                                if (it4->second->ids.size() > 0) {
+                                        rdp_get_func func(*this, it4->second);
+                                        id_ptr id = it4->second->ids.front();
+
+                                        it4->second->ids.pop();
+                                        it4->second->rdp_time = time(NULL);
+                                        it4->second->rdp_desc = m_rdp.connect(rdp_get_port,
+                                                                id, 0, func);
+                                } else {
+                                        it4->second->is_rdp_con = false;
+                                        send_find(it4->second);
+                                }
+                        }
+
+                        ++it4;
+                }
         }
 
         void

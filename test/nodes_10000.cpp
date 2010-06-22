@@ -41,7 +41,7 @@ get_func(bool result, libcage::dht::value_set_ptr vset)
                 }
                 std::cout << std::endl;
         } else {
-                std::cout << "failed to get: sec = " << diff << "[s]"
+                std::cout << "failed in getting: sec = " << diff << "[s]"
                           << ", key = " << get_key << std::endl;
         }
 

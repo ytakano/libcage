@@ -112,7 +112,7 @@ server_callback::operator() (int desc, libcage::rdp_addr addr,
                 cage1->rdp_close(desc);
                 break;
         case libcage::FAILED:
-                std::cout << "failed to connect" << std::endl;
+                std::cout << "failed in connecting" << std::endl;
                 cage1->rdp_close(desc);
                 break;
         default:
@@ -152,7 +152,7 @@ client_callback::operator() (int desc, libcage::rdp_addr addr,
                 cage2->rdp_close(desc);
                 break;
         case libcage::FAILED:
-                std::cout << "failed to connect" << std::endl;
+                std::cout << "failed in connecting" << std::endl;
                 cage2->rdp_close(desc);
                 break;
         case libcage::REFUSED:
