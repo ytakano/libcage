@@ -134,9 +134,15 @@ namespace libcage {
                                       const void *key, uint16_t keylen,
                                       const void *value, uint16_t valuelen,
                                       uint16_t ttl);
+                void            store(id_ptr id, boost::shared_array<char> key,
+                                      uint16_t keylen,
+                                      boost::shared_array<char> value,
+                                      uint16_t valuelen, uint16_t ttl);
+
 
                 void            set_enabled_dtun(bool flag);
                 void            set_enabled_rdp(bool flag);
+                bool            is_use_rdp() { return m_is_use_rdp; }
 
         private:
                 class rdp_recv_store {

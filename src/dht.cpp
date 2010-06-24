@@ -1387,27 +1387,22 @@ namespace libcage {
         }
 
         void
-        dht::store(const uint160_t &id, const void *key, uint16_t keylen,
-                   const void *value, uint16_t valuelen, uint16_t ttl)
+        dht::store(id_ptr id, boost::shared_array<char> key, uint16_t keylen,
+                   boost::shared_array<char> value, uint16_t valuelen,
+                   uint16_t ttl)
         {
                 // store to dht network
                 store_func func;
-                id_ptr     p_id(new uint160_t);
 
-                *p_id = id;
-
-                func.key      = boost::shared_array<char>(new char[keylen]);
-                func.value    = boost::shared_array<char>(new char[valuelen]);
-                func.id       = p_id;
+                func.key      = key;
+                func.value    = value;
+                func.id       = id;
                 func.keylen   = keylen;
                 func.valuelen = valuelen;
                 func.ttl      = ttl;
                 func.p_dht    = this;
 
-                memcpy(func.key.get(), key, keylen);
-                memcpy(func.value.get(), value, valuelen);
-
-                find_node(id, func);
+                find_node(*id, func);
 
 
                 // store to local
@@ -1427,6 +1422,22 @@ namespace libcage {
                 } else {
                         add_sdata(data, true);
                 }
+        }
+
+        void
+        dht::store(const uint160_t &id, const void *key, uint16_t keylen,
+                   const void *value, uint16_t valuelen, uint16_t ttl)
+        {
+                id_ptr     p_id(new uint160_t);
+                boost::shared_array<char> p_key(new char[keylen]);
+                boost::shared_array<char> p_val(new char[valuelen]);
+
+                *p_id = id;
+
+                memcpy(p_key.get(), key, keylen);
+                memcpy(p_val.get(), value, valuelen);
+
+                store(p_id, p_key, keylen, p_val, valuelen, ttl);
         }
 
         bool

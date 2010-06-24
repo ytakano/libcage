@@ -55,6 +55,8 @@ namespace libcage {
                 static const time_t     register_ttl;
                 static const time_t     get_timeout;
                 static const time_t     timer_interval;
+                static const uint16_t   proxy_store_port;
+                static const uint16_t   proxy_get_port;
 
         public:
                 typedef boost::function<void (bool, void *buf, int len)>
@@ -84,6 +86,16 @@ namespace libcage {
                                     const void *key, uint16_t keylen,
                                     dht::callback_find_value func);
 
+                void            store_by_rdp(const uint160_t &id,
+                                             const void *key, uint16_t keylen,
+                                             const void *value,
+                                             uint16_t valuelen,
+                                             uint16_t ttl);
+                void            get_by_rdp(const uint160_t &id,
+                                           const void *key, uint16_t keylen,
+                                           dht::callback_find_value func);
+
+
                 void            send_dgram(const void *msg, int len, id_ptr id);
                 void            send_dgram(packetbuf_ptr pbuf, id_ptr id,
                                            uint8_t type = type_proxy_dgram);
@@ -98,6 +110,92 @@ namespace libcage {
                 void            refresh();
                 
         private:
+                class rdp_store_func {
+                public:
+                        proxy  &m_proxy;
+                        boost::shared_array<char>       m_key;
+                        boost::shared_array<char>       m_val;
+                        uint16_t        m_keylen;
+                        uint16_t        m_valuelen;
+                        uint16_t        m_ttl;
+                        id_ptr          m_id;
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+
+                        rdp_store_func(proxy &p) : m_proxy(p) { }
+                };
+
+                class rdp_recv_store {
+                public:
+                        enum recv_store_state {
+                                RS_HDR,
+                                RS_KEY,
+                                RS_VAL,
+                        };
+
+                        proxy  &m_proxy;
+                        recv_store_state                m_state;
+                        boost::shared_array<char>       m_key;
+                        boost::shared_array<char>       m_val;
+                        uint16_t        m_keylen;
+                        uint16_t        m_key_read;
+                        uint16_t        m_valuelen;
+                        uint16_t        m_val_read;
+                        uint16_t        m_ttl;
+                        id_ptr          m_id;
+                        time_t          m_time;
+
+                        rdp_recv_store(proxy &p) : m_proxy(p),
+                                                   m_state(RS_HDR),
+                                                   m_key_read(0),
+                                                   m_val_read(0) { }
+                };
+
+                typedef boost::shared_ptr<rdp_recv_store> rdp_recv_store_ptr;
+
+                class rdp_recv_store_func {
+                public:
+                        proxy  &m_proxy;
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+
+                        rdp_recv_store_func(proxy &p) : m_proxy(p) { }
+
+                        bool read_hdr(int desc);
+                        bool read_key(int desc);
+                        void read_val(int desc);
+                };
+
+                class rdp_get {
+                public:
+                        proxy  &m_proxy;
+                        time_t  m_time;
+
+                        rdp_get(proxy &p) : m_proxy(p) { }
+                };
+
+                class rdp_get_func {
+                public:
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                };
+
+                class rdp_recv_get {
+                public:
+                        proxy  &m_proxy;
+                        time_t  m_time;
+
+                        rdp_recv_get(proxy &p) : m_proxy(p) { }
+                };
+
+                class rdp_recv_get_func {
+                public:
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+                };
+
                 class _addr {
                 public:
                         uint32_t        session;
@@ -229,6 +327,10 @@ namespace libcage {
                 dgram::callback m_dgram_func;
                 std::map<_id, _addr>            m_registered;
                 std::map<uint32_t, gd_ptr>      m_getdata;
+
+                int             m_rdp_store_desc;
+                std::map<int, time_t>           m_rdp_store;
+                std::map<int, rdp_recv_store_ptr>       m_rdp_recv_store;
         };
 }
 

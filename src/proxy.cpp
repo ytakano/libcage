@@ -42,6 +42,8 @@ namespace libcage {
         const time_t    proxy::register_ttl     = 300;
         const time_t    proxy::get_timeout      = 10;
         const time_t    proxy::timer_interval   = 30;
+        const uint16_t  proxy::proxy_store_port = 200;
+        const uint16_t  proxy::proxy_get_port   = 201;
 
         static void
         no_action(void *buf, size_t len, uint8_t *addr)
@@ -70,16 +72,28 @@ namespace libcage {
                 m_timer_proxy(*this),
                 m_dgram_func(&no_action)
         {
+                rdp_store_func func(*this);
 
+                m_rdp_store_desc = m_rdp.listen(proxy_store_port, func);
         }
 
         proxy::~proxy()
         {
-                std::map<uint32_t, gd_ptr>::iterator it;
+                std::map<uint32_t, gd_ptr>::iterator it1;
 
-                for (it = m_getdata.begin(); it != m_getdata.end(); ++it) {
-                        m_timer.unset_timer(&it->second->timeout);
-                }
+                for (it1 = m_getdata.begin(); it1 != m_getdata.end(); ++it1)
+                        m_timer.unset_timer(&it1->second->timeout);
+
+                std::map<int, time_t>::iterator it2;
+                for (it2 = m_rdp_store.begin(); it2 != m_rdp_store.end(); ++it2)
+                        m_rdp.close(it1->first);
+
+                std::map<int, rdp_recv_store_ptr>::iterator it3;
+                for (it3 = m_rdp_recv_store.begin();
+                     it3 != m_rdp_recv_store.end(); ++it3)
+                        m_rdp.close(it3->first);
+
+                m_rdp.close(m_rdp_store_desc);
         }
 
         void
@@ -236,19 +250,52 @@ namespace libcage {
         }
 
         void
+        proxy::store_by_rdp(const uint160_t &id, const void *key,
+                            uint16_t keylen, const void *value,
+                            uint16_t valuelen, uint16_t ttl)
+        {
+                boost::shared_array<char> k(new char[keylen]);
+                boost::shared_array<char> v(new char[valuelen]);
+                rdp_store_func func(*this);
+                id_ptr         p_id(new uint160_t);
+                int            desc;
+
+                memcpy(k.get(), key, keylen);
+                memcpy(v.get(), value, valuelen);
+
+                *p_id = id;
+
+                func.m_key      = k;
+                func.m_val      = v;
+                func.m_keylen   = keylen;
+                func.m_valuelen = valuelen;
+                func.m_ttl      = ttl;
+                func.m_id       = p_id;
+
+                desc = m_rdp.connect(0, m_server.id, proxy_store_port, func);
+
+                m_rdp_store[desc] = time(NULL);
+        }
+
+        void
         proxy::store(const uint160_t &id, const void *key, uint16_t keylen,
                      const void *value, uint16_t valuelen, uint16_t ttl)
         {
-                msg_proxy_store *store;
-                char *p_value;
-                char buf[1024 * 4];
-                int  size;
-
                 if (! m_is_registered) {
                         if (m_nat.get_state() == node_symmetric)
                                 register_node();
                         return;
                 }
+
+                if (m_dht.is_use_rdp()) {
+                        store_by_rdp(id, key, keylen, value, valuelen, ttl);
+                        return;
+                }
+
+                msg_proxy_store *store;
+                char *p_value;
+                char buf[1024 * 4];
+                int  size;
 
                 size = sizeof(*store) - sizeof(store->data) + keylen + valuelen;
 
@@ -302,13 +349,10 @@ namespace libcage {
 
                 uint160_t id;
                 id_ptr    src(new uint160_t);
-                _id       i;
                 char     *p_value;
 
                 src->from_binary(store->hdr.src, sizeof(store->hdr.src));
-
-                i.id = src;
-                if (m_registered.find(i) == m_registered.end())
+                if (! is_registered(src))
                         return;
 
 
@@ -753,6 +797,215 @@ namespace libcage {
 
                 m_advertise.advertise_to(*src, domain, forwarded->port,
                                          forwarded->addr);
+        }
+
+        void
+        proxy::rdp_get_func::operator() (int desc, rdp_addr addr,
+                                         rdp_event event)
+        {
+
+        }
+
+        void
+        proxy::rdp_recv_get_func::operator() (int desc, rdp_addr addr,
+                                              rdp_event event)
+        {
+
+        }
+
+        void
+        proxy::rdp_store_func::operator() (int desc, rdp_addr addr,
+                                           rdp_event event)
+        {
+                switch (event) {
+                case CONNECTED:
+                {
+                        msg_dht_rdp_store msg;
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        m_id->to_binary(msg.id, sizeof(msg.id));
+
+                        msg.keylen   = htons(m_keylen);
+                        msg.valuelen = htons(m_valuelen);
+                        msg.ttl      = htons(m_ttl);
+
+                        m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
+
+                        break;
+                }
+                default:
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_store.erase(desc);
+                }
+        }
+
+        bool
+        proxy::rdp_recv_store_func::read_hdr(int desc)
+        {
+                std::map<int, rdp_recv_store_ptr>::iterator it;
+
+                it = m_proxy.m_rdp_recv_store.find(desc);
+                if (it == m_proxy.m_rdp_recv_store.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        return false;
+                }
+
+
+                msg_dht_rdp_store msg;
+                int size = sizeof(msg);
+
+                m_proxy.m_rdp.receive(desc, &msg, &size);
+
+                if (size != sizeof(msg)) {
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_store.erase(it);
+                        return false;
+                }
+
+                rdp_recv_store_ptr ptr = it->second;
+                id_ptr id(new uint160_t);
+
+                id->from_binary(msg.id, sizeof(msg.id));
+
+                ptr->m_keylen   = ntohs(msg.keylen);
+                ptr->m_valuelen = ntohs(msg.valuelen);
+                ptr->m_ttl      = ntohs(msg.ttl);
+                ptr->m_id       = id;
+                ptr->m_time     = time(NULL);
+                ptr->m_state    = rdp_recv_store::RS_KEY;
+
+
+                boost::shared_array<char> key(new char[ptr->m_keylen]);
+                boost::shared_array<char> val(new char[ptr->m_valuelen]);
+
+                ptr->m_key = key;
+                ptr->m_val = val;
+
+                return true;
+        }
+
+        bool
+        proxy::rdp_recv_store_func::read_key(int desc)
+        {
+                std::map<int, rdp_recv_store_ptr>::iterator it;
+
+                it = m_proxy.m_rdp_recv_store.find(desc);
+                if (it == m_proxy.m_rdp_recv_store.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        return false;
+                }
+
+
+                rdp_recv_store_ptr ptr = it->second;
+                for (;;) {
+                        int size = ptr->m_keylen - ptr->m_key_read;
+
+                        m_proxy.m_rdp.receive(desc, ptr->m_key.get(), &size);
+
+                        if (size == 0)
+                                return false;
+
+                        ptr->m_key_read += size;
+
+                        if (ptr->m_keylen == ptr->m_key_read) {
+                                ptr->m_state = rdp_recv_store::RS_VAL;
+                                return true;
+                        }
+                }
+
+                return true;
+        }
+
+        void
+        proxy::rdp_recv_store_func::read_val(int desc)
+        {
+                std::map<int, rdp_recv_store_ptr>::iterator it;
+
+                it = m_proxy.m_rdp_recv_store.find(desc);
+                if (it == m_proxy.m_rdp_recv_store.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        return;
+                }
+
+
+                rdp_recv_store_ptr ptr = it->second;
+                for (;;) {
+                        int size = ptr->m_valuelen - ptr->m_val_read;
+
+                        m_proxy.m_rdp.receive(desc, ptr->m_val.get(), &size);
+
+                        if (size == 0)
+                                return;
+
+                        ptr->m_val_read += size;
+
+                        if (ptr->m_valuelen == ptr->m_val_read) {
+                                m_proxy.m_rdp.close(desc);
+                                m_proxy.m_dht.store(ptr->m_id,
+                                                    ptr->m_key,
+                                                    ptr->m_keylen,
+                                                    ptr->m_val,
+                                                    ptr->m_valuelen,
+                                                    ptr->m_ttl);
+                                m_proxy.m_rdp_recv_store.erase(it);
+                                return;
+                        }
+                }
+        }
+
+        void
+        proxy::rdp_recv_store_func::operator() (int desc, rdp_addr addr,
+                                                rdp_event event)
+        {
+                switch (event) {
+                case ACCEPTED:
+                {
+                        if (! m_proxy.is_registered(addr.did)) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        rdp_recv_store_ptr ptr(new rdp_recv_store(m_proxy));
+
+                        ptr->m_time = time(NULL);
+
+                        m_proxy.m_rdp_recv_store[desc] = ptr;
+
+                        break;
+                }
+                case READY2READ:
+                {
+                        std::map<int, rdp_recv_store_ptr>::iterator it;
+
+                        it = m_proxy.m_rdp_recv_store.find(desc);
+                        if (it == m_proxy.m_rdp_recv_store.end()) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        for (;;) {
+                                switch (it->second->m_state) {
+                                case rdp_recv_store::RS_HDR:
+                                        if (! read_hdr(desc))
+                                                return;
+                                        break;
+                                case rdp_recv_store::RS_KEY:
+                                        if (! read_key(desc))
+                                                return;
+                                        break;
+                                case rdp_recv_store::RS_VAL:
+                                        read_val(desc);
+                                        return;
+                                }
+                        }
+
+                        break;
+                }
+                default:
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_store.erase(desc);
+                }
         }
 
         void
