@@ -97,7 +97,7 @@ namespace libcage {
 
                 std::map<int, time_t>::iterator it2;
                 for (it2 = m_rdp_store.begin(); it2 != m_rdp_store.end(); ++it2)
-                        m_rdp.close(it1->first);
+                        m_rdp.close(it2->first);
 
                 std::map<int, rdp_recv_store_ptr>::iterator it3;
                 for (it3 = m_rdp_recv_store.begin();
@@ -127,7 +127,88 @@ namespace libcage {
         void
         proxy::sweep_rdp()
         {
-                // XXX
+                time_t now = time(NULL);
+                time_t diff;
+
+                std::map<int, time_t>::iterator it1;
+                for (it1 = m_rdp_store.begin(); it1 != m_rdp_store.end(); ) {
+                        diff = now - it1->second;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it1->first);
+                                m_rdp_store.erase(it1++);
+                                continue;
+                        }
+                        ++it1;
+                }
+
+                std::map<int, rdp_recv_store_ptr>::iterator it2;
+                for (it2 = m_rdp_recv_store.begin();
+                     it2 != m_rdp_recv_store.end(); ) {
+                        diff = now - it2->second->m_time;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it2->first);
+                                m_rdp_recv_store.erase(it2++);
+                                continue;
+                        }
+                        ++it2;
+                }
+
+                std::map<int, rdp_recv_get_ptr>::iterator it3;
+                for (it3 = m_rdp_recv_get.begin();
+                     it3 != m_rdp_recv_get.end(); ) {
+                        diff = now - it3->second->m_time;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it3->first);
+                                m_rdp_recv_get.erase(it3++);
+                                continue;
+                        }
+                        ++it3;
+                }
+
+                std::map<int, time_t>::iterator it4;
+                for (it4 = m_rdp_get_reply.begin();
+                     it4 != m_rdp_get_reply.end(); ) {
+                        diff = now - it4->second;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it4->first);
+                                m_rdp_get_reply.erase(it4++);
+                                continue;
+                        }
+                        ++it4;
+                }
+
+                std::map<int, rdp_recv_get_reply_ptr>::iterator it5;
+                for (it5 = m_rdp_recv_get_reply.begin();
+                     it5 != m_rdp_recv_get_reply.end(); ) {
+                        diff = it5->second->m_time;
+                        if (diff > rdp_timeout) {
+                                m_rdp.close(it5->first);
+
+                                switch (it5->second->m_state) {
+                                case rdp_recv_get_reply::RGR_VAL_HDR:
+                                case rdp_recv_get_reply::RGR_VAL:
+                                {
+                                        std::map<uint32_t, gd_ptr>::iterator it;
+
+                                        it = m_getdata.find(it5->second->m_nonce);
+                                        if (it == m_getdata.end()) {
+                                                if (it->second->vset->size() > 0)
+                                                        it->second->func(true, it->second->vset);
+                                                else
+                                                        it->second->func(false, it->second->vset);
+
+                                                m_timer.unset_timer(&it->second->timeout);
+                                                m_getdata.erase(it);
+                                        }
+                                }
+                                default:
+                                        m_rdp_recv_get_reply.erase(it5++);
+                                }
+
+                                continue;
+                        }
+                        ++it5;
+                }
         }
 
         void
