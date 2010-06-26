@@ -347,9 +347,10 @@ namespace libcage {
         bool
         dht::rdp_get_func::read_val(int desc)
         {
-                int size = m_query->vallen - m_query->val_read;
+                int   size = m_query->vallen - m_query->val_read;
+                char *buf  = &m_query->val[m_query->val_read];
 
-                m_dht.m_rdp.receive(desc, m_query->val.get(), &size);
+                m_dht.m_rdp.receive(desc, buf, &size);
 
                 if (size == 0)
                         return false;
@@ -585,11 +586,10 @@ namespace libcage {
         bool
         dht::rdp_recv_get_func::read_key(int desc, rdp_recv_get_ptr rget)
         {
-                int size;
-
                 for (;;) {
-                        size = rget->m_keylen - rget->m_key_read;
-                        m_dht.m_rdp.receive(desc, rget->m_key.get(), &size);
+                        int   size = rget->m_keylen - rget->m_key_read;
+                        char *buf  = &rget->m_key[rget->m_key_read];
+                        m_dht.m_rdp.receive(desc, buf, &size);
 
                         if (size == 0)
                                 return false;
@@ -682,7 +682,7 @@ namespace libcage {
                 if (it->second->key_read < it->second->keylen) {
                         int size = it->second->keylen - it->second->key_read;
 
-                        char *buf = &it->second->key.get()[it->second->key_read];
+                        char *buf = &it->second->key[it->second->key_read];
                         m_dht.m_rdp.receive(desc, buf, &size);
 
                         if (size == 0)
@@ -692,9 +692,8 @@ namespace libcage {
                         it->second->last_time  = time(NULL);
                 } else {
                         int size = it->second->valuelen - it->second->val_read;
-                        m_dht.m_rdp.receive(desc,
-                                            &it->second->value.get()[it->second->val_read],
-                                            &size);
+                        char *buf = &it->second->value[it->second->val_read];
+                        m_dht.m_rdp.receive(desc, buf, &size);
 
                         if (size == 0)
                                 return false;

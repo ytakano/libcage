@@ -134,14 +134,18 @@ namespace libcage {
         static const uint8_t type_proxy_rdp_forwarded     = 0x89;
         static const uint8_t type_rdp                     = 0x90;
 
-        static const uint8_t data_are_nodes  = 0xf0;
-        static const uint8_t data_are_values = 0xf1;
-        static const uint8_t data_are_nul    = 0xf2;
+        static const uint8_t data_are_nodes  = 0xa0;
+        static const uint8_t data_are_values = 0xa1;
+        static const uint8_t data_are_nul    = 0xa2;
 
-        static const uint8_t get_by_udp = 0xf0;
-        static const uint8_t get_by_rdp = 0xf1;
+        static const uint8_t get_by_udp = 0xb0;
+        static const uint8_t get_by_rdp = 0xb1;
 
-        static const uint8_t dht_get_next = 0xf0;
+        static const uint8_t dht_get_next = 0xc0;
+
+        static const uint8_t proxy_get_success = 0xd0;
+        static const uint8_t proxy_get_fail    = 0xd1;
+        static const uint8_t proxy_get_next    = 0xd2;
 
 
         struct msg_hdr {
@@ -417,6 +421,25 @@ namespace libcage {
                 uint8_t         padding[3];
                 uint32_t        data[1];
         };
+
+        struct msg_proxy_rdp_get_reply {
+                uint32_t        nonce;
+                uint8_t         id[CAGE_ID_LEN];
+                uint8_t         flag;
+                uint8_t         reserved[3];
+        };
+
+        struct msg_proxy_rdp_get_reply_val {
+                uint16_t        valuelen;
+                uint16_t        reserved;
+        };
+
+        struct msg_proxy_rdp_get {
+                uint32_t        nonce;
+                uint8_t         id[CAGE_ID_LEN];
+                uint16_t        keylen;
+                uint16_t        reserved;
+        };        
 
         struct msg_proxy_dgram {
                 msg_hdr         hdr;

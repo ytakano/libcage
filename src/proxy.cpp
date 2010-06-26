@@ -38,12 +38,13 @@
 #include <boost/foreach.hpp>
 
 namespace libcage {
-        const time_t    proxy::register_timeout = 2;
-        const time_t    proxy::register_ttl     = 300;
-        const time_t    proxy::get_timeout      = 10;
-        const time_t    proxy::timer_interval   = 30;
-        const uint16_t  proxy::proxy_store_port = 200;
-        const uint16_t  proxy::proxy_get_port   = 201;
+        const time_t    proxy::register_timeout     = 2;
+        const time_t    proxy::register_ttl         = 300;
+        const time_t    proxy::get_timeout          = 10;
+        const time_t    proxy::timer_interval       = 30;
+        const uint16_t  proxy::proxy_store_port     = 200;
+        const uint16_t  proxy::proxy_get_port       = 201;
+        const uint16_t  proxy::proxy_get_reply_port = 202;
 
         static void
         no_action(void *buf, size_t len, uint8_t *addr)
@@ -72,15 +73,24 @@ namespace libcage {
                 m_timer_proxy(*this),
                 m_dgram_func(&no_action)
         {
-                rdp_store_func func(*this);
+                rdp_recv_store_func func1(*this);
+                m_rdp_store_desc = m_rdp.listen(proxy_store_port, func1);
 
-                m_rdp_store_desc = m_rdp.listen(proxy_store_port, func);
+                rdp_recv_get_func func2(*this);
+                m_rdp_get_desc = m_rdp.listen(proxy_get_port, func2);
+
+                rdp_recv_get_reply_func func3(*this);
+                m_rdp_get_reply_desc = m_rdp.listen(proxy_get_reply_port,
+                                                    func3);
         }
 
         proxy::~proxy()
         {
-                std::map<uint32_t, gd_ptr>::iterator it1;
+                m_rdp.close(m_rdp_store_desc);
+                m_rdp.close(m_rdp_get_desc);
+                m_rdp.close(m_rdp_get_reply_desc);
 
+                std::map<uint32_t, gd_ptr>::iterator it1;
                 for (it1 = m_getdata.begin(); it1 != m_getdata.end(); ++it1)
                         m_timer.unset_timer(&it1->second->timeout);
 
@@ -93,7 +103,24 @@ namespace libcage {
                      it3 != m_rdp_recv_store.end(); ++it3)
                         m_rdp.close(it3->first);
 
-                m_rdp.close(m_rdp_store_desc);
+                std::map<int, rdp_get_ptr>::iterator it4;
+                for (it4 = m_rdp_get.begin(); it4 != m_rdp_get.end(); ++it4)
+                        m_rdp.close(it4->first);
+
+                std::map<int, rdp_recv_get_ptr>::iterator it5;
+                for (it5 = m_rdp_recv_get.begin(); it5 != m_rdp_recv_get.end();
+                     ++it5)
+                        m_rdp.close(it5->first);
+
+                std::map<int, rdp_recv_get_reply_ptr>::iterator it6;
+                for (it6 = m_rdp_recv_get_reply.begin();
+                     it6 != m_rdp_recv_get_reply.end(); ++it6)
+                        m_rdp.close(it6->first);
+
+                std::map<int, time_t>::iterator it7;
+                for (it7 = m_rdp_get_reply.begin();
+                     it7 != m_rdp_get_reply.end(); ++it7)
+                        m_rdp.close(it7->first);
         }
 
         void
@@ -365,8 +392,308 @@ namespace libcage {
                             ntohs(store->ttl));
         }
 
+
         void
-        proxy::get_reply_func::operator() (bool result, dht::value_set_ptr vset)
+        proxy::rdp_recv_get_reply_func::close_rdp(int desc,
+                                                  rdp_recv_get_reply_ptr ptr)
+        {
+                std::map<uint32_t, gd_ptr>::iterator it;
+
+                it = m_proxy.m_getdata.find(ptr->m_nonce);
+                if (it == m_proxy.m_getdata.end()) {
+                        if (it->second->vset->size() > 0)
+                                it->second->func(true, it->second->vset);
+                        else
+                                it->second->func(false, it->second->vset);
+
+                        m_proxy.m_timer.unset_timer(&it->second->timeout);
+                        m_proxy.m_getdata.erase(ptr->m_nonce);
+                }
+
+                m_proxy.m_rdp.close(desc);
+                m_proxy.m_rdp_recv_get_reply.erase(desc);
+        }
+
+        bool
+        proxy::rdp_recv_get_reply_func::read_hdr(int desc,
+                                                 rdp_recv_get_reply_ptr ptr)
+        {
+                msg_proxy_rdp_get_reply msg;
+                int size = sizeof(msg);
+
+                m_proxy.m_rdp.receive(desc, &msg, &size);
+
+                if (size == 0)
+                        return false;
+
+
+                std::map<uint32_t, gd_ptr>::iterator it;
+                uint32_t nonce = ntohl(msg.nonce);
+
+                it = m_proxy.m_getdata.find(nonce);
+                if (it == m_proxy.m_getdata.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_get_reply.erase(desc);
+                        return false;
+                }
+
+                ptr->m_nonce = nonce;
+                ptr->m_time  = time(NULL);
+                ptr->m_state = rdp_recv_get_reply::RGR_VAL_HDR;
+
+                if (msg.flag == proxy_get_fail) {
+                        close_rdp(desc, ptr);
+                        return false;
+                }
+
+                uint8_t op = proxy_get_next;
+                m_proxy.m_rdp.send(desc, &op, sizeof(op));
+
+                return true;
+        }
+
+        bool
+        proxy::rdp_recv_get_reply_func::read_val_hdr(int desc,
+                                                     rdp_recv_get_reply_ptr ptr)
+        {
+                std::map<uint32_t, gd_ptr>::iterator it;
+
+                it = m_proxy.m_getdata.find(ptr->m_nonce);
+                if (it == m_proxy.m_getdata.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_get_reply.erase(desc);
+                        return false;
+                }
+
+
+                msg_proxy_rdp_get_reply_val msg;
+                int size = sizeof(msg);
+
+                m_proxy.m_rdp.receive(desc, &msg, &size);
+
+                if (size == 0)
+                        return false;
+
+                ptr->m_valuelen = ntohs(msg.valuelen);
+                ptr->m_val_read = 0;
+                ptr->m_state    = rdp_recv_get_reply::RGR_VAL;
+                ptr->m_time     = time(NULL);
+
+                boost::shared_array<char> val(new char[ptr->m_valuelen]);
+                ptr->m_val = val;
+
+                return true;
+        }
+
+        bool
+        proxy::rdp_recv_get_reply_func::read_val(int desc,
+                                                 rdp_recv_get_reply_ptr ptr)
+        {
+                std::map<uint32_t, gd_ptr>::iterator it;
+
+                it = m_proxy.m_getdata.find(ptr->m_nonce);
+                if (it == m_proxy.m_getdata.end()) {
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_get_reply.erase(desc);
+                        return false;
+                }
+
+
+                for (;;) {
+                        int   size = ptr->m_valuelen - ptr->m_val_read;
+                        char *buf  = &ptr->m_val[ptr->m_val_read];
+
+                        m_proxy.m_rdp.receive(desc, buf, &size);
+
+                        if (size == 0)
+                                return false;
+
+                        ptr->m_val_read += size;
+                        ptr->m_time      = time(NULL);
+
+                        if (ptr->m_val_read += ptr->m_valuelen) {
+                                dht::value_t v;
+
+                                v.value = ptr->m_val;
+                                v.len   = ptr->m_valuelen;
+
+                                it->second->vset->insert(v);
+
+
+                                ptr->m_val_read = 0;
+                                ptr->m_val.reset();
+                                ptr->m_state = rdp_recv_get_reply::RGR_VAL_HDR;
+
+
+                                uint8_t op = proxy_get_next;
+                                m_proxy.m_rdp.send(desc, &op, sizeof(op));
+
+                                return true;
+                        }
+                }
+
+                return true;
+        }
+
+        void
+        proxy::rdp_recv_get_reply_func::operator() (int desc, rdp_addr addr,
+                                                    rdp_event event)
+        {
+                switch (event) {
+                case ACCEPTED:
+                {
+                        rdp_recv_get_reply_ptr ptr(new rdp_recv_get_reply);
+
+                        m_proxy.m_rdp_recv_get_reply[desc] = ptr;
+
+                        break;
+                }
+                case READY2READ:
+                {
+                        std::map<int, rdp_recv_get_reply_ptr>::iterator it;
+
+                        it = m_proxy.m_rdp_recv_get_reply.find(desc);
+                        if (it == m_proxy.m_rdp_recv_get_reply.end()) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        for (;;) {
+                                switch (it->second->m_state) {
+                                case rdp_recv_get_reply::RGR_HDR:
+                                        if (! read_hdr(desc, it->second))
+                                                return;
+                                        break;
+                                case rdp_recv_get_reply::RGR_VAL_HDR:
+                                        if (! read_val_hdr(desc, it->second))
+                                                return;
+                                        break;
+                                case rdp_recv_get_reply::RGR_VAL:
+                                        if (! read_val(desc, it->second))
+                                                return;
+                                        break;
+                                }
+                        }
+
+                        break;
+                }
+                default:
+                        std::map<int, rdp_recv_get_reply_ptr>::iterator it;
+
+                        it = m_proxy.m_rdp_recv_get_reply.find(desc);
+                        if (it == m_proxy.m_rdp_recv_get_reply.end()) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        close_rdp(desc, it->second);
+                }
+        }
+
+        void
+        proxy::rdp_get_reply_func::read_op(int desc)
+        {
+                for (;;) {
+                        if (m_vset->size() == 0) {
+                                m_proxy.m_rdp.close(desc);
+                                m_proxy.m_rdp_get_reply.erase(desc);
+                                return;
+                        }
+
+                        uint8_t op;
+                        int     size = sizeof(op);
+
+                        m_proxy.m_rdp.receive(desc, &op, &size);
+
+                        if (size == 0)
+                                return;
+
+                        if (op != proxy_get_next) {
+                                m_proxy.m_rdp.close(desc);
+                                m_proxy.m_rdp_get_reply.erase(desc);
+                                return;
+                        }
+
+                        msg_proxy_rdp_get_reply_val msg;
+                        dht::value_set::iterator it;
+
+                        it = m_vset->begin();
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        msg.valuelen = htons(it->len);
+
+                        m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
+                        m_proxy.m_rdp.send(desc, it->value.get(), it->len);
+
+                        m_vset->erase(it);
+                }
+        }
+
+        void
+        proxy::rdp_get_reply_func::operator() (int desc, rdp_addr addr,
+                                               rdp_event event)
+        {
+                switch (event) {
+                case CONNECTED:
+                {
+                        msg_proxy_rdp_get_reply msg;
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        msg.nonce = htonl(m_nonce);
+
+                        if (m_result)
+                                msg.flag = proxy_get_success;
+                        else
+                                msg.flag = proxy_get_fail;
+
+                        m_id->to_binary(msg.id, sizeof(msg.id));
+
+                        m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
+
+                        m_proxy.m_rdp_get_reply[desc] = time(NULL);
+
+                        break;
+                }
+                case READY2READ:
+                {
+                        if (! m_result) {
+                                m_proxy.m_rdp.close(desc);
+                                m_proxy.m_rdp_get_reply.erase(desc);
+                                return;
+                        }
+
+                        read_op(desc);
+
+                        break;
+                }
+                default:
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_get_reply.erase(desc);
+                }
+        }
+
+        void
+        proxy::get_reply_func::send_reply_by_rdp(bool result,
+                                                 dht::value_set_ptr vset)
+        {
+                rdp_get_reply_func func(*p_proxy);
+                int desc;
+
+                func.m_result = result;
+                func.m_vset   = vset;
+                func.m_nonce  = nonce;
+                func.m_id     = id;
+
+                desc = p_proxy->m_rdp.connect(0, src, proxy_get_reply_port,
+                                              func);
+
+                p_proxy->m_rdp_get_reply[desc] = time(NULL);
+        }
+
+        void
+        proxy::get_reply_func::send_reply(bool result, dht::value_set_ptr vset)
         {
                 msg_proxy_get_reply *reply;
                 int  size;
@@ -437,6 +764,16 @@ namespace libcage {
         }
 
         void
+        proxy::get_reply_func::operator() (bool result, dht::value_set_ptr vset)
+        {
+                if (is_rdp) {
+                        send_reply_by_rdp(result, vset);
+                } else {
+                        send_reply(result, vset);
+                }
+        }
+
+        void
         proxy::recv_get(void *msg, int len)
         {
                 msg_proxy_get *getmsg;
@@ -469,6 +806,7 @@ namespace libcage {
                 func.src     = src;
                 func.nonce   = getmsg->nonce;
                 func.p_proxy = this;
+                func.is_rdp  = false;
 
                 id->from_binary(getmsg->id, sizeof(getmsg->id));
 
@@ -494,20 +832,43 @@ namespace libcage {
                         func(false, p);
                 }
 
+                if (it->second->is_rdp && it->second->desc != 0) {
+                        p_proxy->m_rdp.close(it->second->desc);
+                        p_proxy->m_rdp_get.erase(it->second->desc);
+                }
+
                 p_proxy->m_getdata.erase(nonce);
+        }
+
+        void
+        proxy::get_by_rdp(const uint160_t &id, const void *key, uint16_t keylen,
+                          dht::callback_find_value func)
+        {
+                boost::shared_array<char> p_key(new char[keylen]);
+                rdp_get_ptr  p_get(new rdp_get);
+                rdp_get_func getfunc(*this);
+                id_ptr       p_id(new uint160_t);
+                int          desc;
+
+                memcpy(p_key.get(), key, keylen);
+
+                *p_id = id;
+
+                p_get->m_id     = p_id;
+                p_get->m_key    = p_key;
+                p_get->m_keylen = keylen;
+                p_get->m_func   = func;
+                p_get->m_time   = time(NULL);
+
+                desc = m_rdp.connect(0, m_server.id, proxy_get_port, getfunc);
+
+                m_rdp_get[desc] = p_get;
         }
 
         void
         proxy::get(const uint160_t &id, const void *key, uint16_t keylen,
                    dht::callback_find_value func)
         {
-                boost::shared_array<char> p_key;
-                msg_proxy_get *msg;
-                gd_ptr   data(new getdata);
-                uint32_t nonce;
-                int      size;
-                char     buf[1024 * 4];
-
                 if (! m_is_registered) {
                         if (m_nat.get_state() == node_symmetric)
                                 register_node();
@@ -516,6 +877,18 @@ namespace libcage {
                         func(false, p);
                         return;
                 }
+
+                if (m_dht.is_use_rdp()) {
+                        get_by_rdp(id, key, keylen, func);
+                        return;
+                }
+
+                boost::shared_array<char> p_key;
+                msg_proxy_get *msg;
+                gd_ptr   data(new getdata);
+                uint32_t nonce;
+                int      size;
+                char     buf[1024 * 4];
 
                 msg = (msg_proxy_get*)buf;
 
@@ -803,14 +1176,226 @@ namespace libcage {
         proxy::rdp_get_func::operator() (int desc, rdp_addr addr,
                                          rdp_event event)
         {
+                switch (event) {
+                case CONNECTED:
+                {
+                        std::map<int, rdp_get_ptr>::iterator it;
 
+                        it = m_proxy.m_rdp_get.find(desc);
+                        if (it == m_proxy.m_rdp_get.end())  {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+
+                        msg_proxy_rdp_get msg;
+                        uint32_t          nonce;
+
+                        for (;;) {
+                                nonce = m_proxy.m_rnd();
+                                if (m_proxy.m_getdata.find(nonce) ==
+                                    m_proxy.m_getdata.end())
+                                        break;
+                        }
+
+                        memset(&msg, 0, sizeof(msg));
+
+                        it->second->m_id->to_binary(msg.id, sizeof(msg.id));
+
+                        msg.keylen = htons(it->second->m_keylen);
+                        msg.nonce  = htonl(nonce);
+
+                        m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
+                        m_proxy.m_rdp.send(desc, it->second->m_key.get(),
+                                           it->second->m_keylen);
+
+
+                        proxy::gd_ptr gdp(new proxy::getdata);
+
+                        gdp->key    = it->second->m_key;
+                        gdp->keylen = it->second->m_keylen;
+                        gdp->func   = it->second->m_func;
+                        gdp->is_rdp = true;
+                        gdp->desc   = desc;
+
+                        gdp->timeout.p_proxy = &m_proxy;
+                        gdp->timeout.nonce   = nonce;
+                        gdp->timeout.func    = it->second->m_func;
+
+                        // start timer
+                        timeval tval;
+
+                        tval.tv_sec  = get_timeout;
+                        tval.tv_usec = 0;
+
+                        m_proxy.m_timer.set_timer(&gdp->timeout, &tval);
+
+
+                        m_proxy.m_getdata[nonce] = gdp;
+
+
+                        it->second->m_data  = gdp;
+                        it->second->m_nonce = nonce;
+
+                        break;
+                }
+                case RESET:
+                {
+                        std::map<int, rdp_get_ptr>::iterator it;
+
+                        it = m_proxy.m_rdp_get.find(desc);
+                        if (it == m_proxy.m_rdp_get.end())  {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        it->second->m_data->desc = 0;
+
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_get.erase(desc);
+                        break;
+                }
+                default:
+                {
+                        m_proxy.m_rdp.close(desc);
+
+                        std::map<int, rdp_get_ptr>::iterator it1;
+                        it1 = m_proxy.m_rdp_get.find(desc);
+                        if (it1 == m_proxy.m_rdp_get.end()) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        std::map<uint32_t, gd_ptr>::iterator it2;
+                        it2 = m_proxy.m_getdata.find(it1->second->m_nonce);
+                        if (it2 != m_proxy.m_getdata.end()) {
+                                m_proxy.m_timer.unset_timer(&it2->second->timeout);
+                                m_proxy.m_getdata.erase(it2);
+                        }
+
+
+                        dht::value_set_ptr p;
+                        it1->second->m_func(false, p);
+
+                        m_proxy.m_rdp_get.erase(it1);
+
+                        break;
+                }
+                }
+        }
+
+        bool
+        proxy::rdp_recv_get_func::read_hdr(int desc, rdp_recv_get_ptr ptr)
+        {
+                msg_proxy_rdp_get msg;
+                int size = sizeof(msg);
+
+                m_proxy.m_rdp.receive(desc, &msg, &size);
+
+                if (size != sizeof(msg)) {
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_get.erase(desc);
+                        return false;
+                }
+
+                ptr->m_keylen = ntohs(msg.keylen);
+                ptr->m_nonce  = ntohl(msg.nonce);
+                ptr->m_time   = time(NULL);
+                ptr->m_state  = rdp_recv_get::RG_KEY;
+
+                boost::shared_array<char> key(new char[ptr->m_keylen]);
+                ptr->m_key = key;
+
+                id_ptr id(new uint160_t);
+                id->from_binary(msg.id, sizeof(msg.id));
+
+                ptr->m_id = id;
+
+                return true;
+        }
+
+        void
+        proxy::rdp_recv_get_func::read_key(int desc, rdp_recv_get_ptr ptr)
+        {
+                for (;;) {
+                        int   size = ptr->m_keylen - ptr->m_key_read;
+                        char *buf  = &ptr->m_key[ptr->m_key_read];
+
+                        m_proxy.m_rdp.receive(desc, buf, &size);
+
+                        if (size == 0)
+                                return;
+
+                        ptr->m_key_read += size;
+                        if (ptr->m_key_read == ptr->m_keylen) {
+                                get_reply_func func;
+
+                                func.id      = ptr->m_id;
+                                func.src     = ptr->m_src;
+                                func.nonce   = ptr->m_nonce;
+                                func.p_proxy = &m_proxy;
+                                func.is_rdp  = true;
+
+                                m_proxy.m_dht.find_value(*ptr->m_id,
+                                                         ptr->m_key.get(),
+                                                         ptr->m_keylen, func);
+
+                                m_proxy.m_rdp.close(desc);
+                                m_proxy.m_rdp_recv_get.erase(desc);
+                                return;
+                        }
+                }
         }
 
         void
         proxy::rdp_recv_get_func::operator() (int desc, rdp_addr addr,
                                               rdp_event event)
         {
+                switch (event) {
+                case ACCEPTED:
+                {
+                        if (! m_proxy.is_registered(addr.did)) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
 
+                        rdp_recv_get_ptr ptr(new rdp_recv_get(m_proxy));
+
+                        ptr->m_src = addr.did;
+
+                        m_proxy.m_rdp_recv_get[desc] = ptr;
+
+                        break;
+                }
+                case READY2READ:
+                {
+                        std::map<int, rdp_recv_get_ptr>::iterator it;
+
+                        it = m_proxy.m_rdp_recv_get.find(desc);
+                        if (it == m_proxy.m_rdp_recv_get.end()) {
+                                m_proxy.m_rdp.close(desc);
+                                return;
+                        }
+
+                        for (;;) {
+                                switch (it->second->m_state) {
+                                case rdp_recv_get::RG_HDR:
+                                        if (! read_hdr(desc, it->second))
+                                                return;
+                                        break;
+                                case rdp_recv_get::RG_KEY:
+                                        read_key(desc, it->second);
+                                        return;
+                                }
+                        }
+
+                        break;
+                }
+                default:
+                        m_proxy.m_rdp.close(desc);
+                        m_proxy.m_rdp_recv_get.erase(desc);
+                        break;
+                }
         }
 
         void
@@ -831,6 +1416,8 @@ namespace libcage {
                         msg.ttl      = htons(m_ttl);
 
                         m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
+                        m_proxy.m_rdp.send(desc, m_key.get(), m_keylen);
+                        m_proxy.m_rdp.send(desc, m_val.get(), m_valuelen);
 
                         break;
                 }
@@ -841,17 +1428,8 @@ namespace libcage {
         }
 
         bool
-        proxy::rdp_recv_store_func::read_hdr(int desc)
+        proxy::rdp_recv_store_func::read_hdr(int desc, rdp_recv_store_ptr ptr)
         {
-                std::map<int, rdp_recv_store_ptr>::iterator it;
-
-                it = m_proxy.m_rdp_recv_store.find(desc);
-                if (it == m_proxy.m_rdp_recv_store.end()) {
-                        m_proxy.m_rdp.close(desc);
-                        return false;
-                }
-
-
                 msg_dht_rdp_store msg;
                 int size = sizeof(msg);
 
@@ -859,11 +1437,11 @@ namespace libcage {
 
                 if (size != sizeof(msg)) {
                         m_proxy.m_rdp.close(desc);
-                        m_proxy.m_rdp_recv_store.erase(it);
+                        m_proxy.m_rdp_recv_store.erase(desc);
                         return false;
                 }
 
-                rdp_recv_store_ptr ptr = it->second;
+
                 id_ptr id(new uint160_t);
 
                 id->from_binary(msg.id, sizeof(msg.id));
@@ -886,27 +1464,19 @@ namespace libcage {
         }
 
         bool
-        proxy::rdp_recv_store_func::read_key(int desc)
+        proxy::rdp_recv_store_func::read_key(int desc, rdp_recv_store_ptr ptr)
         {
-                std::map<int, rdp_recv_store_ptr>::iterator it;
-
-                it = m_proxy.m_rdp_recv_store.find(desc);
-                if (it == m_proxy.m_rdp_recv_store.end()) {
-                        m_proxy.m_rdp.close(desc);
-                        return false;
-                }
-
-
-                rdp_recv_store_ptr ptr = it->second;
                 for (;;) {
-                        int size = ptr->m_keylen - ptr->m_key_read;
+                        int   size = ptr->m_keylen - ptr->m_key_read;
+                        char *buf  = &ptr->m_key[ptr->m_key_read];
 
-                        m_proxy.m_rdp.receive(desc, ptr->m_key.get(), &size);
+                        m_proxy.m_rdp.receive(desc, buf, &size);
 
                         if (size == 0)
                                 return false;
 
                         ptr->m_key_read += size;
+                        ptr->m_time      = time(NULL);
 
                         if (ptr->m_keylen == ptr->m_key_read) {
                                 ptr->m_state = rdp_recv_store::RS_VAL;
@@ -918,27 +1488,19 @@ namespace libcage {
         }
 
         void
-        proxy::rdp_recv_store_func::read_val(int desc)
+        proxy::rdp_recv_store_func::read_val(int desc, rdp_recv_store_ptr ptr)
         {
-                std::map<int, rdp_recv_store_ptr>::iterator it;
-
-                it = m_proxy.m_rdp_recv_store.find(desc);
-                if (it == m_proxy.m_rdp_recv_store.end()) {
-                        m_proxy.m_rdp.close(desc);
-                        return;
-                }
-
-
-                rdp_recv_store_ptr ptr = it->second;
                 for (;;) {
-                        int size = ptr->m_valuelen - ptr->m_val_read;
+                        int   size = ptr->m_valuelen - ptr->m_val_read;
+                        char *buf  = &ptr->m_val[ptr->m_val_read];
 
-                        m_proxy.m_rdp.receive(desc, ptr->m_val.get(), &size);
+                        m_proxy.m_rdp.receive(desc, buf, &size);
 
                         if (size == 0)
                                 return;
 
                         ptr->m_val_read += size;
+                        ptr->m_time      = time(NULL);
 
                         if (ptr->m_valuelen == ptr->m_val_read) {
                                 m_proxy.m_rdp.close(desc);
@@ -948,7 +1510,7 @@ namespace libcage {
                                                     ptr->m_val,
                                                     ptr->m_valuelen,
                                                     ptr->m_ttl);
-                                m_proxy.m_rdp_recv_store.erase(it);
+                                m_proxy.m_rdp_recv_store.erase(desc);
                                 return;
                         }
                 }
@@ -966,7 +1528,7 @@ namespace libcage {
                                 return;
                         }
 
-                        rdp_recv_store_ptr ptr(new rdp_recv_store(m_proxy));
+                        rdp_recv_store_ptr ptr(new rdp_recv_store);
 
                         ptr->m_time = time(NULL);
 
@@ -987,15 +1549,15 @@ namespace libcage {
                         for (;;) {
                                 switch (it->second->m_state) {
                                 case rdp_recv_store::RS_HDR:
-                                        if (! read_hdr(desc))
+                                        if (! read_hdr(desc, it->second))
                                                 return;
                                         break;
                                 case rdp_recv_store::RS_KEY:
-                                        if (! read_key(desc))
+                                        if (! read_key(desc, it->second))
                                                 return;
                                         break;
                                 case rdp_recv_store::RS_VAL:
-                                        read_val(desc);
+                                        read_val(desc, it->second);
                                         return;
                                 }
                         }

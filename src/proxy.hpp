@@ -57,6 +57,7 @@ namespace libcage {
                 static const time_t     timer_interval;
                 static const uint16_t   proxy_store_port;
                 static const uint16_t   proxy_get_port;
+                static const uint16_t   proxy_get_reply_port;
 
         public:
                 typedef boost::function<void (bool, void *buf, int len)>
@@ -85,16 +86,6 @@ namespace libcage {
                 void            get(const uint160_t &id,
                                     const void *key, uint16_t keylen,
                                     dht::callback_find_value func);
-
-                void            store_by_rdp(const uint160_t &id,
-                                             const void *key, uint16_t keylen,
-                                             const void *value,
-                                             uint16_t valuelen,
-                                             uint16_t ttl);
-                void            get_by_rdp(const uint160_t &id,
-                                           const void *key, uint16_t keylen,
-                                           dht::callback_find_value func);
-
 
                 void            send_dgram(const void *msg, int len, id_ptr id);
                 void            send_dgram(packetbuf_ptr pbuf, id_ptr id,
@@ -134,7 +125,6 @@ namespace libcage {
                                 RS_VAL,
                         };
 
-                        proxy  &m_proxy;
                         recv_store_state                m_state;
                         boost::shared_array<char>       m_key;
                         boost::shared_array<char>       m_val;
@@ -146,10 +136,8 @@ namespace libcage {
                         id_ptr          m_id;
                         time_t          m_time;
 
-                        rdp_recv_store(proxy &p) : m_proxy(p),
-                                                   m_state(RS_HDR),
-                                                   m_key_read(0),
-                                                   m_val_read(0) { }
+                        rdp_recv_store() : m_state(RS_HDR), m_key_read(0),
+                                           m_val_read(0) { }
                 };
 
                 typedef boost::shared_ptr<rdp_recv_store> rdp_recv_store_ptr;
@@ -163,37 +151,99 @@ namespace libcage {
 
                         rdp_recv_store_func(proxy &p) : m_proxy(p) { }
 
-                        bool read_hdr(int desc);
-                        bool read_key(int desc);
-                        void read_val(int desc);
+                        bool read_hdr(int desc, rdp_recv_store_ptr ptr);
+                        bool read_key(int desc, rdp_recv_store_ptr ptr);
+                        void read_val(int desc, rdp_recv_store_ptr ptr);
                 };
+
+                class timer_get : public timer::callback {
+                public:
+                        virtual void operator() ();
+
+                        proxy          *p_proxy;
+                        uint32_t        nonce;
+                        dht::callback_find_value    func;
+                };
+
+                class getdata {
+                public:
+                        timer_get       timeout;
+                        boost::shared_array<char>       key;
+                        int             keylen;
+                        dht::callback_find_value    func;
+
+                        dht::value_set_ptr  vset;
+                        std::set<int>       indeces;
+                        int                 total;
+
+                        // for rdp
+                        int     desc;
+                        bool    is_rdp;
+
+                        getdata() : vset(new dht::value_set), total(0),
+                                    is_rdp(false) { }
+                };
+
+                typedef boost::shared_ptr<getdata> gd_ptr;
 
                 class rdp_get {
                 public:
-                        proxy  &m_proxy;
-                        time_t  m_time;
-
-                        rdp_get(proxy &p) : m_proxy(p) { }
+                        id_ptr  m_id;
+                        dht::callback_find_value        m_func;
+                        boost::shared_array<char>       m_key;
+                        uint16_t        m_keylen;
+                        time_t          m_time;
+                        gd_ptr          m_data;
+                        uint32_t        m_nonce;
                 };
+
+                typedef boost::shared_ptr<rdp_get> rdp_get_ptr;
 
                 class rdp_get_func {
                 public:
+                        proxy  &m_proxy;
+
                         void operator() (int desc, rdp_addr addr,
                                          rdp_event event);
+
+                        rdp_get_func(proxy &p) : m_proxy(p) { }
                 };
 
                 class rdp_recv_get {
                 public:
-                        proxy  &m_proxy;
-                        time_t  m_time;
+                        enum recv_get_state {
+                                RG_HDR,
+                                RG_KEY,
+                        };
 
-                        rdp_recv_get(proxy &p) : m_proxy(p) { }
+                        proxy  &m_proxy;
+                        id_ptr  m_id;
+                        id_ptr  m_src;
+                        boost::shared_array<char>       m_key;
+                        uint16_t        m_keylen;
+                        uint16_t        m_key_read;
+                        uint32_t        m_nonce;
+                        time_t          m_time;
+                        recv_get_state  m_state;
+
+                        rdp_recv_get(proxy &p) : m_proxy(p), m_key_read(0),
+                                                 m_time(time(NULL)),
+                                                 m_state(RG_HDR) { }
                 };
+
+                typedef boost::shared_ptr<rdp_recv_get> rdp_recv_get_ptr;
 
                 class rdp_recv_get_func {
                 public:
+                        proxy  &m_proxy;
+
                         void operator() (int desc, rdp_addr addr,
                                          rdp_event event);
+
+                        rdp_recv_get_func(proxy &p) : m_proxy(p) { }
+
+                        bool read_hdr(int desc, rdp_recv_get_ptr ptr);
+                        void read_key(int desc, rdp_recv_get_ptr ptr);
                 };
 
                 class _addr {
@@ -224,39 +274,73 @@ namespace libcage {
                         proxy  &m_proxy;
                 };
 
-                class timer_get : public timer::callback {
+                class rdp_get_reply_func {
                 public:
-                        virtual void operator() ();
+                        proxy  &m_proxy;
+                        bool    m_result;
+                        dht::value_set_ptr      m_vset;
+                        uint32_t        m_nonce;
+                        id_ptr          m_id;
 
-                        proxy          *p_proxy;
-                        uint32_t        nonce;
-                        dht::callback_find_value    func;
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+
+                        rdp_get_reply_func(proxy &p) : m_proxy(p) { }
+
+                        void read_op(int desc);
                 };
-
-                class getdata {
-                public:
-                        timer_get       timeout;
-                        boost::shared_array<char>       key;
-                        int             keylen;
-                        dht::callback_find_value    func;
-
-                        dht::value_set_ptr  vset;
-                        std::set<int>       indeces;
-                        int                 total;
-
-                        getdata() : vset(new dht::value_set), total(0) { }
-                };
-
-                typedef boost::shared_ptr<getdata> gd_ptr;
 
                 class get_reply_func {
                 public:
                         void operator() (bool result, dht::value_set_ptr vset);
 
+                        void send_reply_by_rdp(bool result,
+                                               dht::value_set_ptr vset);
+                        void send_reply(bool result, dht::value_set_ptr vset);
+
                         id_ptr          id;
                         id_ptr          src;
                         uint32_t        nonce;
                         proxy          *p_proxy;
+                        bool            is_rdp;
+                };
+
+                class rdp_recv_get_reply {
+                public:
+                        enum recv_get_reply_state {
+                                RGR_HDR,
+                                RGR_VAL_HDR,
+                                RGR_VAL,
+                        };
+
+                        boost::shared_array<char>       m_val;
+                        uint16_t        m_valuelen;
+                        uint16_t        m_val_read;
+
+                        recv_get_reply_state    m_state;
+                        uint32_t        m_nonce;
+                        time_t          m_time;
+
+                        rdp_recv_get_reply() : m_state(RGR_HDR),
+                                               m_time(time(NULL)) { }
+                };
+
+                typedef boost::shared_ptr<rdp_recv_get_reply> rdp_recv_get_reply_ptr;
+
+                class rdp_recv_get_reply_func {
+                public:
+                        proxy  &m_proxy;
+
+                        void operator() (int desc, rdp_addr addr,
+                                         rdp_event event);
+
+                        rdp_recv_get_reply_func(proxy &p) : m_proxy(p) { }
+
+                        bool read_hdr(int desc, rdp_recv_get_reply_ptr ptr);
+                        bool read_val_hdr(int desc, rdp_recv_get_reply_ptr ptr);
+                        bool read_val(int desc, rdp_recv_get_reply_ptr ptr);
+
+                        void close_rdp(int desc, rdp_recv_get_reply_ptr ptr);
                 };
 
                 class timer_proxy : public timer::callback {
@@ -305,6 +389,15 @@ namespace libcage {
                         proxy  &m_proxy;
                 };
 
+                void            store_by_rdp(const uint160_t &id,
+                                             const void *key, uint16_t keylen,
+                                             const void *value,
+                                             uint16_t valuelen,
+                                             uint16_t ttl);
+                void            get_by_rdp(const uint160_t &id,
+                                           const void *key, uint16_t keylen,
+                                           dht::callback_find_value func);
+
                 rand_uint      &m_rnd;
                 rand_real      &m_drnd;
 
@@ -329,8 +422,14 @@ namespace libcage {
                 std::map<uint32_t, gd_ptr>      m_getdata;
 
                 int             m_rdp_store_desc;
+                int             m_rdp_get_desc;
+                int             m_rdp_get_reply_desc;
                 std::map<int, time_t>           m_rdp_store;
+                std::map<int, rdp_get_ptr>      m_rdp_get;
                 std::map<int, rdp_recv_store_ptr>       m_rdp_recv_store;
+                std::map<int, rdp_recv_get_ptr>         m_rdp_recv_get;
+                std::map<int, time_t>           m_rdp_get_reply;
+                std::map<int, rdp_recv_get_reply_ptr>   m_rdp_recv_get_reply;
         };
 }
 
