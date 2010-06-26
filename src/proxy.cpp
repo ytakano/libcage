@@ -42,6 +42,7 @@ namespace libcage {
         const time_t    proxy::register_ttl         = 300;
         const time_t    proxy::get_timeout          = 10;
         const time_t    proxy::timer_interval       = 30;
+        const time_t    proxy::rdp_timeout          = 30;
         const uint16_t  proxy::proxy_store_port     = 200;
         const uint16_t  proxy::proxy_get_port       = 201;
         const uint16_t  proxy::proxy_get_reply_port = 202;
@@ -121,6 +122,12 @@ namespace libcage {
                 for (it7 = m_rdp_get_reply.begin();
                      it7 != m_rdp_get_reply.end(); ++it7)
                         m_rdp.close(it7->first);
+        }
+
+        void
+        proxy::sweep_rdp()
+        {
+                // XXX
         }
 
         void

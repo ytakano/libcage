@@ -55,6 +55,7 @@ namespace libcage {
                 static const time_t     register_ttl;
                 static const time_t     get_timeout;
                 static const time_t     timer_interval;
+                static const time_t     rdp_timeout;
                 static const uint16_t   proxy_store_port;
                 static const uint16_t   proxy_get_port;
                 static const uint16_t   proxy_get_reply_port;
@@ -350,8 +351,10 @@ namespace libcage {
                                 m_proxy.refresh();
 
                                 if (m_proxy.m_nat.get_state() ==
-                                    node_symmetric)
+                                    node_symmetric) {
                                         m_proxy.register_node();
+                                        m_proxy.sweep_rdp();
+                                }
 
                                 timeval tval;
                                 time_t  t;
@@ -397,6 +400,7 @@ namespace libcage {
                 void            get_by_rdp(const uint160_t &id,
                                            const void *key, uint16_t keylen,
                                            dht::callback_find_value func);
+                void            sweep_rdp();
 
                 rand_uint      &m_rnd;
                 rand_real      &m_drnd;

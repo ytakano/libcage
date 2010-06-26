@@ -64,7 +64,8 @@ namespace libcage {
                 static const int        max_query;
                 static const int        query_timeout;
                 static const int        restore_interval;
-                static const int        timer_interval;
+                static const int        slow_timer_interval;
+                static const int        fast_timer_interval;
                 static const int        original_put_num;
                 static const int        recvd_value_timeout;
                 static const uint16_t   rdp_store_port;
@@ -456,40 +457,64 @@ namespace libcage {
 
                 class timer_dht : public timer::callback {
                 public:
-                        virtual void operator() ()
+                        void
+                        reschedule()
                         {
-                                m_dht.refresh();
-                                m_dht.restore();
-                                m_dht.sweep_rdp();
-                                m_dht.maintain();
-
-                                // reschedule
                                 timeval tval;
 
-                                tval.tv_sec  = (long)((double)dht::timer_interval * m_dht.m_drnd());
-                                tval.tv_sec += dht::restore_interval;
-
+                                tval.tv_sec  = (time_t)((double)m_sec *
+                                                        m_dht.m_drnd());
+                                tval.tv_sec += m_sec;
                                 tval.tv_usec = 0;
 
                                 m_dht.m_timer.set_timer(this, &tval);
+
                         }
 
-                        timer_dht(dht &d) : m_dht(d)
+                        timer_dht(dht &d, time_t sec) : m_dht(d), m_sec(sec)
                         {
-                                timeval tval;
-
-                                tval.tv_sec  = (long)((double)dht::timer_interval * m_dht.m_drnd());
-                                tval.tv_sec += dht::restore_interval;
-
-                                tval.tv_usec = 0;
-
-                                m_dht.m_timer.set_timer(this, &tval);
+                                reschedule();
                         }
 
                         virtual ~timer_dht()
                         {
                                 m_dht.m_timer.unset_timer(this);
                         }
+
+                        dht    &m_dht;
+                        time_t  m_sec;
+                };
+
+                class fast_timer_dht : public timer_dht {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_dht.refresh();
+                                m_dht.sweep_rdp();
+
+                                reschedule();
+                        }
+
+                        fast_timer_dht(dht &d) :
+                                timer_dht(d, dht::fast_timer_interval),
+                                m_dht(d) { }
+
+                        dht    &m_dht;
+                };
+
+                class slow_timer_dht : public timer_dht {
+                public:
+                        virtual void operator() ()
+                        {
+                                m_dht.restore();
+                                m_dht.maintain();
+
+                                reschedule();
+                        }
+
+                        slow_timer_dht(dht &d) :
+                                timer_dht(d, dht::slow_timer_interval),
+                                m_dht(d) { }
 
                         dht    &m_dht;
                 };
@@ -554,7 +579,8 @@ namespace libcage {
                 rdp                     &m_rdp;
                 bool                     m_is_dtun;
                 time_t                   m_last_restore;
-                timer_dht                m_timer_dht;
+                slow_timer_dht           m_slow_timer_dht;
+                fast_timer_dht           m_fast_timer_dht;
                 dht_join                 m_join;
                 sync_node                m_sync;
                 int                      m_rdp_recv_listen;

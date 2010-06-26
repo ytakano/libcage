@@ -40,12 +40,13 @@ namespace libcage {
         const int       dht::max_query           = 6;
         const int       dht::query_timeout       = 3;
         const int       dht::restore_interval    = 120;
-        const int       dht::timer_interval      = 600;
+        const int       dht::slow_timer_interval = 600;
+        const int       dht::fast_timer_interval = 60;
         const int       dht::original_put_num    = 3;
         const int       dht::recvd_value_timeout = 3;
         const uint16_t  dht::rdp_store_port      = 100;
         const uint16_t  dht::rdp_get_port        = 101;
-        const time_t    dht::rdp_timeout         = 120;
+        const time_t    dht::rdp_timeout         = 30;
 
         size_t
         hash_value(const dht::_key &k)
@@ -94,7 +95,8 @@ namespace libcage {
                 m_rdp(r),
                 m_is_dtun(true),
                 m_last_restore(0),
-                m_timer_dht(*this),
+                m_slow_timer_dht(*this),
+                m_fast_timer_dht(*this),
                 m_join(*this),
                 m_sync(*this),
                 m_is_use_rdp(true)
