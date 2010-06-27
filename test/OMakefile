@@ -1,4 +1,4 @@
-CXXFLAGS += -Wall -O0 -g -I../include
+CXXFLAGS += -Wall -O3 -g -I../include
 LDFLAGS += -levent -lcrypto
 LIBS += ../src/libcage
 

@@ -1,4 +1,4 @@
-CXXFLAGS += -Wall -O0 -g -fPIC
+CXXFLAGS += -Wall -O3 -g -fPIC
 # ASFLAGS +=
 LDFLAGS += -levent -lcrypto
 # INCLUDES +=
@@ -22,6 +22,7 @@ SRC[] =
 	udphandler
 	rdp
 	packetbuf
+	cagetime
 
 LIBNAME = libcage
 

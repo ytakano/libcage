@@ -62,11 +62,11 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
 void process_get(int sockfd, esc_tokenizer::iterator &it,
                  const esc_tokenizer::iterator &end);
 
-static const char * const SUCCESSED_NEW         = "200";
-static const char * const SUCCESSED_DELETE      = "201";
-static const char * const SUCCESSED_JOIN        = "202";
-static const char * const SUCCESSED_PUT         = "203";
-static const char * const SUCCESSED_GET         = "204";
+static const char * const SUCCEEDED_NEW         = "200";
+static const char * const SUCCEEDED_DELETE      = "201";
+static const char * const SUCCEEDED_JOIN        = "202";
+static const char * const SUCCEEDED_PUT         = "203";
+static const char * const SUCCEEDED_GET         = "204";
 
 static const char * const ERR_UNKNOWN_COMMAND   = "400";
 static const char * const ERR_INVALID_STATEMENT = "401";
@@ -86,7 +86,7 @@ static const char * const ERR_GET               = "409";
   new,node_name,port_number,global
   -> 200,new,node_name,port_number |
      400 | 401,comment |
-     402 | 403,new,node_name,port_number,comment |
+     402 | 403,new,node_name,port_number,comment
 
   delete,node_name
   -> 201,delete,node_name |
@@ -420,7 +420,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // send result
         // format: 200,new,node_name,port_number
         snprintf(result, sizeof(result), "%s,new,%s,%d\n", 
-                 SUCCESSED_NEW, esc_node_name.c_str(), port);
+                 SUCCEEDED_NEW, esc_node_name.c_str(), port);
 
         send(sockfd, result, strlen(result), 0);
 
@@ -470,7 +470,7 @@ process_delete(int sockfd, esc_tokenizer::iterator &it,
         // format: 201,delete,node_name
         snprintf(result, sizeof(result),
                  "%s,delete,%s\n",
-                 SUCCESSED_DELETE, esc_node_name.c_str());
+                 SUCCEEDED_DELETE, esc_node_name.c_str());
         send(sockfd, result, strlen(result), 0);
 }
 
@@ -496,7 +496,7 @@ public:
                         // format: 202,join,node_name,host,port
                         snprintf(result, sizeof(result),
                                  "%s,join,%s,%s,%d\n",
-                                 SUCCESSED_JOIN, esc_node_name.c_str(),
+                                 SUCCEEDED_JOIN, esc_node_name.c_str(),
                                  esc_host.c_str(), port);
                         send(sockfd, result, strlen(result), 0);
                 } else {
@@ -709,7 +709,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         // format: 203,put,node_name,key,value,ttl
         snprintf(result, sizeof(result),
                  "%s,put,%s,%s,%s,%d\n",
-                 SUCCESSED_PUT, esc_node_name.c_str(),
+                 SUCCEEDED_PUT, esc_node_name.c_str(),
                  esc_key.c_str(), esc_value.c_str(), ttl);
         send(sockfd, result, strlen(result), 0);
 }
@@ -754,7 +754,7 @@ public:
                         // format: 204,get,node_name,key,value
                         snprintf(result, sizeof(result),
                                  "%s,get,%s,%s%s\n",
-                                 SUCCESSED_GET, esc_node_name.c_str(),
+                                 SUCCEEDED_GET, esc_node_name.c_str(),
                                  esc_key.c_str(), values.c_str());
 
                         send(sockfd, result, strlen(result), 0);

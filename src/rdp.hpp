@@ -32,6 +32,7 @@
 #ifndef RDP_HPP
 #define RDP_HPP
 
+#include "cagetime.hpp"
 #include "cagetypes.hpp"
 #include "common.hpp"
 #include "packetbuf.hpp"
@@ -39,13 +40,6 @@
 
 #include <stdint.h>
 #include <time.h>
-
-#ifndef WIN32
-  #include <sys/time.h>
-#else
-  // XXX
-  // for Windows
-#endif
 
 #include <functional>
 #include <map>
@@ -267,12 +261,7 @@ namespace libcage {
                                          // connection.
                 uint32_t        rcv_ack; // The sequence number last acked
 
-#ifndef WIN32
-                timeval         acked_time;
-#else
-                // XXX
-                // for Windows
-#endif
+                cagetime        acked_time;
 
                 std::vector<uint32_t>   rcvdseqno; // The array of sequence
                                                    // numbers of segments that

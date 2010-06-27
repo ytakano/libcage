@@ -207,22 +207,13 @@ namespace libcage {
 
 
                                 // delayed ack;
-#ifndef WIN32
-                                timeval t;
-                                double  sec1, sec2;
+                                cagetime now;
+                                double   diff;
 
-                                gettimeofday(&t, NULL);
-
-                                sec1 = t.tv_sec + t.tv_usec / 1000000.0;
-                                sec2 = p_con->acked_time.tv_sec + 
-                                        p_con->acked_time.tv_usec / 1000000.0;
-
-                                if (sec1 - sec2 > ack_interval)
+                                diff = now - p_con->acked_time;
+                                if (diff > ack_interval)
                                         p_con->delayed_ack();
-#else
-                                // XXX
-                                // for Windows
-#endif
+
                                 break;
                         }
                         default:
@@ -976,12 +967,7 @@ namespace libcage {
                         p_con->syn_time = time(NULL);
                         p_con->syn_tout = 1;
 
-#ifndef WIN32
-                        gettimeofday(&p_con->acked_time, NULL);
-#else
-                        // XXX
-                        // for Windows
-#endif
+                        p_con->acked_time.update();
 
                         // create descriptor
                         int desc = generate_desc();
@@ -1094,13 +1080,7 @@ namespace libcage {
 
                         p_con->init_swnd();
                         p_con->init_rwnd();
-
-#ifndef WIN32
-                        gettimeofday(&p_con->acked_time, NULL);
-#else
-                        // XXX
-                        // for Windows
-#endif
+                        p_con->acked_time.update();
 
                         if (syn->head.flags & flag_ack) {
                                 p_con->snd_una = ntohl(syn->head.acknum);
@@ -1227,12 +1207,7 @@ namespace libcage {
                         ack->acknum = htonl(p_con->rcv_cur);
 
                         p_con->rcv_ack = p_con->rcv_cur;
-#ifndef WIN32
-                        gettimeofday(&p_con->acked_time, NULL);
-#else
-                        // XXX
-                        // for Windows
-#endif
+                        p_con->acked_time.update();
 
                         output(addr.did, pbuf_ack);
                 } else if (head->flags & flag_rst) {
@@ -1449,13 +1424,7 @@ namespace libcage {
                         output(addr.did, pbuf_ack);
 
                         p_con->rcv_ack = p_con->rcv_cur;
-
-#ifndef WIN32
-                        gettimeofday(&p_con->acked_time, NULL);
-#else
-                        // XXX
-                        // for Windows
-#endif
+                        p_con->acked_time.update();
 
                         return;
                 } else if (head->flags & flag_rst) {
@@ -1941,11 +1910,6 @@ namespace libcage {
 
                 rcv_ack = rcv_cur;
 
-#ifndef WIN32
-                gettimeofday(&acked_time, NULL);
-#else
-                // XXX
-                // for Windows
-#endif
+                acked_time.update();
         }
 }
