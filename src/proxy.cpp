@@ -369,11 +369,25 @@ namespace libcage {
                             uint16_t keylen, const void *value,
                             uint16_t valuelen, uint16_t ttl)
         {
+                rdp_store_func func(*this);
+                int            desc;
+
+                create_store_func(func, id, key, keylen, value, valuelen, ttl);
+
+                desc = m_rdp.connect(0, m_server.id, proxy_store_port, func);
+
+                m_rdp_store[desc] = time(NULL);
+        }
+
+        void
+        proxy::create_store_func(rdp_store_func &func,
+                                 const uint160_t &id, const void *key,
+                                 uint16_t keylen, const void *value,
+                                 uint16_t valuelen, uint16_t ttl)
+        {
                 boost::shared_array<char> k(new char[keylen]);
                 boost::shared_array<char> v(new char[valuelen]);
-                rdp_store_func func(*this);
-                id_ptr         p_id(new uint160_t);
-                int            desc;
+                id_ptr p_id(new uint160_t);
 
                 memcpy(k.get(), key, keylen);
                 memcpy(v.get(), value, valuelen);
@@ -386,10 +400,6 @@ namespace libcage {
                 func.m_valuelen = valuelen;
                 func.m_ttl      = ttl;
                 func.m_id       = p_id;
-
-                desc = m_rdp.connect(0, m_server.id, proxy_store_port, func);
-
-                m_rdp_store[desc] = time(NULL);
         }
 
         void
@@ -397,8 +407,17 @@ namespace libcage {
                      const void *value, uint16_t valuelen, uint16_t ttl)
         {
                 if (! m_is_registered) {
-                        if (m_nat.get_state() == node_symmetric)
+                        if (m_nat.get_state() == node_symmetric) {
                                 register_node();
+                                if (m_dht.is_use_rdp()) {
+                                        rdp_store_func_ptr func(new rdp_store_func(*this));
+                                        create_store_func(*func, id, key,
+                                                          keylen, value,
+                                                          valuelen, ttl);
+
+                                        m_store_data.push_back(func);
+                                }
+                        }
                         return;
                 }
 
@@ -488,7 +507,7 @@ namespace libcage {
                 std::map<uint32_t, gd_ptr>::iterator it;
 
                 it = m_proxy.m_getdata.find(ptr->m_nonce);
-                if (it == m_proxy.m_getdata.end()) {
+                if (it != m_proxy.m_getdata.end()) {
                         if (it->second->vset->size() > 0)
                                 it->second->func(true, it->second->vset);
                         else
@@ -907,7 +926,6 @@ namespace libcage {
                 std::map<uint32_t, gd_ptr>::iterator it;
 
                 it = p_proxy->m_getdata.find(nonce);
-
                 if (it == p_proxy->m_getdata.end()) {
                         dht::value_set_ptr p;
                         func(false, p);
@@ -929,14 +947,40 @@ namespace libcage {
         }
 
         void
+        proxy::retry_storing()
+        {
+                if (! m_is_registered && m_nat.get_state() != node_symmetric)
+                        return;
+
+
+                BOOST_FOREACH(rdp_store_func_ptr func, m_store_data) {
+                        int desc;
+
+                        desc = m_rdp.connect(0, m_server.id, proxy_store_port,
+                                             *func);
+                        m_rdp_store[desc] = time(NULL);
+                }
+
+                m_store_data.clear();
+        }
+
+        void
         proxy::get_by_rdp(const uint160_t &id, const void *key, uint16_t keylen,
                           dht::callback_find_value func)
         {
                 boost::shared_array<char> p_key(new char[keylen]);
-                rdp_get_ptr  p_get(new rdp_get);
-                rdp_get_func getfunc(*this);
-                id_ptr       p_id(new uint160_t);
-                int          desc;
+                proxy::gd_ptr gdp(new proxy::getdata);
+                rdp_get_ptr   p_get(new rdp_get);
+                rdp_get_func  getfunc(*this);
+                id_ptr        p_id(new uint160_t);
+                int           desc;
+                uint32_t      nonce;
+
+                for (;;) {
+                        nonce = m_rnd();
+                        if (m_getdata.find(nonce) == m_getdata.end())
+                                break;
+                }
 
                 memcpy(p_key.get(), key, keylen);
 
@@ -947,10 +991,35 @@ namespace libcage {
                 p_get->m_keylen = keylen;
                 p_get->m_func   = func;
                 p_get->m_time   = time(NULL);
+                p_get->m_nonce  = nonce;
+                p_get->m_data   = gdp;
+
 
                 desc = m_rdp.connect(0, m_server.id, proxy_get_port, getfunc);
 
-                m_rdp_get[desc] = p_get;
+
+                gdp->key    = p_key;
+                gdp->keylen = keylen;
+                gdp->func   = func;
+                gdp->is_rdp = true;
+                gdp->desc   = desc;
+
+                gdp->timeout.p_proxy = this;
+                gdp->timeout.nonce   = nonce;
+                gdp->timeout.func    = func;
+
+
+                // start timer
+                timeval tval;
+
+                tval.tv_sec  = get_timeout;
+                tval.tv_usec = 0;
+
+                m_timer.set_timer(&gdp->timeout, &tval);
+
+
+                m_getdata[nonce] = gdp;
+                m_rdp_get[desc]  = p_get;
         }
 
         void
@@ -1277,53 +1346,17 @@ namespace libcage {
 
 
                         msg_proxy_rdp_get msg;
-                        uint32_t          nonce;
-
-                        for (;;) {
-                                nonce = m_proxy.m_rnd();
-                                if (m_proxy.m_getdata.find(nonce) ==
-                                    m_proxy.m_getdata.end())
-                                        break;
-                        }
 
                         memset(&msg, 0, sizeof(msg));
 
                         it->second->m_id->to_binary(msg.id, sizeof(msg.id));
 
                         msg.keylen = htons(it->second->m_keylen);
-                        msg.nonce  = htonl(nonce);
+                        msg.nonce  = htonl(it->second->m_nonce);
 
                         m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
                         m_proxy.m_rdp.send(desc, it->second->m_key.get(),
                                            it->second->m_keylen);
-
-
-                        proxy::gd_ptr gdp(new proxy::getdata);
-
-                        gdp->key    = it->second->m_key;
-                        gdp->keylen = it->second->m_keylen;
-                        gdp->func   = it->second->m_func;
-                        gdp->is_rdp = true;
-                        gdp->desc   = desc;
-
-                        gdp->timeout.p_proxy = &m_proxy;
-                        gdp->timeout.nonce   = nonce;
-                        gdp->timeout.func    = it->second->m_func;
-
-                        // start timer
-                        timeval tval;
-
-                        tval.tv_sec  = get_timeout;
-                        tval.tv_usec = 0;
-
-                        m_proxy.m_timer.set_timer(&gdp->timeout, &tval);
-
-
-                        m_proxy.m_getdata[nonce] = gdp;
-
-
-                        it->second->m_data  = gdp;
-                        it->second->m_nonce = nonce;
 
                         break;
                 }
@@ -1673,7 +1706,7 @@ namespace libcage {
                 now = time(NULL);
 
                 for (it = m_registered.begin(); it != m_registered.end();) {
-                        time_t diff = now = it->second.recv_time;
+                        time_t diff = now - it->second.recv_time;
 
                         if (diff > register_ttl) {
                                 m_registered.erase(it++);

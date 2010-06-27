@@ -118,6 +118,8 @@ namespace libcage {
                         rdp_store_func(proxy &p) : m_proxy(p) { }
                 };
 
+                typedef boost::shared_ptr<rdp_store_func> rdp_store_func_ptr;
+
                 class rdp_recv_store {
                 public:
                         enum recv_store_state {
@@ -354,6 +356,7 @@ namespace libcage {
                                     node_symmetric) {
                                         m_proxy.register_node();
                                         m_proxy.sweep_rdp();
+                                        m_proxy.retry_storing();
                                 }
 
                                 timeval tval;
@@ -401,6 +404,14 @@ namespace libcage {
                                            const void *key, uint16_t keylen,
                                            dht::callback_find_value func);
                 void            sweep_rdp();
+                void            create_store_func(rdp_store_func &func,
+                                                  const uint160_t &id,
+                                                  const void *key,
+                                                  uint16_t keylen,
+                                                  const void *value,
+                                                  uint16_t valuelen,
+                                                  uint16_t ttl);
+                void            retry_storing();
 
                 rand_uint      &m_rnd;
                 rand_real      &m_drnd;
@@ -424,6 +435,7 @@ namespace libcage {
                 dgram::callback m_dgram_func;
                 std::map<_id, _addr>            m_registered;
                 std::map<uint32_t, gd_ptr>      m_getdata;
+                std::vector<rdp_store_func_ptr> m_store_data;
 
                 int             m_rdp_store_desc;
                 int             m_rdp_get_desc;

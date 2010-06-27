@@ -3,13 +3,14 @@ LDFLAGS += -levent -lcrypto
 LIBS += ../src/libcage
 
 
-.PHONY: clean rdp_test nodes_10000
+.PHONY: clean rdp_test nodes_10000 symmetric
 
 rdp_test: $(CXXProgram rdp_test, rdp_test)
 nodes_10000: $(CXXProgram nodes_10000, nodes_10000)
+symmetric: $(CXXProgram symmetric, symmetric)
 
 clean:
 	rm -f *~ *.o
-	rm -f rdp_test nodes_10000
+	rm -f rdp_test nodes_10000 symmetric
 
-.DEFAULT: rdp_test nodes_10000
+.DEFAULT: rdp_test nodes_10000 symmetric
