@@ -404,7 +404,8 @@ namespace libcage {
 
         void
         proxy::store(const uint160_t &id, const void *key, uint16_t keylen,
-                     const void *value, uint16_t valuelen, uint16_t ttl)
+                     const void *value, uint16_t valuelen, uint16_t ttl,
+                     bool is_unique)
         {
                 if (! m_is_registered) {
                         if (m_nat.get_state() == node_symmetric) {
@@ -495,8 +496,9 @@ namespace libcage {
                 p_value  = (char*)store->data;
                 p_value += keylen;
 
+                // XXX
                 m_dht.store(id, store->data, keylen, p_value, valuelen,
-                            ntohs(store->ttl));
+                            ntohs(store->ttl), true);
         }
 
 
@@ -1630,7 +1632,8 @@ namespace libcage {
                                                     ptr->m_keylen,
                                                     ptr->m_val,
                                                     ptr->m_valuelen,
-                                                    ptr->m_ttl);
+                                                    ptr->m_ttl,
+                                                    true); // XXX
                                 m_proxy.m_rdp_recv_store.erase(desc);
                                 return;
                         }

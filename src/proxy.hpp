@@ -83,7 +83,7 @@ namespace libcage {
                 void            store(const uint160_t &id,
                                       const void *key, uint16_t keylen,
                                       const void *value, uint16_t valuelen,
-                                      uint16_t ttl);
+                                      uint16_t ttl, bool is_unique);
                 void            get(const uint160_t &id,
                                     const void *key, uint16_t keylen,
                                     dht::callback_find_value func);

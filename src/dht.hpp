@@ -134,11 +134,12 @@ namespace libcage {
                 void            store(const uint160_t &id,
                                       const void *key, uint16_t keylen,
                                       const void *value, uint16_t valuelen,
-                                      uint16_t ttl);
+                                      uint16_t ttl, bool is_unique);
                 void            store(id_ptr id, boost::shared_array<char> key,
                                       uint16_t keylen,
                                       boost::shared_array<char> value,
-                                      uint16_t valuelen, uint16_t ttl);
+                                      uint16_t valuelen, uint16_t ttl,
+                                      bool is_unique);
 
 
                 void            set_enabled_dtun(bool flag);
@@ -193,6 +194,7 @@ namespace libcage {
                         uint16_t        valuelen;
                         uint16_t        ttl;
                         id_ptr          id;
+                        bool            is_unique;
                         dht            *p_dht;
 
                         void operator() (int desc, rdp_addr addr,
@@ -224,6 +226,7 @@ namespace libcage {
                         uint16_t        valuelen;
                         uint16_t        ttl;
                         id_ptr          id;
+                        bool            is_unique;
                         dht            *p_dht;
                 };
 
@@ -254,6 +257,8 @@ namespace libcage {
                         uint16_t        keylen;
                         uint16_t        valuelen;
                         id_ptr          id;
+                        id_ptr          src;
+                        bool            is_unique;
 
                         mutable std::set<_id>   recvd;
                         mutable time_t          stored_time;

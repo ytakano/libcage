@@ -404,7 +404,8 @@ namespace libcage {
 
         void
         cage::put(const void *key, uint16_t keylen,
-                  const void *value, uint16_t valuelen, uint16_t ttl)
+                  const void *value, uint16_t valuelen, uint16_t ttl,
+                  bool is_unique)
         {
                 EVP_MD_CTX      ctx;
                 uint160_t       id;
@@ -420,9 +421,11 @@ namespace libcage {
                 id.from_binary(buf, sizeof(buf));
 
                 if (m_nat.get_state() == node_symmetric) {
-                        m_proxy.store(id, key, keylen, value, valuelen, ttl);
+                        m_proxy.store(id, key, keylen, value, valuelen, ttl,
+                                      is_unique);
                 } else {
-                        m_dht.store(id, key, keylen, value, valuelen, ttl);
+                        m_dht.store(id, key, keylen, value, valuelen, ttl,
+                                    is_unique);
                 }
         }
 

@@ -141,6 +141,8 @@ namespace libcage {
         static const uint8_t get_by_udp = 0xb0;
         static const uint8_t get_by_rdp = 0xb1;
 
+        static const uint8_t dht_flag_unique = 0x01;
+
         static const uint8_t dht_get_next = 0xc0;
 
         static const uint8_t proxy_get_success = 0xd0;
@@ -348,7 +350,8 @@ namespace libcage {
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
-                uint16_t        reserved;
+                uint8_t         flags;
+                uint8_t         reserved;
                 uint32_t        data[1];
         };
 
@@ -357,7 +360,8 @@ namespace libcage {
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
-                uint16_t        reserved;
+                uint8_t         flags;
+                uint8_t         reserved;
         };
 
         struct msg_dht_rdp_get {
@@ -393,7 +397,8 @@ namespace libcage {
                 uint16_t        keylen;
                 uint16_t        valuelen;
                 uint16_t        ttl;
-                uint16_t        reserved;
+                uint8_t         flags;
+                uint8_t         reserved;
                 uint32_t        data[1];
         };
 

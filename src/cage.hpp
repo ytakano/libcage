@@ -63,7 +63,7 @@ namespace libcage {
                                      bool is_dtun = true);
                 void            put(const void *key, uint16_t keylen,
                                     const void *value, uint16_t valuelen,
-                                    uint16_t ttl);
+                                    uint16_t ttl, bool is_unique = false);
                 void            get(const void *key, uint16_t keylen,
                                     dht::callback_find_value func);
                 void            join(std::string host, int port,
