@@ -32,6 +32,8 @@
 #ifndef CAGETIME_HPP
 #define CAGETIME_HPP
 
+#include "common.hpp"
+
 #ifdef WIN32
   #include <time.h>
   #include <windows.h>

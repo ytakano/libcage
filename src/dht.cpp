@@ -712,11 +712,14 @@ namespace libcage {
                 }
 
                 id_ptr id(new uint160_t);
+                id_ptr src(new uint160_t);
 
                 id->from_binary(msg.id, sizeof(msg.id));
+                src->from_binary(msg.from, sizeof(msg.from));
 
                 it->second->ttl         = ntohs(msg.ttl);
                 it->second->id          = id;
+                it->second->src         = src;
                 it->second->last_time   = time(NULL);
                 it->second->is_hdr_read = true;
 
@@ -724,6 +727,9 @@ namespace libcage {
                 boost::shared_array<char> val(new char[it->second->valuelen]);
                 it->second->key   = key;
                 it->second->value = val;
+
+                if (msg.flags & dht_flag_unique)
+                        it->second->is_unique = true;
 
                 return true;
         }
@@ -733,8 +739,7 @@ namespace libcage {
                                             dht::rdp_recv_store_func::it_rcvs it)
         {
                 if (it->second->key_read < it->second->keylen) {
-                        int size = it->second->keylen - it->second->key_read;
-
+                        int size  = it->second->keylen - it->second->key_read;
                         char *buf = &it->second->key[it->second->key_read];
                         m_dht.m_rdp.receive(desc, buf, &size);
 
@@ -744,7 +749,7 @@ namespace libcage {
                         it->second->key_read  += size;
                         it->second->last_time  = time(NULL);
                 } else {
-                        int size = it->second->valuelen - it->second->val_read;
+                        int size  = it->second->valuelen - it->second->val_read;
                         char *buf = &it->second->value[it->second->val_read];
                         m_dht.m_rdp.receive(desc, buf, &size);
 
@@ -820,7 +825,9 @@ namespace libcage {
                 data.ttl         = ttl;
                 data.stored_time = time(NULL);
                 data.id          = id;
+                data.src         = src;
                 data.original    = 0;
+                data.is_unique   = is_unique;
 
                 if (ttl == 0) {
                         p_dht->erase_sdata(data);
@@ -843,10 +850,12 @@ namespace libcage {
                         memset(&msg, 0, sizeof(msg));
 
                         id->to_binary(&msg.id, sizeof(msg.id));
+                        from->to_binary(&msg.from, sizeof(msg.from));
 
                         msg.keylen   = ntohs(keylen);
                         msg.valuelen = ntohs(valuelen);
                         msg.ttl      = ntohs(ttl);
+                        msg.flags    = dht_flag_unique;
 
                         p_dht->m_rdp.send(desc, &msg, sizeof(msg));
                         p_dht->m_rdp.send(desc, key.get(), keylen);
@@ -1442,6 +1451,8 @@ namespace libcage {
                    boost::shared_array<char> value, uint16_t valuelen,
                    uint16_t ttl, bool is_unique)
         {
+                id_ptr from(new uint160_t(m_id));
+
                 // store to dht network
                 store_func func;
 
@@ -1453,6 +1464,7 @@ namespace libcage {
                 func.ttl       = ttl;
                 func.is_unique = is_unique;
                 func.p_dht     = this;
+                func.from      = from;
 
                 find_node(*id, func);
 
@@ -1468,7 +1480,7 @@ namespace libcage {
                 data.stored_time = time(NULL);
                 data.id          = func.id;
                 data.original    = original_put_num;
-                data.src         = id_ptr(new uint160_t(m_id));
+                data.src         = from;
                 data.is_unique   = is_unique;
 
                 if (ttl == 0) {
@@ -1510,6 +1522,8 @@ namespace libcage {
 
                 msg = (msg_dht_store*)buf;
 
+                memset(msg, 0, sizeof(*msg));
+
                 msg->keylen   = htons(keylen);
                 msg->valuelen = htons(valuelen);
                 msg->ttl      = htons(ttl);
@@ -1519,6 +1533,7 @@ namespace libcage {
 
 
                 id->to_binary(msg->id, sizeof(msg->id));
+                p_dht->m_id.to_binary(msg->from, sizeof(msg->from));
 
                 p_key   = (char*)msg->data;
                 p_value = p_key + keylen;
@@ -1553,6 +1568,7 @@ namespace libcage {
                 func.valuelen  = valuelen;
                 func.ttl       = ttl;
                 func.id        = id;
+                func.from      = from;
                 func.is_unique = is_unique;
                 func.p_dht     = p_dht;
 
@@ -1588,12 +1604,13 @@ namespace libcage {
                 if (nodes.size() >= (uint32_t)num_find_node) {
                         stored_data sdata;
 
-                        sdata.value    = value;
-                        sdata.valuelen = valuelen;
-                        sdata.key      = key;
-                        sdata.keylen   = keylen;
-                        sdata.id       = id;
-                        sdata.src      = id_ptr(new uint160_t(p_dht->m_id));
+                        sdata.value     = value;
+                        sdata.valuelen  = valuelen;
+                        sdata.key       = key;
+                        sdata.keylen    = keylen;
+                        sdata.id        = id;
+                        sdata.is_unique = is_unique;
+                        sdata.src       = from;
 
 
                         int origin = p_dht->dec_origin_sdata(sdata);
@@ -1644,7 +1661,7 @@ namespace libcage {
                 id_ptr src(new uint160_t);
 
                 id->from_binary(req->id, sizeof(req->id));
-                src->from_binary(req->hdr.src, sizeof(req->hdr.src));
+                src->from_binary(req->from, sizeof(req->from));
                 memcpy(key.get(), req->data, keylen);
                 memcpy(value.get(), (char*)req->data + keylen, valuelen);
 

@@ -161,6 +161,7 @@ namespace libcage {
                         time_t          last_time;
                         dht            *p_dht;
                         bool            is_hdr_read;
+                        bool            is_unique;
 
                         rdp_recv_store(dht *d, id_ptr from) :
                                 keylen(0), valuelen(0), key_read(0),
@@ -194,6 +195,7 @@ namespace libcage {
                         uint16_t        valuelen;
                         uint16_t        ttl;
                         id_ptr          id;
+                        id_ptr          from;
                         bool            is_unique;
                         dht            *p_dht;
 
@@ -226,6 +228,7 @@ namespace libcage {
                         uint16_t        valuelen;
                         uint16_t        ttl;
                         id_ptr          id;
+                        id_ptr          from;
                         bool            is_unique;
                         dht            *p_dht;
                 };
