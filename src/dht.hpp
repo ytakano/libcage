@@ -139,7 +139,7 @@ namespace libcage {
                                       uint16_t keylen,
                                       boost::shared_array<char> value,
                                       uint16_t valuelen, uint16_t ttl,
-                                      bool is_unique);
+                                      id_ptr from, bool is_unique);
 
 
                 void            set_enabled_dtun(bool flag);

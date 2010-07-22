@@ -1449,10 +1449,8 @@ namespace libcage {
         void
         dht::store(id_ptr id, boost::shared_array<char> key, uint16_t keylen,
                    boost::shared_array<char> value, uint16_t valuelen,
-                   uint16_t ttl, bool is_unique)
+                   uint16_t ttl, id_ptr from, bool is_unique)
         {
-                id_ptr from(new uint160_t(m_id));
-
                 // store to dht network
                 store_func func;
 
@@ -1496,6 +1494,7 @@ namespace libcage {
                    bool is_unique)
         {
                 id_ptr     p_id(new uint160_t);
+                id_ptr     p_from(new uint160_t(m_id));
                 boost::shared_array<char> p_key(new char[keylen]);
                 boost::shared_array<char> p_val(new char[valuelen]);
 
@@ -1504,7 +1503,8 @@ namespace libcage {
                 memcpy(p_key.get(), key, keylen);
                 memcpy(p_val.get(), value, valuelen);
 
-                store(p_id, p_key, keylen, p_val, valuelen, ttl, is_unique);
+                store(p_id, p_key, keylen, p_val, valuelen, ttl, p_from,
+                      is_unique);
         }
 
         bool
@@ -2269,13 +2269,15 @@ namespace libcage {
                 if (it->original > 0) {
                         store_func sfunc;
 
-                        sfunc.key      = it->key;
-                        sfunc.value    = it->value;
-                        sfunc.id       = it->id;
-                        sfunc.keylen   = it->keylen;
-                        sfunc.valuelen = it->valuelen;
-                        sfunc.ttl      = it->ttl - diff;
-                        sfunc.p_dht    = p_dht;
+                        sfunc.key       = it->key;
+                        sfunc.value     = it->value;
+                        sfunc.id        = it->id;
+                        sfunc.from      = it->src;
+                        sfunc.keylen    = it->keylen;
+                        sfunc.valuelen  = it->valuelen;
+                        sfunc.ttl       = it->ttl - diff;
+                        sfunc.is_unique = it->is_unique;
+                        sfunc.p_dht     = p_dht;
 
                         p_dht->find_node(*it->id, sfunc);
 
@@ -2285,11 +2287,15 @@ namespace libcage {
                 ttl = it->ttl - diff;
 
                 msg = (msg_dht_store*)buf;
+
+                memset(msg, 0, sizeof(*msg));
+
                 msg->keylen   = htons(it->keylen);
                 msg->valuelen = htons(it->valuelen);
                 msg->ttl      = htons(ttl);
 
                 it->id->to_binary(msg->id, sizeof(msg->id));
+                it->src->to_binary(msg->from, sizeof(msg->from));
 
                 p_key   = (char*)msg->data;
                 p_value = p_key + it->keylen;
@@ -2297,13 +2303,16 @@ namespace libcage {
                 memcpy(p_key, it->key.get(), it->keylen);
                 memcpy(p_value, it->value.get(), it->valuelen);
 
+                if (it->is_unique)
+                        msg->flags = dht_flag_unique;
+
                 BOOST_FOREACH(cageaddr &addr, nodes) {
                         if (p_dht->m_id == *addr.id) {
                                 me = true;
                                 continue;
                         }
 
-                        _id    i;
+                        _id i;
 
                         i.id = addr.id;
                         if (it->recvd.find(i) != it->recvd.end())
@@ -2334,26 +2343,30 @@ namespace libcage {
                 if (it->original > 0) {
                         store_func sfunc;
 
-                        sfunc.key      = it->key;
-                        sfunc.value    = it->value;
-                        sfunc.id       = it->id;
-                        sfunc.keylen   = it->keylen;
-                        sfunc.valuelen = it->valuelen;
-                        sfunc.ttl      = it->ttl - diff;
-                        sfunc.p_dht    = p_dht;
+                        sfunc.key       = it->key;
+                        sfunc.value     = it->value;
+                        sfunc.id        = it->id;
+                        sfunc.from      = it->src;
+                        sfunc.keylen    = it->keylen;
+                        sfunc.valuelen  = it->valuelen;
+                        sfunc.ttl       = it->ttl - diff;
+                        sfunc.is_unique = it->is_unique;
+                        sfunc.p_dht     = p_dht;
 
                         p_dht->find_node(*it->id, sfunc);
 
                         return true;
                 }
 
-                func.key      = it->key;
-                func.value    = it->value;
-                func.keylen   = it->keylen;
-                func.valuelen = it->valuelen;
-                func.ttl      = it->ttl;
-                func.id       = it->id;
-                func.p_dht    = p_dht;
+                func.key       = it->key;
+                func.value     = it->value;
+                func.keylen    = it->keylen;
+                func.valuelen  = it->valuelen;
+                func.ttl       = it->ttl;
+                func.id        = it->id;
+                func.from      = it->src;
+                func.is_unique = it->is_unique;
+                func.p_dht     = p_dht;
 
                 BOOST_FOREACH(cageaddr &addr, nodes) {
                         if (*addr.id == p_dht->m_id) {

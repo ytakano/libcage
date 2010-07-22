@@ -110,6 +110,7 @@ namespace libcage {
                         uint16_t        m_keylen;
                         uint16_t        m_valuelen;
                         uint16_t        m_ttl;
+                        bool            m_is_unique;
                         id_ptr          m_id;
 
                         void operator() (int desc, rdp_addr addr,
@@ -136,7 +137,9 @@ namespace libcage {
                         uint16_t        m_valuelen;
                         uint16_t        m_val_read;
                         uint16_t        m_ttl;
+                        bool            m_is_unique;
                         id_ptr          m_id;
+                        id_ptr          m_src;
                         time_t          m_time;
 
                         rdp_recv_store() : m_state(RS_HDR), m_key_read(0),
@@ -399,7 +402,8 @@ namespace libcage {
                                              const void *key, uint16_t keylen,
                                              const void *value,
                                              uint16_t valuelen,
-                                             uint16_t ttl);
+                                             uint16_t ttl,
+                                             bool is_unique);
                 void            get_by_rdp(const uint160_t &id,
                                            const void *key, uint16_t keylen,
                                            dht::callback_find_value func);
@@ -410,7 +414,8 @@ namespace libcage {
                                                   uint16_t keylen,
                                                   const void *value,
                                                   uint16_t valuelen,
-                                                  uint16_t ttl);
+                                                  uint16_t ttl,
+                                                  bool is_unique);
                 void            retry_storing();
 
                 rand_uint      &m_rnd;

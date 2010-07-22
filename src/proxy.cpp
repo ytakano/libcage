@@ -367,12 +367,13 @@ namespace libcage {
         void
         proxy::store_by_rdp(const uint160_t &id, const void *key,
                             uint16_t keylen, const void *value,
-                            uint16_t valuelen, uint16_t ttl)
+                            uint16_t valuelen, uint16_t ttl, bool is_unique)
         {
                 rdp_store_func func(*this);
                 int            desc;
 
-                create_store_func(func, id, key, keylen, value, valuelen, ttl);
+                create_store_func(func, id, key, keylen, value, valuelen, ttl,
+                                  is_unique);
 
                 desc = m_rdp.connect(0, m_server.id, proxy_store_port, func);
 
@@ -383,7 +384,8 @@ namespace libcage {
         proxy::create_store_func(rdp_store_func &func,
                                  const uint160_t &id, const void *key,
                                  uint16_t keylen, const void *value,
-                                 uint16_t valuelen, uint16_t ttl)
+                                 uint16_t valuelen, uint16_t ttl,
+                                 bool is_unique)
         {
                 boost::shared_array<char> k(new char[keylen]);
                 boost::shared_array<char> v(new char[valuelen]);
@@ -394,12 +396,13 @@ namespace libcage {
 
                 *p_id = id;
 
-                func.m_key      = k;
-                func.m_val      = v;
-                func.m_keylen   = keylen;
-                func.m_valuelen = valuelen;
-                func.m_ttl      = ttl;
-                func.m_id       = p_id;
+                func.m_key       = k;
+                func.m_val       = v;
+                func.m_keylen    = keylen;
+                func.m_valuelen  = valuelen;
+                func.m_ttl       = ttl;
+                func.m_is_unique = is_unique;
+                func.m_id        = p_id;
         }
 
         void
@@ -414,7 +417,8 @@ namespace libcage {
                                         rdp_store_func_ptr func(new rdp_store_func(*this));
                                         create_store_func(*func, id, key,
                                                           keylen, value,
-                                                          valuelen, ttl);
+                                                          valuelen, ttl,
+                                                          is_unique);
 
                                         m_store_data.push_back(func);
                                 }
@@ -423,7 +427,8 @@ namespace libcage {
                 }
 
                 if (m_dht.is_use_rdp()) {
-                        store_by_rdp(id, key, keylen, value, valuelen, ttl);
+                        store_by_rdp(id, key, keylen, value, valuelen, ttl,
+                                     is_unique);
                         return;
                 }
 
@@ -447,6 +452,9 @@ namespace libcage {
                 store->valuelen = htons(valuelen);
                 store->ttl      = htons(ttl);
 
+                if (is_unique)
+                        store->flags = dht_flag_unique;
+
                 p_value = (char*)store->data;
                 p_value += keylen;
 
@@ -464,6 +472,7 @@ namespace libcage {
                 uint160_t dst;
                 uint16_t  keylen;
                 uint16_t  valuelen;
+                bool      is_unique;
                 int       size;
 
                 store = (msg_proxy_store*)msg;
@@ -482,7 +491,9 @@ namespace libcage {
                         return;
 
 
-                uint160_t id;
+                boost::shared_array<char> key(new char[keylen]);
+                boost::shared_array<char> value(new char[valuelen]);
+                id_ptr    id(new uint160_t);
                 id_ptr    src(new uint160_t);
                 char     *p_value;
 
@@ -491,14 +502,19 @@ namespace libcage {
                         return;
 
 
-                id.from_binary(store->id, sizeof(store->id));
+                id->from_binary(store->id, sizeof(store->id));
+
+                if (store->flags & dht_flag_unique)
+                        is_unique = true;
 
                 p_value  = (char*)store->data;
                 p_value += keylen;
 
-                // XXX
-                m_dht.store(id, store->data, keylen, p_value, valuelen,
-                            ntohs(store->ttl), true);
+                memcpy(key.get(), store->data, keylen);
+                memcpy(value.get(), &store->data[keylen], valuelen);
+
+                m_dht.store(id, key, keylen, value, valuelen,
+                            ntohs(store->ttl), src, is_unique);
         }
 
 
@@ -1538,6 +1554,9 @@ namespace libcage {
                         msg.valuelen = htons(m_valuelen);
                         msg.ttl      = htons(m_ttl);
 
+                        if (m_is_unique)
+                                msg.flags = dht_flag_unique;
+
                         m_proxy.m_rdp.send(desc, &msg, sizeof(msg));
                         m_proxy.m_rdp.send(desc, m_key.get(), m_keylen);
                         m_proxy.m_rdp.send(desc, m_val.get(), m_valuelen);
@@ -1575,6 +1594,9 @@ namespace libcage {
                 ptr->m_id       = id;
                 ptr->m_time     = time(NULL);
                 ptr->m_state    = rdp_recv_store::RS_KEY;
+
+                if (msg.flags & dht_flag_unique)
+                        ptr->m_is_unique = true;
 
 
                 boost::shared_array<char> key(new char[ptr->m_keylen]);
@@ -1633,7 +1655,8 @@ namespace libcage {
                                                     ptr->m_val,
                                                     ptr->m_valuelen,
                                                     ptr->m_ttl,
-                                                    true); // XXX
+                                                    ptr->m_src,
+                                                    ptr->m_is_unique);
                                 m_proxy.m_rdp_recv_store.erase(desc);
                                 return;
                         }
@@ -1655,6 +1678,7 @@ namespace libcage {
                         rdp_recv_store_ptr ptr(new rdp_recv_store);
 
                         ptr->m_time = time(NULL);
+                        ptr->m_src  = addr.did;
 
                         m_proxy.m_rdp_recv_store[desc] = ptr;
 
