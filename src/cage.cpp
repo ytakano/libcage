@@ -266,7 +266,7 @@ namespace libcage {
         }
 
         void
-        cage::set_id(char *buf, int len)
+        cage::set_id(const char *buf, int len)
         {
                 EVP_MD_CTX md_ctx;
                 unsigned int md_len;

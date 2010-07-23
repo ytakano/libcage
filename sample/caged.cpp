@@ -51,6 +51,8 @@ void callback_accept(int fd, short ev, void *arg);
 void callback_read(int fd, short ev, void *arg);
 void replace(std::string &str, std::string from, std::string to);
 void do_command(int sockfd, std::string command);
+void process_set_id(int sockfd, esc_tokenizer::iterator &it,
+                    const esc_tokenizer::iterator &end);
 void process_new(int sockfd, esc_tokenizer::iterator &it,
 		 const esc_tokenizer::iterator &end);
 void process_delete(int sockfd, esc_tokenizer::iterator &it,
@@ -67,6 +69,7 @@ static const char * const SUCCEEDED_DELETE      = "201";
 static const char * const SUCCEEDED_JOIN        = "202";
 static const char * const SUCCEEDED_PUT         = "203";
 static const char * const SUCCEEDED_GET         = "204";
+static const char * const SUCCEEDED_SET_ID      = "205";
 
 static const char * const ERR_UNKNOWN_COMMAND   = "400";
 static const char * const ERR_INVALID_STATEMENT = "401";
@@ -81,32 +84,39 @@ static const char * const ERR_GET               = "409";
 
 /*
   escape character: \
+  reserved words:   words in small letters, and numbers
+  variables:        words in capital letters
 
-  new,node_name,port_number |
-  new,node_name,port_number,global
-  -> 200,new,node_name,port_number |
-     400 | 401,comment |
-     402 | 403,new,node_name,port_number,comment
+  new,NODE_NAME,PORT_NUMBER |
+  new,NODE_NAME,PORT_NUMBER,global
+  -> 200,new,NODE_NAME,PORT_NUMBER |
+     400 | 401,COMMENT |
+     402 | 403,new,NODE_NAME,PORT_NUMBER,COMMENT
 
-  delete,node_name
-  -> 201,delete,node_name |
-     404,delete,node_name,comment
+  delete,NODE_NAME
+  -> 201,delete,NODE_NAME |
+     404,delete,NODE_NAME,COMMENT
 
-  join,node_name,host,port
-  -> 202,join,node_name,host,port
-     400 | 401,comment
-     405 | 406,join,node_name,host,port,comment
+  set_id,NODE_NAME,IDNETIFIER
+  -> 205,set_id,NODE_NAME,IDENTIFIER |
+     400 | 401,COMMENT
 
-  put,node_name,key,value,ttl
-  -> 203,put,node_name,key,value,ttl
-     400 | 401,comment
-     407,put,node_name,key,value,ttl,comment
+  join,NODE_NAME,HOST,PORT
+  -> 202,join,NODE_NAME,HOST,PORT
+     400 | 401,COMMENT
+     405 | 406,join,NODE_NAME,HOST,PORT,COMMENT
 
-  get,node_name,key
-  -> 204,get,node_name,key,value1,value2,value3,...
-     400 | 401,comment
-     408,get,key,comment
-     409,get,key
+  put,NODE_NAME,KEY,VALUE,TTL | 
+  put,NODE_NAME,KEY,VALUE,TTL,unique
+  -> 203,put,NODE_NAME,KEY,VALUE,TTL |
+     400 | 401,COMMENT |
+     407,put,NODE_NAME,KEY,VALUE,TTL,COMMENT
+
+  get,NODE_NAME,key
+  -> 204,get,NODE_NAME,KEY,VALUE1,VALUE2,VALUE3,... |
+     400 | 401,COMMENT |
+     408,get,KEY,COMMENT |
+     409,get,KEY
  */
 
 int
@@ -161,7 +171,7 @@ usage(char *cmd)
         printf("%s [-d] [-p port]\n", cmd);
         printf("    -d: run as daemon\n");
         printf("    -h: show this help\n");
-        printf("    -p: port number to listen, default value is 12080\n");
+        printf("    -p: the port number to listen, default value is 12080\n");
 }
 
 bool
@@ -299,6 +309,9 @@ do_command(int sockfd, std::string command)
         } else if (*it == "delete") {
                 D(std::cout << "process delete" << std::endl);
                 process_delete(sockfd, ++it, tokens.end());
+        } else if (*it == "set_id") {
+                D(std::cout << "process set_id" << std::endl;);
+                process_set_id(sockfd, ++it, tokens.end());
         } else if (*it == "join") {
                 D(std::cout << "process join" << std::endl;);
                 process_join(sockfd, ++it, tokens.end());
@@ -313,12 +326,68 @@ do_command(int sockfd, std::string command)
 
                 char result[1024];
 
-                // format: 400,comment
+                // format: 400,COMMENT
                 snprintf(result, sizeof(result), 
                          "400,unknown command. cannot recognize '%s'\n",
                          it->c_str());
                 send(sockfd, result, strlen(result), 0);
         }
+}
+
+void
+process_set_id(int sockfd, esc_tokenizer::iterator &it,
+               const esc_tokenizer::iterator &end)
+{
+        name2node_type::iterator it_n2n;
+        std::string node_name;
+        std::string esc_node_name;
+        char        result[1024 * 4];
+
+        // read node_name
+        if (it == end || it->length() == 0) {
+                // there is no port number
+                // format: 401,COMMENT
+                snprintf(result, sizeof(result),
+                         "401,node name is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        node_name = *it;
+        esc_node_name = *it;
+        replace(esc_node_name, ",", "\\,");
+
+        it_n2n = name2node.find(node_name);
+        if (it_n2n == name2node.end()) {
+                // invalid node name
+                // format: 404,delete,NODE_NAME,COMMENT
+                snprintf(result, sizeof(result),
+                         "%s,delete,%s,no such node named '%s'\n",
+                         ERR_DEL_NO_SUCH_NODE, esc_node_name.c_str(),
+                         esc_node_name.c_str());
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        ++it;
+
+
+        // read port number
+        if (it == end) {
+                // there is no identifier
+                // format: 401,COMMENT
+                snprintf(result, sizeof(result),
+                         "401,identifier is required\n");
+                send(sockfd, result, strlen(result), 0);
+                return;
+        }
+
+        it_n2n->second->set_id(it->c_str(), it->size());
+
+        // format: 205,set_id,NODE_NAME,IDENTIFIER
+        snprintf(result, sizeof(result), "205,set_id,%s,%s\n",
+                 esc_node_name.c_str(), it->c_str());
+        send(sockfd, result, strlen(result), 0);
 }
 
 void
@@ -334,7 +403,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // read node_name
         if (it == end || it->length() == 0) {
                 // there is no port number
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,node name is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -350,7 +419,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // read port number
         if (it == end) {
                 // there is no port number
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,port number is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -361,7 +430,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
                 port = boost::lexical_cast<int>(*it);
         } catch (boost::bad_lexical_cast) {
                 // no integer
-                // format: 401,comment
+                // format: 401,COMMENT
                 std::string esc_port = *it;
                 replace(esc_port, ",", "\\,");
                 snprintf(result, sizeof(result),
@@ -387,7 +456,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // check whether the node_name has been used already or not
         if (name2node.find(node_name) != name2node.end()) {
                 // the node name has been already used
-                // format: 403,new,node_name,port_number,comment
+                // format: 403,new,NODE_NAME,PORT_NUMBER,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,new,%s,%d,the node name '%s' exists already\n",
                          ERR_ALREADY_EXIST, esc_node_name.c_str(), port,
@@ -401,7 +470,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         // open port
         if (c->open(PF_INET, port) == false) {
                 // cannot open port
-                // format: 402,new,node_name,port_number,comment
+                // format: 402,new,NODE_NAME,PORT_NUMBER,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,new,%s,%d,cannot open port(%d)\n",
                          ERR_CANNOT_OPEN_PORT, esc_node_name.c_str(),
@@ -418,7 +487,7 @@ process_new(int sockfd, esc_tokenizer::iterator &it,
         name2node[node_name] = c;
 
         // send result
-        // format: 200,new,node_name,port_number
+        // format: 200,new,NODE_NAME,PORT_NUMBER
         snprintf(result, sizeof(result), "%s,new,%s,%d\n", 
                  SUCCEEDED_NEW, esc_node_name.c_str(), port);
 
@@ -439,7 +508,7 @@ process_delete(int sockfd, esc_tokenizer::iterator &it,
 
         if (it == end) {
                 // there is no node_name
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,node name is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -453,7 +522,7 @@ process_delete(int sockfd, esc_tokenizer::iterator &it,
         it_n2n = name2node.find(node_name);
         if (it_n2n == name2node.end()) {
                 // invalid node name
-                // format: 404,delete,node_name,comment
+                // format: 404,delete,NODE_NAME,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,delete,%s,no such node named '%s'\n",
                          ERR_DEL_NO_SUCH_NODE, esc_node_name.c_str(),
@@ -467,7 +536,7 @@ process_delete(int sockfd, esc_tokenizer::iterator &it,
         name2node.erase(it_n2n);
 
         // send result
-        // format: 201,delete,node_name
+        // format: 201,delete,NODE_NAME
         snprintf(result, sizeof(result),
                  "%s,delete,%s\n",
                  SUCCEEDED_DELETE, esc_node_name.c_str());
@@ -493,7 +562,7 @@ public:
 
                 if (is_join) {
                         // send result of the success
-                        // format: 202,join,node_name,host,port
+                        // format: 202,join,NODE_NAME,HOST,PORT
                         snprintf(result, sizeof(result),
                                  "%s,join,%s,%s,%d\n",
                                  SUCCEEDED_JOIN, esc_node_name.c_str(),
@@ -501,7 +570,7 @@ public:
                         send(sockfd, result, strlen(result), 0);
                 } else {
                         // send result of the fail
-                        // format: 406,join,node_name,host,port,comment
+                        // format: 406,join,NODE_NAME,HOST,PORT,COMMENT
                         snprintf(result, sizeof(result),
                                  "%s,join,%s,%s,%d,failed in connecting to '%s:%d'\n",
                                  ERR_JOIN_FAILED, esc_node_name.c_str(),
@@ -526,7 +595,7 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
 
         if (it == end) {
                 // there is no node_name
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,node name is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -540,7 +609,7 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no host
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,host is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -554,7 +623,7 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no port number
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,port number is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -566,7 +635,7 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
                 port = boost::lexical_cast<int>(*it);
         } catch (boost::bad_lexical_cast) {
                 // no integer
-                // format: 401,comment
+                // format: 401,COMMENT
                 std::string esc_port = *it;
                 replace(esc_port, ",", "\\,");
                 snprintf(result, sizeof(result),
@@ -579,7 +648,7 @@ void process_join(int sockfd, esc_tokenizer::iterator &it,
         it_n2n = name2node.find(node_name);
         if (it_n2n == name2node.end()) {
                 // invalid node name
-                // format: 405,join,node_name,host,port,comment
+                // format: 405,join,NODE_NAME,HOST,PORT,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,join,%s,%s,%d,no such node named '%s'\n",
                          ERR_JOIN_NO_SUCH_NODE, esc_node_name.c_str(),
@@ -609,11 +678,12 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         std::string key, value;
         std::string esc_key, esc_value;
         uint16_t    ttl;
+        bool        is_unique = false;
         char        result[1024 * 4];
 
         if (it == end) {
                 // there is no node_name
-                // format: result,401,comment
+                // format: result,401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,node name is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -628,7 +698,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no key
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,key is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -643,7 +713,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no value
-                // format: result,401,comment
+                // format: result,401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,value is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -658,7 +728,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no ttl
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,ttl is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -670,7 +740,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
                 ttl = boost::lexical_cast<uint16_t>(*it);
         } catch (boost::bad_lexical_cast) {
                 // no integer
-                // format: 401,comment
+                // format: 401,COMMENT
                 std::string esc_ttl = *it;
                 replace(esc_ttl, ",", "\\,");
                 snprintf(result, sizeof(result),
@@ -680,12 +750,16 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
                 return;
         }
 
+        ++it;
+        if (it != end && *it == "unique")
+                is_unique = true;
+
 
         name2node_type::iterator it_n2n;
         it_n2n = name2node.find(node_name);
         if (it_n2n == name2node.end()) {
                 // invalid node name
-                // format: 407,put,node_name,key,value,ttl,comment
+                // format: 407,put,NODE_NAME,KEY,VALUE,TTL,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,put,%s,%s,%s,%d,no such node named '%s'\n",
                          ERR_PUT_NO_SUCH_NODE, esc_node_name.c_str(),
@@ -696,7 +770,7 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
         }
 
         it_n2n->second->put(key.c_str(), key.length(),
-                            value.c_str(), value.length(), ttl);
+                            value.c_str(), value.length(), ttl, is_unique);
 
         D(std::cout << "    node_name: " << node_name
                     << "\n    key: " << key
@@ -706,11 +780,20 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
 
 
         // send result of the success
-        // format: 203,put,node_name,key,value,ttl
-        snprintf(result, sizeof(result),
-                 "%s,put,%s,%s,%s,%d\n",
-                 SUCCEEDED_PUT, esc_node_name.c_str(),
-                 esc_key.c_str(), esc_value.c_str(), ttl);
+        if (is_unique) {
+                // format: 203,put,NODE_NAME,KEY,VALUE,TTL,unique
+                snprintf(result, sizeof(result),
+                         "%s,put,%s,%s,%s,%d,unique\n",
+                         SUCCEEDED_PUT, esc_node_name.c_str(),
+                         esc_key.c_str(), esc_value.c_str(), ttl);
+        } else {
+                // format: 203,put,NODE_NAME,KEY,VALUE,TTL
+                snprintf(result, sizeof(result),
+                         "%s,put,%s,%s,%s,%d\n",
+                         SUCCEEDED_PUT, esc_node_name.c_str(),
+                         esc_key.c_str(), esc_value.c_str(), ttl);
+        }
+
         send(sockfd, result, strlen(result), 0);
 }
 
@@ -751,7 +834,7 @@ public:
                         }
 
                         // send value
-                        // format: 204,get,node_name,key,value
+                        // format: 204,get,NODE_NAME,KEY,VALUE
                         snprintf(result, sizeof(result),
                                  "%s,get,%s,%s%s\n",
                                  SUCCEEDED_GET, esc_node_name.c_str(),
@@ -761,7 +844,7 @@ public:
                         return;
                 } else {
                         // send result of fail
-                        // format: 409,get,node_name,key
+                        // format: 409,get,NODE_NAME,KEY
                         snprintf(result, sizeof(result),
                                  "%s,get,%s,%s\n",
                                  ERR_GET, esc_node_name.c_str(),
@@ -783,7 +866,7 @@ void process_get(int sockfd, esc_tokenizer::iterator &it,
 
         if (it == end) {
                 // there is no node_name
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,node name is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -798,7 +881,7 @@ void process_get(int sockfd, esc_tokenizer::iterator &it,
         ++it;
         if (it == end) {
                 // there is no key
-                // format: 401,comment
+                // format: 401,COMMENT
                 snprintf(result, sizeof(result),
                          "401,key is required\n");
                 send(sockfd, result, strlen(result), 0);
@@ -814,7 +897,7 @@ void process_get(int sockfd, esc_tokenizer::iterator &it,
         it_n2n = name2node.find(node_name);
         if (it_n2n == name2node.end()) {
                 // invalid node name
-                // format: 408,node_name,get,key,comment
+                // format: 408,NODE_NAME,get,KEY,COMMENT
                 snprintf(result, sizeof(result),
                          "%s,get,%s,%s,no such node named '%s'\n",
                          ERR_GET_NO_SUCH_NODE, esc_node_name.c_str(),
