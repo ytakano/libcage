@@ -265,6 +265,22 @@ namespace libcage {
 
         }
 
+        void
+        cage::set_id(char *buf, int len)
+        {
+                EVP_MD_CTX md_ctx;
+                unsigned int md_len;
+                unsigned char md_value[EVP_MAX_MD_SIZE];
+
+                EVP_MD_CTX_init(&md_ctx);
+                EVP_DigestInit_ex(&md_ctx, EVP_sha1(), NULL);
+                EVP_DigestUpdate(&md_ctx, buf, len);
+                EVP_DigestFinal_ex(&md_ctx, md_value, &md_len);
+                EVP_MD_CTX_cleanup(&md_ctx);
+
+                m_id.from_binary(md_value, md_len);
+        }
+
         int
         cage::rdp_listen(uint16_t sport, callback_rdp_event func)
         {
