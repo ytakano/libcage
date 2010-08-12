@@ -1,6 +1,6 @@
-CXXFLAGS += -Wall -O0 -g -fPIC
+CXXFLAGS += -Wall -O0 -g -fPIC -DEV_MULTIPLICITY=0
 # ASFLAGS +=
-LDFLAGS += -levent -lcrypto
+LDFLAGS += -lev -lcrypto
 # INCLUDES +=
 
 if $(equal $(SYSNAME), Darwin)
