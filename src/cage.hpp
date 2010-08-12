@@ -86,6 +86,7 @@ namespace libcage {
                 void            set_dgram_callback(dgram::callback func);
                 void            unset_dgram_callback();
 
+                std::string     get_id_str() const;
                 void            get_id(void *addr) const;
                 node_state      get_nat_state() const { return m_nat.get_state(); }
 

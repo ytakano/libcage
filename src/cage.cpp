@@ -497,6 +497,12 @@ namespace libcage {
                 }
         }
 
+        std::string
+        cage::get_id_str() const
+        {
+                return m_id.to_string();
+        }
+
         void
         cage::get_id(void *addr) const
         {
