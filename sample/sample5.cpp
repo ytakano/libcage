@@ -32,7 +32,8 @@ public:
 };
 
 
-uint16_t port = 10000;
+uint16_t port     = 10000;
+uint16_t rdp_port = 5000;
 libcage::cage *cage1, *cage2;
 int desc_sender;
 event *ev;
@@ -74,7 +75,7 @@ join_callback::operator() (bool result)
         cage1->get_id(addr);
         id->from_binary(addr, CAGE_ID_LEN);
 
-        cage2->rdp_connect(0, id, 200, client_func);
+        cage2->rdp_connect(0, id, rdp_port, client_func);
 }
 
 void
@@ -189,7 +190,7 @@ main(int argc, char *argv)
                 return -1;
         }
         cage1->set_global();
-        cage1->rdp_listen(200, server_func);
+        cage1->rdp_listen(rdp_port, server_func);
 
 
         join_callback func;
