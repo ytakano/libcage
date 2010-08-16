@@ -1,6 +1,6 @@
 
 all:
-	omake
+	omake EV=TRUE
 
 install:
-	omake install
+	omake install EV=TRUE
