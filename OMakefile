@@ -29,12 +29,14 @@
 
 # choose event library
 if $(defined EV)
+	echo "*** linking with libev ***"
 	if $(equal $(EV), TRUE)
 		LDFLAGS += -lev
 		CXXFLAGS += -DEV_MULTIPLICITY=0
 		export
 	export
 else
+	echo "*** linking with libevent ***"
 	LDFLAGS += -levent
 	export
 
