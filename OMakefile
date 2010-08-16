@@ -27,6 +27,27 @@
 
 .PHONY: clean install uninstall
 
+# choose event library
+if $(defined EV)
+	if $(equal $(EV), TRUE)
+		LDFLAGS += -lev
+		CXXFLAGS += -DEV_MULTIPLICITY=0
+		export
+	export
+else
+	LDFLAGS += -levent
+	export
+
+# add debugging information
+if $(defined DEBUG)
+	if $(DEBUG)
+		CXXFLAGS += -O0 -g
+		export
+	export
+else
+	CXXFLAGS += -O3
+	export
+
 clean:
 	rm -f *~
 

@@ -11,10 +11,22 @@
 
     and uses C++ compiler and OMake (http://omake.metaprl.org/index.html).
     So, please install above libraries and applications before compiling.
-   
+
+    You can then compile as:
 
     $ cd libcage
     $ omake
+
+
+    libcage uses libevent as a default event library. If you'd like to use
+    libev instead of libevent, please use the EV option when compiling.
+
+    $ omake EV=TRUE
+
+
+    The DEBUG option enables debugging.
+
+    $ omake DEBUG=TRUE
 
 3. Install
     If you want to install to /usr/local, please type:
