@@ -28,12 +28,14 @@
 .PHONY: clean install uninstall
 
 # choose event library
-if $(defined EV)
+if $(not $(defined EV))
+	EV = FALSE
+	export
+
+if $(equal $(EV), TRUE)
 	echo "*** linking with libev ***"
-	if $(equal $(EV), TRUE)
-		LDFLAGS += -lev
-		CXXFLAGS += -DEV_MULTIPLICITY=0
-		export
+	LDFLAGS += -lev
+	CXXFLAGS += -DEV_MULTIPLICITY=0
 	export
 else
 	echo "*** linking with libevent ***"
@@ -41,10 +43,12 @@ else
 	export
 
 # add debugging information
-if $(defined DEBUG)
-	if $(DEBUG)
-		CXXFLAGS += -O0 -g
-		export
+if $(not $(defined DEBUG))
+	DEBUG = FALSE
+	export
+
+if $(equal $(DEBUG), TRUE)
+	CXXFLAGS += -O0 -g
 	export
 else
 	CXXFLAGS += -O3
