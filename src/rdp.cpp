@@ -382,8 +382,9 @@ namespace libcage {
                                 return total;
 
                         total += size;
+                        len   -= size;
 
-                        if (total == len)
+                        if (len == 0)
                                 return total;
 
                         buf = (char*)buf + size;
