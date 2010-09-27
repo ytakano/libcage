@@ -901,8 +901,15 @@ namespace libcage {
         dht::send_ping(cageaddr &dst, uint32_t nonce)
         {
                 try {
-                        if (m_is_dtun)
+                        if (m_is_dtun) {
+                                node_state state = m_nat.get_state();
+                                if (state == node_symmetric ||
+                                    state == node_undefined ||
+                                    state == node_nat)
+                                        return;
+
                                 m_peers.get_addr(dst.id);
+                        }
 
                         send_ping_tmpl<msg_dht_ping>(dst, nonce, type_dht_ping,
                                                      m_id, m_udp);
