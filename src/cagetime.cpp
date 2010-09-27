@@ -66,4 +66,15 @@ namespace libcage{
                 return 0;
         }
 }
+
+#else
+
+namespace libcage{
+        void
+        __dummy_func__()
+        {
+
+        }
+}
+
 #endif // WIN32

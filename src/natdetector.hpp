@@ -46,6 +46,7 @@
 
 namespace libcage {
         class proxy;
+        class dht;
 
         class natdetector {
         private:
@@ -53,7 +54,7 @@ namespace libcage {
 
         public:
                 natdetector(rand_uint &rnd, udphandler &udp, timer &t,
-                            const uint160_t &id, peers &p, proxy &pr);
+                            const uint160_t &id, dht &d, peers &p, proxy &pr);
                 virtual ~natdetector();
 
                 void            detect(std::string host, int port);
@@ -140,6 +141,7 @@ namespace libcage {
                 udphandler             &m_udp;
                 udphandler             *m_udp_tmp;
                 const uint160_t        &m_id;
+                dht                    &m_dht;
                 peers                  &m_peers;
                 proxy                  &m_proxy;
                 uint16_t                m_global_port;
@@ -155,6 +157,8 @@ namespace libcage {
                 void            recv_echo_reply_wait2(void *msg);
 
                 void            get_echo(msg_nat_echo &echo);
+
+                void            join_dht();
 
         public:
                 void            set_state_nat() { m_state = nat; }

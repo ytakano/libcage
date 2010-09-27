@@ -57,6 +57,7 @@ namespace libcage {
                         return;
                 }
 
+
                 switch (hdr->type) {
                 case type_nat_echo:
                         if (len == (int)sizeof(msg_nat_echo)) {
@@ -243,7 +244,8 @@ namespace libcage {
                        m_drnd(m_gen, m_dist_real),
                        m_receiver(*this),
                        m_peers(m_drnd, m_timer),
-                       m_nat(m_rnd, m_udp, m_timer, m_id, m_peers, m_proxy),
+                       m_nat(m_rnd, m_udp, m_timer, m_id, m_dht, m_peers,
+                             m_proxy),
                        m_dtun(m_rnd, m_drnd, m_id, m_timer, m_peers, m_nat,
                               m_udp, m_proxy),
                        m_rdp(m_rnd, m_timer),

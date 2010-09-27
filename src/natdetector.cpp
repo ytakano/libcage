@@ -37,6 +37,8 @@ namespace libcage {
         const time_t    natdetector::echo_timeout   = 3;
         const time_t    natdetector::timer_interval = 30;
 
+        extern void no_action(std::vector<cageaddr> &nodes);
+
         void
         natdetector::timer_echo_wait1::operator() ()
         {
@@ -96,12 +98,14 @@ namespace libcage {
         }
 
         natdetector::natdetector(rand_uint &rnd, udphandler &udp, timer &t,
-                                 const uint160_t &id, peers &p, proxy &pr) :
+                                 const uint160_t &id, dht &d, peers &p,
+                                 proxy &pr) :
                 m_rnd(rnd),
                 m_state(undefined),
                 m_timer(t),
                 m_udp(udp),
                 m_id(id),
+                m_dht(d),
                 m_peers(p),
                 m_proxy(pr),
                 m_global_port(0),
@@ -301,6 +305,8 @@ namespace libcage {
                         m_reply.erase(nonce);
                         m_timers.erase(nonce);
 
+                        join_dht();
+
 #ifdef DEBUG_NAT
                         printf("cone nat\n");
 #endif // DEBUG_NAT
@@ -391,6 +397,8 @@ namespace libcage {
                 memcpy(m_global_addr, reply->addr, sizeof(m_global_addr));
 
                 m_state = global;
+
+                join_dht();
         }
 
         void
@@ -470,6 +478,22 @@ namespace libcage {
                 }
 
                 return node_state(undefined);
+        }
+
+        void
+        natdetector::join_dht()
+        {
+                try {
+                        cageaddr addr;
+                        in_ptr   in;
+
+                        addr = m_peers.get_first();
+                        in   = boost::get<in_ptr>(addr.saddr);
+
+                        m_dht.find_node((sockaddr*)in.get(), &no_action);
+                } catch (std::out_of_range) {
+                        return;
+                }
         }
 
         void

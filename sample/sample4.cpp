@@ -7,7 +7,7 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 100;
+const int max_node = 3;
 const int port     = 10000;
 libcage::cage *cage;
 event *ev;
@@ -37,8 +37,14 @@ timer_callback(int fd, short ev, void *arg)
         int n1, n2;
 
         n1 = abs(mrand48()) % max_node;
-        n2 = abs(mrand48()) % max_node;
 
+        for (;;) {
+                n2 = abs(mrand48()) % max_node;
+                if (n1 != n2)
+                        break;
+        }
+
+        std::cout << n1 << " to " << n2 << std::endl;
 
         // send datagram
         const char *str = "Hello, world!";
@@ -79,9 +85,6 @@ public:
                                   << std::endl;
 
                 cage[n].print_state();
-
-                // put data
-                cage[n].put(&n, sizeof(n), &n, sizeof(n), 300);
 
                 n++;
 
@@ -137,6 +140,7 @@ main(int argc, char *argv[])
                 return -1;
         }
         cage[0].set_global();
+        cage[0].set_dgram_callback(recv_dgram);
 
 
         // start other nodes
@@ -150,6 +154,7 @@ main(int argc, char *argv[])
                 return -1;
         }
         cage[1].set_global();
+        cage[1].set_dgram_callback(recv_dgram);
         cage[1].join("localhost", 10000, func);
 
 

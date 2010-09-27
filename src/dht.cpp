@@ -1368,6 +1368,12 @@ namespace libcage {
         void
         dht::find_node(sockaddr *saddr, callback_find_node func)
         {
+                node_state state = m_nat.get_state();
+                if (state == node_symmetric || state == node_undefined ||
+                    state == node_nat)
+                        return;
+
+
                 // initialize query
                 query_ptr q(new query);
                 id_ptr    dst(new uint160_t);
