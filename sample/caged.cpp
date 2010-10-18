@@ -63,6 +63,8 @@ void process_put(int sockfd, esc_tokenizer::iterator &it,
                  const esc_tokenizer::iterator &end);
 void process_get(int sockfd, esc_tokenizer::iterator &it,
                  const esc_tokenizer::iterator &end);
+void process_dump(int sockfd, esc_tokenizer::iterator &it,
+                  const esc_tokenizer::iterator &end);
 
 static const char * const SUCCEEDED_NEW         = "200";
 static const char * const SUCCEEDED_DELETE      = "201";
@@ -321,6 +323,9 @@ do_command(int sockfd, std::string command)
         } else if (*it == "get") {
                 D(std::cout << "process get" << std::endl);
                 process_get(sockfd, ++it, tokens.end());
+        } else if (*it == "dump") {
+                D(std::cout << "process dump" << std::endl);
+                process_dump(sockfd, ++it, tokens.end());
         } else {
                 D(std::cout << "unknown command: " << *it << std::endl);
 
@@ -914,4 +919,17 @@ void process_get(int sockfd, esc_tokenizer::iterator &it,
         func.esc_key       = esc_key;
         func.sockfd        = sockfd;
         it_n2n->second->get(key.c_str(), key.length(), func);
+}
+
+// for debug
+void process_dump(int sockfd, esc_tokenizer::iterator &it,
+                  const esc_tokenizer::iterator &end)
+{
+        name2node_type::iterator it_n;
+
+        for (it_n = name2node.begin(); it_n != name2node.end(); ++it_n) {
+                printf("%s:\n", it_n->first.c_str());
+                it_n->second->print_state();
+                printf("\n");
+        }
 }

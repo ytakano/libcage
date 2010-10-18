@@ -9,7 +9,7 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 20;
+const int max_node = 5;
 const int port     = 10000;
 libcage::cage *cage;
 event *ev;
@@ -61,7 +61,7 @@ timer_callback(int fd, short ev, void *arg)
         }
 
         // get at random
-        printf("get %d\n", n2);
+        printf("get %d by node %d\n", n2, n1);
         cage[n1].get(&n2, sizeof(n2), get_func);
 }
 
