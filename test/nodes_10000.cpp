@@ -10,9 +10,9 @@
 // include libcage's header
 #include <libcage/cage.hpp>
 
-const int max_node = 125;
+const int max_node = 50;
 const int port     = 20000;
-const int proc_num = 80;
+const int proc_num = 200;
 
 libcage::cage *cage;
 event   *ev;
@@ -68,8 +68,14 @@ timer_callback(int fd, short ev, void *arg)
         }
 
         // get at random
+        std::cout << "get: proc = " << proc << ", n = " << n << std::endl;
         gettimeofday(&tval1, NULL);
-        cage[n].get(&get_key, sizeof(get_key), get_func);
+
+        char buf[1024 * 4];
+        memset(buf, 0, sizeof(buf));
+        *(int*)buf = get_key;
+
+        cage[n].get(buf, sizeof(buf), get_func);
 }
 
 class join_callback
@@ -95,7 +101,10 @@ public:
                 }
 
                 // put data
-                cage[idx].put(&n, sizeof(n), &n, sizeof(n), 60000);
+                char buf[1024 * 4];
+                memset(buf, 0, sizeof(buf));
+                *(int*)buf = n;
+                cage[idx].put(buf, sizeof(buf), &n, sizeof(n), 60000);
 
                 n++;
                 idx++;
