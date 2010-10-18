@@ -247,33 +247,33 @@ namespace libcage {
 
                 head = (rdp_head*)pbuf->get_data();
 
-                std::cout << "output: src = " << ntohs(head->sport)
+                std::cerr << "output: src = " << ntohs(head->sport)
                           << ", dst = " << ntohs(head->dport)
                           << ", seq = " << ntohl(head->seqnum)
                           << ", ack = " << ntohl(head->acknum)
                           << "\n        flags = ";
 
                 if (head->flags & flag_syn) {
-                        std::cout << "syn, ";
+                        std::cerr << "syn, ";
                 }
 
                 if (head->flags & flag_ack) {
-                        std::cout << "ack, ";
+                        std::cerr << "ack, ";
                 }
 
                 if (head->flags & flag_rst) {
-                        std::cout << "rst, ";
+                        std::cerr << "rst, ";
                 }
 
                 if (head->flags & flag_nul) {
-                        std::cout << "nul, ";
+                        std::cerr << "nul, ";
                 }
 
                 if (head->flags & flag_fin) {
-                        std::cout << "fin, ";
+                        std::cerr << "fin, ";
                 }
 
-                std::cout << "\n        to id = " << id->to_string()
+                std::cerr << "\n        to id = " << id->to_string()
                           << std::endl;
 #endif
 
@@ -631,30 +631,30 @@ namespace libcage {
                 it = m_addr2conn.find(addr);
 
 #ifdef DEBUG_RDP
-                std::cout << "input:  src = " << addr.dport
+                std::cerr << "input:  src = " << addr.dport
                           << ", dst = " << addr.sport
                           << ", seq = " << ntohl(head->seqnum)
                           << ", ack = " << ntohl(head->acknum)
                           << "\n        flags = ";
 
                 if (head->flags & flag_syn) {
-                        std::cout << "syn, ";
+                        std::cerr << "syn, ";
                 }
 
                 if (head->flags & flag_ack) {
-                        std::cout << "ack, ";
+                        std::cerr << "ack, ";
                 }
 
                 if (head->flags & flag_rst) {
-                        std::cout << "rst, ";
+                        std::cerr << "rst, ";
                 }
 
                 if (head->flags & flag_nul) {
-                        std::cout << "nul, ";
+                        std::cerr << "nul, ";
                 }
 
                 if (head->flags & flag_fin) {
-                        std::cout << "fin, ";
+                        std::cerr << "fin, ";
                 }
 
 
@@ -663,29 +663,29 @@ namespace libcage {
 
                         switch (con->state) {
                         case CLOSE_WAIT_PASV:
-                                std::cout << "state = CLOSE-WAIT-PASV";
+                                std::cerr << "state = CLOSE-WAIT-PASV";
                                 break;
                         case CLOSE_WAIT_ACTIVE:
-                                std::cout << "state = CLOSE-WAIT-ACTIVE";
+                                std::cerr << "state = CLOSE-WAIT-ACTIVE";
                                 break;
                         case SYN_SENT:
-                                std::cout << "state = SYN-SENT";
+                                std::cerr << "state = SYN-SENT";
                                 break;
                         case SYN_RCVD:
-                                std::cout << "state = SYN-RCVD";
+                                std::cerr << "state = SYN-RCVD";
                                 break;
                         case OPEN:
-                                std::cout << "state = OPEN";
+                                std::cerr << "state = OPEN";
                                 break;
                         case CLOSED:
-                                std::cout << "state = CLOSED";
+                                std::cerr << "state = CLOSED";
                                 break;
                         default:
                                 break;
                         }
                 }
 
-                std::cout << "\n        from id = " << src->to_string()
+                std::cerr << "\n        from id = " << src->to_string()
                           << std::endl;
 #endif // DEBUG
 

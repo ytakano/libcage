@@ -32,6 +32,8 @@ if $(not $(defined EV))
 	EV = FALSE
 	export
 
+CXXFLAGS += -DDEBUG_RDP
+
 if $(equal $(EV), TRUE)
 	echo "*** linking with libev ***"
 	LDFLAGS += -lev
