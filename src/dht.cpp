@@ -855,7 +855,9 @@ namespace libcage {
                         msg.keylen   = ntohs(keylen);
                         msg.valuelen = ntohs(valuelen);
                         msg.ttl      = ntohs(ttl);
-                        msg.flags    = dht_flag_unique;
+
+                        if (is_unique)
+                                msg.flags |= dht_flag_unique;
 
                         p_dht->m_rdp.send(desc, &msg, sizeof(msg));
                         p_dht->m_rdp.send(desc, key.get(), keylen);
