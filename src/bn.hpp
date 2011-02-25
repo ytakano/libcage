@@ -129,6 +129,8 @@ namespace libcage {
                 bool            is_zero() const;
 
                 std::string     to_string() const;
+                void            from_string(std::string str);
+                void            from_string(const char *str);
 
                 size_t          hash_value() const;
 
@@ -962,6 +964,38 @@ namespace libcage {
                 }
 
                 return str;
+        }
+
+        template <typename T, int N>
+        void
+        bn<T, N>::from_string(std::string str)
+        {
+                from_string(str.c_str());
+        }
+
+        template <typename T, int N>
+        void
+        bn<T, N>::from_string(const char *str)
+        {
+                fill_zero();
+
+                while (str[0]) {
+                        char c = str[0];
+                        *this <<= 4;
+                        if (c >= '0' && c <= '9') {
+                                T n = (T)(str[0] - '0');
+                                *this += n;
+                        } else if (c >= 'A' && c <= 'F') {
+                                T n = (T)(str[0] - 'A' + 10);
+                                *this += n;
+                        } else if (c >= 'a' && c <= 'f') {
+                                T n = (T)(str[0] - 'a' + 10);
+                                *this += n;
+                        } else {
+                                break;
+                        }
+                        str++;
+                }
         }
 
         template <typename T, int N>

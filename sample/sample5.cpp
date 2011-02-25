@@ -106,15 +106,15 @@ server_callback::operator() (int desc, libcage::rdp_addr addr,
         }
         case libcage::BROKEN:
                 std::cout << "broken pipe" << std::endl;
-                cage1->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         case libcage::RESET:
                 std::cout << "reset by peer" << std::endl;
-                cage1->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         case libcage::FAILED:
                 std::cout << "failed in connecting" << std::endl;
-                cage1->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         default:
                 ;
@@ -146,19 +146,19 @@ client_callback::operator() (int desc, libcage::rdp_addr addr,
         }
         case libcage::BROKEN:
                 std::cout << "broken pipe" << std::endl;
-                cage2->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         case libcage::RESET:
                 std::cout << "reset by peer" << std::endl;
-                cage2->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         case libcage::FAILED:
                 std::cout << "failed in connecting" << std::endl;
-                cage2->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         case libcage::REFUSED:
                 std::cout << "connection refused" << std::endl;
-                cage2->rdp_close(desc);
+                m_cage.rdp_close(desc);
                 break;
         default:
                 ;
