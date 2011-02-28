@@ -24,9 +24,17 @@
     $ omake EV=TRUE
 
 
-    The DEBUG option enables debugging.
+    The DEBUG option enables debugging which passes -O0 and -g flags to the
+    compiler.
 
     $ omake DEBUG=TRUE
+
+
+    If you want to debug RDP, please add a -DDEBUG_RDP flag to the CXXFLAGS
+    option. When enabled DEBUG_RDP, libcage outputs RDP packets to the standard
+    error.
+
+    $ omake CXXFLAGS=-DDEBUG_RDP
 
 3. Install
     If you want to install to /usr/local, please type:

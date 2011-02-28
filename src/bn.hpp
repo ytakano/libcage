@@ -842,7 +842,7 @@ namespace libcage {
                 if (m == 0 || n >= size)
                         return;
 
-                for (i = 0; i < size - n; i++) {
+                for (i = 0; i < size - n - 1; i++) {
                         T msb;
 
                         msb = arr[i + 1];
