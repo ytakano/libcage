@@ -1,0 +1,20 @@
+CXXFLAGS += -Wall -I../include
+LDFLAGS += -lcrypto
+LIBS += ../src/libcage
+
+
+.PHONY: clean example1 example2 example3 example4 example5 caged
+
+example1: $(CXXProgram example1, example1)
+example2: $(CXXProgram example2, example2)
+example2: $(CXXProgram example3, example3)
+example4: $(CXXProgram example4, example4)
+example4: $(CXXProgram example5, example5)
+
+caged: $(CXXProgram caged, caged)
+
+clean:
+	rm -f *~ *.o
+	rm -f example1 example2 example3 example4 example5 caged
+
+.DEFAULT: example1 example2 example3 example4 example5 caged

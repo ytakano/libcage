@@ -315,9 +315,15 @@ namespace libcage {
         }
 
         rdp_state
-        cage::rdp_status(int desc)
+        cage::rdp_get_desc_state(int desc)
         {
-                return m_rdp.status(desc);
+                return m_rdp.get_desc_state(desc);
+        }
+
+        void
+        cage::rdp_get_status(std::vector<rdp_status> &vec)
+        {
+                return m_rdp.get_status(vec);
         }
 
         void

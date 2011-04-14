@@ -110,6 +110,13 @@ namespace libcage {
                 }
         };
 
+        struct rdp_status {
+                rdp_state    state;
+                id_const_ptr did;
+                uint16_t     dport;
+                uint16_t     sport;
+        };
+
         size_t hash_value(const rdp_addr &addr);
 
         typedef boost::function<void (id_ptr, packetbuf_ptr)> callback_dgram_out;
@@ -146,7 +153,8 @@ namespace libcage {
                 void            close(int desc);
                 int             send(int desc, const void *buf, int len);
                 void            receive(int desc, void *buf, int *len);
-                rdp_state       status(int desc);
+                rdp_state       get_desc_state(int desc);
+                void            get_status(std::vector<rdp_status> &vec);
 
                 void            set_callback_rdp_event(int desc,
                                                        callback_rdp_event func);

@@ -78,7 +78,8 @@ namespace libcage {
                 void            rdp_close(int desc);
                 int             rdp_send(int desc, const void *buf, int len);
                 void            rdp_receive(int desc, void *buf, int *len);
-                rdp_state       rdp_status(int desc);
+                rdp_state       rdp_get_desc_state(int desc);
+                void            rdp_get_status(std::vector<rdp_status> &vec);
 
 
                 void            send_dgram(const void *buf, int len,

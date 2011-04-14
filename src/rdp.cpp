@@ -281,7 +281,7 @@ namespace libcage {
         }
 
         rdp_state
-        rdp::status(int desc)
+        rdp::get_desc_state(int desc)
         {
                 if (m_desc_set.find(desc) == m_desc_set.end())
                         return CLOSED;
@@ -1912,5 +1912,48 @@ namespace libcage {
                 rcv_ack = rcv_cur;
 
                 acked_time.update();
+        }
+
+        void
+        rdp::get_status(std::vector<rdp_status> &vec)
+        {
+                id_ptr zero(new uint160_t);
+
+                zero->fill_zero();
+
+                BOOST_FOREACH(int desc, m_desc_set) {
+                        listening_t::right_iterator lis_it;
+                        lis_it = m_listening.right.find(desc);
+
+                        if (lis_it != m_listening.right.end()) {
+                                rdp_status s;
+
+                                s.state = LISTEN;
+                                s.did   = zero;
+                                s.dport = 0;
+                                s.sport = lis_it->second;
+
+                                vec.push_back(s);
+
+                                continue;
+                        }
+
+
+                        std::map<int, rdp_con_ptr>::iterator conn_it;
+                        conn_it = m_desc2conn.find(desc);
+
+                        if (conn_it != m_desc2conn.end()) {
+                                rdp_status s;
+
+                                s.state = conn_it->second->state;
+                                s.did   = conn_it->second->addr.did;
+                                s.dport = conn_it->second->addr.dport;
+                                s.sport = conn_it->second->addr.sport;
+
+                                vec.push_back(s);
+                                
+                                continue;
+                        }
+                }
         }
 }

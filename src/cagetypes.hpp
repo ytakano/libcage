@@ -52,6 +52,7 @@ namespace libcage {
         typedef boost::shared_ptr<sockaddr_in>  in_ptr;
         typedef boost::shared_ptr<sockaddr_in6> in6_ptr;
         typedef boost::shared_ptr<uint160_t>    id_ptr;
+        typedef boost::shared_ptr<const uint160_t>  id_const_ptr;
 
         typedef boost::uniform_int<uint32_t>    uint_dist;
         typedef boost::uniform_real<>           real_dist;
