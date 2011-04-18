@@ -85,7 +85,7 @@ namespace libcage {
                         case SYN_SENT:
                         case SYN_RCVD:
                         {
-                                if (it->second->syn_tout >
+                                if (it->second->syn_tout >=
                                     m_rdp.m_max_retrans) {
                                         if (it->second->is_pasv) {
                                                 // delete connection
@@ -145,7 +145,7 @@ namespace libcage {
                         case CLOSE_WAIT_ACTIVE:
                         case CLOSE_WAIT_PASV:
                         {
-                                if (it->second->rst_tout >
+                                if (it->second->rst_tout >=
                                     m_rdp.m_max_retrans) {
                                         if (it->second->is_closed) {
                                                 // deallocate
@@ -223,7 +223,7 @@ namespace libcage {
                 }
         }
 
-        rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_max_retrans(64),
+        rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_max_retrans(32),
                                               m_timer(tm), m_timer_rdp(*this)
         {
                 timeval   tval;
