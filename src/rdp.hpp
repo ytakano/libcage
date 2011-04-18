@@ -138,7 +138,6 @@ namespace libcage {
                 static const uint16_t  well_known_port_max;
                 static const uint16_t  sbuf_limit;
                 static const uint32_t  timer_rdp_usec;
-                static const time_t    max_retrans;
                 static const double    ack_interval;
 
         public:
@@ -155,6 +154,9 @@ namespace libcage {
                 void            receive(int desc, void *buf, int *len);
                 rdp_state       get_desc_state(int desc);
                 void            get_status(std::vector<rdp_status> &vec);
+
+                void            set_max_retrans(time_t sec);
+                time_t          get_max_retrans();
 
                 void            set_callback_rdp_event(int desc,
                                                        callback_rdp_event func);
@@ -178,20 +180,21 @@ namespace libcage {
                 typedef boost::bimaps::bimap<_uint16_set,
                                              _int_set>::value_type listening_val;
 
-                std::set<int>              m_desc_set;
-                listening_t                m_listening; // <port, desc>
+                std::set<int>               m_desc_set;
+                listening_t                 m_listening; // <port, desc>
                 
                 boost::unordered_map<rdp_addr, rdp_con_ptr>     m_addr2conn;
                 std::map<int, rdp_con_ptr>          m_desc2conn;
                 std::map<int, callback_rdp_event>   m_desc2event;
 
                 
-                callback_dgram_out         m_output_func;
+                callback_dgram_out          m_output_func;
 
-                rand_uint                 &m_rnd;
+                rand_uint                  &m_rnd;
 
-                timer                     &m_timer;
-                timer_rdp                  m_timer_rdp;
+                time_t                      m_max_retrans;
+                timer                      &m_timer;
+                timer_rdp                   m_timer_rdp;
 
                 void            output(id_ptr id, packetbuf_ptr pbuf);
                 int             generate_desc();

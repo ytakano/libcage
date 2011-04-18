@@ -80,6 +80,8 @@ namespace libcage {
                 void            rdp_receive(int desc, void *buf, int *len);
                 rdp_state       rdp_get_desc_state(int desc);
                 void            rdp_get_status(std::vector<rdp_status> &vec);
+                void            rdp_set_max_retrans(time_t sec);
+                time_t          rdp_get_max_retrans();
 
 
                 void            send_dgram(const void *buf, int len,

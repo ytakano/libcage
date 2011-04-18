@@ -527,6 +527,18 @@ namespace libcage {
                 }
         }
 
+        void
+        cage::rdp_set_max_retrans(time_t sec)
+        {
+                m_rdp.set_max_retrans(sec);
+        }
+
+        time_t
+        cage::rdp_get_max_retrans()
+        {
+                return m_rdp.get_max_retrans();
+        }
+
 #ifdef DEBUG_NAT
         void
         cage::test_natdetect()

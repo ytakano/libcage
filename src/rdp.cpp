@@ -47,7 +47,6 @@ namespace libcage {
         const uint16_t rdp::well_known_port_max = 1024;
         const uint16_t rdp::sbuf_limit          = 1012 - 128;
         const uint32_t rdp::timer_rdp_usec      = 300 * 1000;
-        const time_t   rdp::max_retrans         = 64;
         const double   rdp::ack_interval        = 0.3;
 
         size_t
@@ -86,7 +85,8 @@ namespace libcage {
                         case SYN_SENT:
                         case SYN_RCVD:
                         {
-                                if (it->second->syn_tout > max_retrans) {
+                                if (it->second->syn_tout >
+                                    m_rdp.m_max_retrans) {
                                         if (it->second->is_pasv) {
                                                 // delete connection
                                                 m_rdp.m_desc_set.erase(it->first);
@@ -145,7 +145,8 @@ namespace libcage {
                         case CLOSE_WAIT_ACTIVE:
                         case CLOSE_WAIT_PASV:
                         {
-                                if (it->second->rst_tout > max_retrans) {
+                                if (it->second->rst_tout >
+                                    m_rdp.m_max_retrans) {
                                         if (it->second->is_closed) {
                                                 // deallocate
                                                 m_rdp.m_desc_set.erase(it->first);
@@ -222,8 +223,8 @@ namespace libcage {
                 }
         }
 
-        rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_timer(tm),
-                                              m_timer_rdp(*this)
+        rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_max_retrans(64),
+                                              m_timer(tm), m_timer_rdp(*this)
         {
                 timeval   tval;
 
@@ -1630,7 +1631,7 @@ namespace libcage {
                         if (p_wnd->is_acked)
                                 continue;
 
-                        if (p_wnd->rt_sec > rdp::max_retrans) {
+                        if (p_wnd->rt_sec > ref_rdp.m_max_retrans) {
                                 // broken pipe
                                 state = CLOSED;
                                 ref_rdp.invoke_event(desc, 0, addr, BROKEN);
@@ -1955,5 +1956,17 @@ namespace libcage {
                                 continue;
                         }
                 }
+        }
+
+        void
+        rdp::set_max_retrans(time_t sec)
+        {
+                m_max_retrans = sec;
+        }
+
+        time_t
+        rdp::get_max_retrans()
+        {
+                return m_max_retrans;
         }
 }
