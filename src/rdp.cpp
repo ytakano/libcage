@@ -352,8 +352,7 @@ namespace libcage {
                         if (event == ACCEPTED && it2 == m_desc2event.end())
                                 m_desc2event[desc2] = it->second;
                 } else {
-                        callback_rdp_event ev = it->second;
-                        ev(desc1, addr, event);
+                        it->second(desc1, addr, event);
                 }
         }
 
