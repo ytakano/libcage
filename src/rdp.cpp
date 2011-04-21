@@ -224,7 +224,8 @@ namespace libcage {
         }
 
         rdp::rdp(rand_uint &rnd, timer &tm) : m_rnd(rnd), m_max_retrans(32),
-                                              m_timer(tm), m_timer_rdp(*this)
+                                              m_timer(tm), m_timer_rdp(*this),
+                                              m_is_invoke(false)
         {
                 timeval   tval;
 
@@ -352,7 +353,15 @@ namespace libcage {
                         if (event == ACCEPTED && it2 == m_desc2event.end())
                                 m_desc2event[desc2] = it->second;
                 } else {
+                        m_is_invoke = true;
                         it->second(desc1, addr, event);
+                        m_is_invoke = false;
+
+                        BOOST_FOREACH(int desc, m_desc_closed) {
+                                this->close(desc);
+                        }
+
+                        m_desc_closed.clear();
                 }
         }
 
@@ -450,10 +459,14 @@ namespace libcage {
                 }
                 case CLOSED:
                 {
-                        m_desc_set.erase(it->first);
-                        m_desc2event.erase(it->first);
-                        m_addr2conn.erase(it->second->addr);
-                        m_desc2conn.erase(it);
+                        if (! m_is_invoke) {
+                                m_desc_set.erase(it->first);
+                                m_desc2event.erase(it->first);
+                                m_addr2conn.erase(it->second->addr);
+                                m_desc2conn.erase(it);
+                        } else {
+                                m_desc_closed.insert(desc);
+                        }
 
                         break;
                 }
@@ -478,10 +491,14 @@ namespace libcage {
 
                         output(it->second->addr.did, pbuf);
 
-                        m_desc_set.erase(it->first);
-                        m_desc2event.erase(it->first);
-                        m_addr2conn.erase(it->second->addr);
-                        m_desc2conn.erase(it);
+                        if (! m_is_invoke) {
+                                m_desc_set.erase(it->first);
+                                m_desc2event.erase(it->first);
+                                m_addr2conn.erase(it->second->addr);
+                                m_desc2conn.erase(it);
+                        } else {
+                                m_desc_closed.insert(desc);
+                        }
 
                         break;
                 }

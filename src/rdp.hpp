@@ -196,6 +196,9 @@ namespace libcage {
                 timer                      &m_timer;
                 timer_rdp                   m_timer_rdp;
 
+                bool            m_is_invoke;
+                std::set<int>   m_desc_closed;
+
                 void            output(id_ptr id, packetbuf_ptr pbuf);
                 int             generate_desc();
                 void            invoke_event(int desc1, int desc2,
