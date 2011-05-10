@@ -63,7 +63,6 @@ namespace libcage {
         void
         rdp::timer_rdp::operator() ()
         {
-
                 timeval tval;
 
                 tval.tv_sec  = 0;

@@ -472,7 +472,7 @@ namespace libcage {
                 uint160_t dst;
                 uint16_t  keylen;
                 uint16_t  valuelen;
-                bool      is_unique;
+                bool      is_unique = false;
                 int       size;
 
                 store = (msg_proxy_store*)msg;
