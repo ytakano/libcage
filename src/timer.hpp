@@ -52,9 +52,12 @@ namespace libcage {
                         timer  *get_timer() { return m_timer; }
 
                         friend class    timer;
+                        friend void     timer_callback(int fd, short event, void *arg);
 
                 private:
-                        timer  *m_timer;
+                        timer   *m_timer;
+                        timeval  m_scheduled;
+                        timeval  m_interval;
                 };
 
                 virtual ~timer();

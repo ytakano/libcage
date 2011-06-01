@@ -38,10 +38,45 @@ namespace libcage {
         timer_callback(int fd, short event, void *arg)
         {
                 timer::callback &func = *(timer::callback*)arg;
-                timer *t = func.get_timer();
+                timer   *t = func.get_timer();
+                timeval  now;
+                double   diff;
+                double   interval;
+
+                gettimeofday(&now, NULL);
+
+                diff  = (double)now.tv_sec + (double)now.tv_usec / 1000000.0;
+                diff -= (double)func.m_scheduled.tv_sec +
+                        (double)func.m_scheduled.tv_usec / 1000000.0;
+
+                interval = (double)func.m_interval.tv_sec +
+                           (double)func.m_interval.tv_usec / 1000000.0;
+
+                if (diff < interval) {
+                        double sec;
+
+                        sec = ceil(interval - diff);
+
+                        if (sec > 1.0) {
+                                double usec;
+                                usec  = interval - diff - sec;
+                                usec *= 1000000;
+
+                                func.m_interval.tv_sec  = (time_t)sec;
+                                func.m_interval.tv_usec = (time_t)usec;
+
+                                boost::shared_ptr<struct event> ev;
+
+                                ev = t->m_events[&func];
+
+                                evtimer_set(ev.get(), timer_callback, arg);
+                                evtimer_add(ev.get(), &func.m_interval);
+
+                                return;
+                        }
+                }
 
                 t->m_events.erase(&func);
-
                 func();
         }
 
@@ -64,12 +99,14 @@ namespace libcage {
                 // delete old event
                 unset_timer(func);
 
-                func->m_timer = this;
+                func->m_timer    = this;
+                func->m_interval = *t;
+                gettimeofday(&func->m_scheduled, NULL);
 
                 // add new event
                 m_events[func] = ev;
                 evtimer_set(ev.get(), timer_callback, func);
-                evtimer_add(ev.get(), t);
+                evtimer_add(ev.get(), &func->m_interval);
         }
 
         void
