@@ -39,6 +39,9 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/pool/object_pool.hpp>
 
+#define PBUF_SIZE           1024
+#define PBUF_DEFAULT_OFFSET 128
+
 namespace libcage {
         class packetbuf;
 
@@ -67,7 +70,7 @@ namespace libcage {
         private:
                 static const int buf_max;
 
-                uint8_t         m_buf[1012];
+                uint8_t         m_buf[PBUF_SIZE];
                 uint8_t        *m_head;
                 int32_t         m_len;
                 int32_t         m_refc;

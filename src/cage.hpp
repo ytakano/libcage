@@ -69,7 +69,11 @@ namespace libcage {
                 void            join(std::string host, int port,
                                      callback_join func);
 
-                // for rdp
+                // for reliable datagram transmission like TCP
+                //
+                // NOTICE:
+                //     Currentry, this protocol doesn't support congestion
+                //     control.
                 int             rdp_listen(uint16_t sport,
                                            callback_rdp_event func);
                 int             rdp_connect(uint16_t sport, id_ptr did,
@@ -84,6 +88,13 @@ namespace libcage {
                 time_t          rdp_get_max_retrans();
 
 
+                // for dgram messege transmission like UDP
+                //
+                // NOTCE:
+                //     If the length is bigger than 896 bytes, the message is
+                //     automatically divided and then deliverd to the
+                //     destination unlike UDP.
+                //     The destination node should be receive multiple times.
                 void            send_dgram(const void *buf, int len,
                                            uint8_t *dst);
                 void            set_dgram_callback(dgram::callback func);

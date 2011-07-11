@@ -38,7 +38,7 @@ namespace libcage {
 
         packetbuf::packetbuf() : m_len(0), m_refc(0)
         {
-                m_head = &m_buf[128];
+                m_head = &m_buf[PBUF_DEFAULT_OFFSET];
         }
 
         void*

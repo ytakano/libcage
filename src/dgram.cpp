@@ -184,13 +184,22 @@ namespace libcage {
         dgram::push2queue(id_ptr id, const void *msg, int len,
                           const uint160_t &src)
         {
-                packetbuf_ptr pbuf = packetbuf::construct();
-                void *p;
+                int total = 0;
+                int dmax  = PBUF_SIZE - PBUF_DEFAULT_OFFSET;
 
-                p = pbuf->append(len);
-                memcpy(p, msg, len);
+                while (len > 0) {
+                        packetbuf_ptr pbuf = packetbuf::construct();
+                        int   plen = (len > dmax) ? dmax : len;
+                        void *p;
 
-                push2queue(id, pbuf, src);
+                        p = pbuf->append(plen);
+                        memcpy(p, (char*)msg + total, plen);
+
+                        push2queue(id, pbuf, src);
+
+                        len   -= plen;
+                        total += plen;
+                }
         }
 
         void
